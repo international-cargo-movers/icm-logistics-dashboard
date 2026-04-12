@@ -18,14 +18,18 @@ export async function POST(request:Request){
     try{
         await dbConnect();
 
-        //Rest of the API
         const body = await request.json();
 
         const newCompany = await CompanyModel.create({
-            name:body.name,
-            type:body.type||["Customer"],
-            defaultSalesPerson:body.defaultSalesPerson,
-            billingAddress:body.billingAddress
+            name: body.name,
+            type: body.type || ["Customer"],
+            defaultSalesPerson: body.defaultSalesPerson || body.salesPerson, // fallback just in case
+            taxId: body.taxId,
+            streetAddress: body.streetAddress,
+            city: body.city,
+            state: body.state,
+            zipCode: body.zipCode,
+            country: body.country
         });
         return NextResponse.json({success:true,data:newCompany},{status:201})
     }catch(error:any){

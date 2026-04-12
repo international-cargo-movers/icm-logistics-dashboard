@@ -12,7 +12,12 @@ type DBCompany = {
   _id: string;
   name: string;
   defaultSalesPerson?: string;
-  billingAddress?: string;
+  taxId?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
 }
 
 const isValidMongoId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
@@ -40,15 +45,25 @@ export default function CustomerSection() {
     fetchCompanies()
   }, [])
 
-  const handleCompanySelect = (selectedIdOrName: string) => {
+const handleCompanySelect = (selectedIdOrName: string) => {
     const foundCompany = companies.find(c => c._id === selectedIdOrName)
     
     if (foundCompany && isValidMongoId(foundCompany._id)) { 
       setValue("customerDetails.salesPerson", foundCompany.defaultSalesPerson || "", { shouldValidate: true })
-      setValue("customerDetails.billingAddress", foundCompany.billingAddress || "", { shouldValidate: true })
+      setValue("customerDetails.taxId", foundCompany.taxId || "", { shouldValidate: true })
+      setValue("customerDetails.streetAddress", foundCompany.streetAddress || "", { shouldValidate: true })
+      setValue("customerDetails.city", foundCompany.city || "", { shouldValidate: true })
+      setValue("customerDetails.state", foundCompany.state || "", { shouldValidate: true })
+      setValue("customerDetails.zipCode", foundCompany.zipCode || "", { shouldValidate: true })
+      setValue("customerDetails.country", foundCompany.country || "", { shouldValidate: true })
     } else {
       setValue("customerDetails.salesPerson", "")
-      setValue("customerDetails.billingAddress", "")
+      setValue("customerDetails.taxId", "")
+      setValue("customerDetails.streetAddress", "")
+      setValue("customerDetails.city", "")
+      setValue("customerDetails.state", "")
+      setValue("customerDetails.zipCode", "")
+      setValue("customerDetails.country", "")
     }
   }
 
@@ -194,20 +209,98 @@ export default function CustomerSection() {
           />
         </div>
 
-        <div className="md:col-span-2">
+{/* ROW 2: Tax ID & Street Address */}
+        <div>
           <FormField
             control={control}
-            name="customerDetails.billingAddress"
+            name="customerDetails.taxId"
             render={({ field }: { field: any }) => (
               <FormItem>
-                <FormLabel>Billing Address *</FormLabel>
+                <FormLabel>Tax ID (GSTIN/EIN)</FormLabel>
                 <FormControl>
-                  <Textarea 
-                    placeholder={isKnownCompany ? "Auto-filled" : "Enter full billing address..."} 
-                    readOnly={isKnownCompany} 
-                    className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} 
-                    {...field} 
-                  />
+                  <Input placeholder={isKnownCompany ? "Auto-filled" : "e.g. 27AAAAA0000A1Z5"} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div>
+           <FormField
+            control={control}
+            name="customerDetails.streetAddress"
+            render={({ field }: { field: any }) => (
+              <FormItem>
+                <FormLabel>Street Address</FormLabel>
+                <FormControl>
+                  <Input placeholder={isKnownCompany ? "Auto-filled" : "123 Logistics Way..."} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* ROW 3: City & State */}
+        <div>
+          <FormField
+            control={control}
+            name="customerDetails.city"
+            render={({ field }: { field: any }) => (
+              <FormItem>
+                <FormLabel>City</FormLabel>
+                <FormControl>
+                  <Input placeholder={isKnownCompany ? "Auto-filled" : "City"} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div>
+          <FormField
+            control={control}
+            name="customerDetails.state"
+            render={({ field }: { field: any }) => (
+              <FormItem>
+                <FormLabel>State / Province</FormLabel>
+                <FormControl>
+                  <Input placeholder={isKnownCompany ? "Auto-filled" : "State"} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* ROW 4: Zip Code & Country */}
+        <div>
+          <FormField
+            control={control}
+            name="customerDetails.zipCode"
+            render={({ field }: { field: any }) => (
+              <FormItem>
+                <FormLabel>Zip / Postal Code</FormLabel>
+                <FormControl>
+                  <Input placeholder={isKnownCompany ? "Auto-filled" : "Zip Code"} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div>
+          <FormField
+            control={control}
+            name="customerDetails.country"
+            render={({ field }: { field: any }) => (
+              <FormItem>
+                <FormLabel>Country</FormLabel>
+                <FormControl>
+                  <Input placeholder={isKnownCompany ? "Auto-filled" : "Country"} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

@@ -9,9 +9,13 @@ export interface ICompany extends Document{
     contactEmail?: string; 
     contactPhone?: string; // Crucial for truckers to call the warehouse!
 
-    billingAddress?:string;
+    // billingAddress?:string;
+    streetAddress?: string; // Line 1 & 2 combined (e.g., "Plot 42, Sector 18")
     city?: string;
+    state?: string;         // Province / Region
+    zipCode?: string;       // Postal Code
     country?: string;
+
 
     taxId?:string;
     defaultSalesPerson?:string;
@@ -25,8 +29,11 @@ const CompanySchema = new Schema<ICompany>(
         contactName:{type:String},
         contactEmail:{type:String},
         contactPhone:{type:String},
-        billingAddress:{type:String},
+        // billingAddress:{type:String},
+        streetAddress: { type: String },
         city:{type:String},
+        state: { type: String },
+        zipCode: { type: String },
         country:{type:String},
         taxId:{type:String},
         defaultSalesPerson:{type:String},

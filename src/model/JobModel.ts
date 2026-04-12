@@ -10,6 +10,14 @@ export interface IJob extends Document {
         customerInvoiceDate?: Date;
         shipperId?: mongoose.Types.ObjectId; //Links to CompanyModel
         consigneeId?: mongoose.Types.ObjectId;
+
+        salesPerson?: string;
+        taxId?: string;
+        streetAddress?: string;
+        city?: string;
+        state?: string;
+        zipCode?: string;
+        country?: string;
     };
     partyDetails: {
         shipperId?: mongoose.Types.ObjectId; // Links to CompanyModel
@@ -52,6 +60,13 @@ const JobSchema = new Schema<IJob>({
         customerInvoiceDate: { type: Date },
         shipperId: { type: Schema.Types.ObjectId, ref: "CompanyModel" },
         consigneeId: { type: Schema.Types.ObjectId, ref: "CompanyModel" },
+        salesPerson: { type: String },
+        taxId: { type: String },
+        streetAddress: { type: String },
+        city: { type: String },
+        state: { type: String },
+        zipCode: { type: String },
+        country: { type: String },
 
     },
     partyDetails: {

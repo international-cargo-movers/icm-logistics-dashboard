@@ -18,8 +18,8 @@ export default function Sidebar() {
         <NavItem href="/dashboard" pathname = {pathname} icon={LayoutDashboard} label="Dashboard" exact />
         <NavItem href="/dashboard/jobs" pathname = {pathname} icon={Package} label="Jobs" active />
         <NavItem href="/dashboard/invoices" pathname = {pathname} icon={Receipt} label="Invoicing" />
-        <NavItem href="*" pathname = {pathname} icon={Truck} label="Status" />
-        <NavItem href="*" pathname = {pathname} icon={Wallet} label="Reconciliation" />
+        <NavItem href="/dashboard/directory/companies" pathname = {pathname} icon={Truck} label="Directory" />
+        <NavItem href="/dashboard/quotes/new" pathname = {pathname} icon={Wallet} label="Reconciliation" />
       </nav>
     </aside>
   )

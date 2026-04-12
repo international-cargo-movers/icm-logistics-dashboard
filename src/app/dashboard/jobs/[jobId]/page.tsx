@@ -13,9 +13,11 @@ import { ArrowLeft, Truck, Anchor, Plane, MapPin, Package, Building2 } from "luc
 // Server Component
 export default async function JobControlRoom({ params }: { params: { jobId: string } }) {
     await dbConnect();
-    const {jobId} = await params;
-    const job = await JobModel.findOne({ jobId:jobId })
-        .populate("customerDetails.companyId", "name billingAddress defaultSalesPerson")
+    const { jobId } = await params;
+
+    // UPDATED: Now populating all the new granular fields from the Company as a fallback
+    const job = await JobModel.findOne({ jobId: jobId })
+        .populate("customerDetails.companyId", "name taxId streetAddress city state zipCode country defaultSalesPerson")
         .populate("vendorDetails.vendorId", "name")
         .lean()
 
@@ -30,6 +32,7 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
     return (
         <div className="bg-surface text-on-background min-h-screen p-8 lg:p-12">
             {/* Header */}
+            {/* Header */}
             <div className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <Link href="/dashboard">
@@ -41,16 +44,25 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                         <h1 className="text-4xl font-extrabold text-primary tracking-tight">
                             {job.jobId}
                         </h1>
-                        <Badge variant="outline" className="text-sm px-4 py-1 border-primary text-primary">
-                            {job.cargoDetails?.jobStatus || "Processing"}
-                        </Badge>
+
+                        {/* THE NEW BADGES */}
+                        <div className="flex items-center gap-2 mt-1">
+                            {/* Job Type Badge - Auto capitalizes and fixes old underscores! */}
+                            <Badge className="text-sm px-4 py-1 bg-primary/10 text-primary hover:bg-primary/20 border-none shadow-none capitalize">
+                                {job.shipmentDetails?.mode?.replace(/_/g, ' ') || "Unknown Mode"}
+                            </Badge>
+
+                            {/* Status Badge */}
+                            <Badge variant="outline" className="text-sm px-4 py-1 border-primary text-primary">
+                                {job.cargoDetails?.jobStatus || "Processing"}
+                            </Badge>
+                        </div>
                     </div>
                 </div>
                 <div className="flex gap-3">
-                    {/* We will build this in Step 3! */}
                     <StatusDropdown
                         jobId={job.jobId}
-                        currentStatus={job.cargoDetails?.jobStatus||"Processing"}
+                        currentStatus={job.cargoDetails?.jobStatus || "Processing"}
                     />
                 </div>
             </div>
@@ -119,23 +131,64 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                 {/* RIGHT COLUMN (Entities) */}
                 <div className="space-y-8">
 
-                    {/* Customer Card */}
-                    <Card className="p-6 border-l-4 border-l-primary">
-                        <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
+                    {/* UPDATED: Structured Customer Card */}
+                    <Card className="p-6 border border-border shadow-sm border-t-4 border-t-primary">
+                        <h2 className="text-lg font-bold flex items-center gap-2 mb-6 pb-4 border-b">
                             <Building2 className="text-primary" /> The Client
                         </h2>
-                        <div className="space-y-4">
-                            <div>
-                                <p className="text-sm text-muted-foreground">Company Name</p>
-                                <p className="font-bold text-lg">{job.customerDetails?.companyId?.name || "Unknown"}</p>
+
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="h-12 w-12 bg-primary/10 text-primary flex items-center justify-center rounded-lg font-bold text-lg shrink-0">
+                                {job.customerDetails?.companyId?.name?.substring(0, 2).toUpperCase() || "??"}
+                            </div>
+                            <div className="overflow-hidden">
+                                <h3 className="font-bold text-foreground text-lg truncate" title={job.customerDetails?.companyId?.name}>
+                                    {job.customerDetails?.companyId?.name || "Unknown Company"}
+                                </h3>
+                                <p className="text-sm text-muted-foreground truncate">
+                                    Tax ID: <span className="font-mono text-primary font-medium">{job.customerDetails?.taxId || job.customerDetails?.companyId?.taxId || "N/A"}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-y-5 gap-x-4">
+                            <div className="col-span-2">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Street Address</p>
+                                <p className="text-sm font-medium text-foreground leading-snug">
+                                    {job.customerDetails?.streetAddress || job.customerDetails?.companyId?.streetAddress || "—"}
+                                </p>
                             </div>
                             <div>
-                                <p className="text-sm text-muted-foreground">Sales Rep</p>
-                                <p className="font-semibold">{job.customerDetails?.companyId?.defaultSalesPerson || "Unassigned"}</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">City</p>
+                                {/* Removed 'truncate', added 'leading-snug' for clean wrapping */}
+                                <p className="text-sm font-medium text-foreground leading-snug">
+                                    {job.customerDetails?.city || job.customerDetails?.companyId?.city || "—"}
+                                </p>
                             </div>
                             <div>
-                                <p className="text-sm text-muted-foreground">Billing Address</p>
-                                <p className="text-sm mt-1">{job.customerDetails?.companyId?.billingAddress || "No address on file."}</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">State / Prov</p>
+                                <p className="text-sm font-medium text-foreground leading-snug">
+                                    {job.customerDetails?.state || job.customerDetails?.companyId?.state || "—"}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Zip Code</p>
+                                <p className="text-sm font-medium text-foreground leading-snug">
+                                    {job.customerDetails?.zipCode || job.customerDetails?.companyId?.zipCode || "—"}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Country</p>
+                                <p className="text-sm font-medium text-foreground leading-snug">
+                                    {job.customerDetails?.country || job.customerDetails?.companyId?.country || "—"}
+                                </p>
+                            </div>
+
+                            <div className="col-span-2 mt-1 pt-5 border-t">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Sales Person</p>
+                                <p className="text-sm font-medium text-foreground">
+                                    {job.customerDetails?.salesPerson || job.customerDetails?.companyId?.defaultSalesPerson || "—"}
+                                </p>
                             </div>
                         </div>
                     </Card>
