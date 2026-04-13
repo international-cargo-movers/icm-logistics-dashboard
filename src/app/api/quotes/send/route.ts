@@ -7,7 +7,6 @@ export async function POST(request: Request) {
     try {
         await dbConnect();
         
-        // 1. Parse the incoming payload from the frontend
         const body = await request.json();
         const { quoteData, pdfBase64 } = body;
 
@@ -18,7 +17,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // 2. Map the frontend data to our strict MongoDB Schema
+        // 1. Map the frontend data to our strict MongoDB Schema
         const newQuote = await QuoteModel.create({
             quoteId: quoteData.quoteRef,
             customerDetails: {
@@ -26,9 +25,12 @@ export async function POST(request: Request) {
                 contactPerson: quoteData.customerName, 
             },
             routingDetails: {
+                originCountry: quoteData.originCountry,           
                 originPort: quoteData.originPort,
+                destinationCountry: quoteData.destinationCountry, 
                 destinationPort: quoteData.destinationPort,
-                mode: quoteData.mode,
+                // The Fallback ensures Mongoose never crashes even if the UI drops the mode
+                mode: quoteData.mode, 
             },
             cargoSummary: {
                 commodity: quoteData.cargoSummary?.commodity || "General Cargo",
@@ -52,7 +54,7 @@ export async function POST(request: Request) {
         });
 
         // ==========================================
-        // 3. EMAIL DISPATCH PIPELINE (Nodemailer)
+        // 2. EMAIL DISPATCH PIPELINE (Nodemailer)
         // ==========================================
         if (pdfBase64 && quoteData.customerEmail) {
             const pdfBuffer = Buffer.from(pdfBase64, 'base64');
@@ -87,13 +89,11 @@ export async function POST(request: Request) {
 
         console.log(`[SUCCESS] Quote ${newQuote.quoteId} saved to database!`);
 
-        // 4. Return success back to the UI
         return NextResponse.json({ success: true, data: newQuote, message: "Quote saved and email sent!" }, { status: 201 });
 
     } catch (error: any) {
         console.error("Quote Engine Error:", error);
         
-        // Gracefully catch duplicate Quote IDs
         if (error.code === 11000) {
             return NextResponse.json(
                 { success: false, error: "A quote with this Reference ID already exists." }, 

@@ -1,20 +1,26 @@
 "use client"
+import * as React from "react"
 import Sidebar from "@/components/dashboard/Sidebar"
 import TopNav from "@/components/dashboard/TopNav"
 import JobTable from "@/components/dashboard/JobTable"
 import StatsCard from "@/components/dashboard/StatsCard"
 import InsightCard from "@/components/dashboard/InsightCard"
-import { Button } from "@/components/ui/button" // Imported Shadcn Button
-import {useRouter} from "next/navigation"
+import { Button } from "@/components/ui/button" 
+import { useRouter } from "next/navigation"
 
 export default function DashboardPage() {
   const router = useRouter();
+  
+  // 1. Lifted state: This holds whatever the user types in the TopNav
+  const [searchTerm, setSearchTerm] = React.useState("");
+
   return (
     <div className="bg-surface text-on-background antialiased font-body min-h-screen">
       <Sidebar />
 
       <main className="min-h-screen">
-        <TopNav />
+        {/* 2. Pass the state and the updater function into the TopNav */}
+        <TopNav searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
         <div className="pt-24 px-12 pb-12">
           {/* Hero */}
@@ -31,7 +37,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* Replaced standard HTML button with Shadcn Button */}
             <Button onClick={()=>{router.push("/dashboard/new-job")}} className="flex items-center gap-3 px-6 py-6 rounded-lg font-semibold shadow-xl hover:opacity-90 active:scale-95 bg-gradient-to-br from-primary to-primary-container text-on-primary">
               Create New Job
             </Button>
@@ -45,7 +50,8 @@ export default function DashboardPage() {
             <StatsCard title="Exception Alerts" value="04" subtitle="Action required" danger />
           </div>
 
-          <JobTable />
+          {/* 3. Pass the exact same search term down into the JobTable */}
+          <JobTable searchTerm={searchTerm} />
 
           {/* Insights */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">

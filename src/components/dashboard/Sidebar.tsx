@@ -16,10 +16,10 @@ export default function Sidebar() {
 
       <nav className="flex-1 space-y-1">
         <NavItem href="/dashboard" pathname = {pathname} icon={LayoutDashboard} label="Dashboard" exact />
+        <NavItem href="/dashboard/quotes" pathname = {pathname} icon={Wallet} label="Quotations" />
         <NavItem href="/dashboard/jobs" pathname = {pathname} icon={Package} label="Jobs" active />
         <NavItem href="/dashboard/invoices" pathname = {pathname} icon={Receipt} label="Invoicing" />
         <NavItem href="/dashboard/directory/companies" pathname = {pathname} icon={Truck} label="Directory" />
-        <NavItem href="/dashboard/quotes/new" pathname = {pathname} icon={Wallet} label="Reconciliation" />
       </nav>
     </aside>
   )

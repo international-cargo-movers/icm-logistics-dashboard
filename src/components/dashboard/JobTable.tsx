@@ -1,81 +1,3 @@
-// const MOCK_JOBS = [
-//   {
-//     id: "FR-902341",
-//     customer: "Global Logistics",
-//     route: "Shanghai → Rotterdam",
-//     status: "In Transit",
-//     eta: "2024-11-14",
-//     statusColor: "bg-green-100 text-green-700",
-//   },
-//   {
-//     id: "FR-881203",
-//     customer: "TechMove Systems",
-//     route: "Singapore → Los Angeles",
-//     status: "Booking",
-//     eta: "2024-11-09",
-//     statusColor: "bg-blue-100 text-blue-700",
-//   },
-//   {
-//     id: "FR-776452",
-//     customer: "Apex Ventures",
-//     route: "Hamburg → New York",
-//     status: "Delivered",
-//     eta: "2024-11-05",
-//     statusColor: "bg-gray-100 text-gray-700",
-//   },
-//   {
-//     id: "FR-651239",
-//     customer: "Blue Mountain Co.",
-//     route: "Busan → Felixstowe",
-//     status: "Delayed",
-//     eta: "2024-11-20",
-//     statusColor: "bg-red-100 text-red-700",
-//   },
-// ];
-
-// export default function JobTable() {
-//   return (
-//     <div className="rounded-2xl border bg-background overflow-hidden">
-//       <div className="px-8 py-6 border-b flex justify-between">
-//         <span className="text-sm font-medium">All Jobs</span>
-//         <span className="text-xs text-muted-foreground">
-//           Showing 1-{MOCK_JOBS.length} of 1,248
-//         </span>
-//       </div>
-
-//       <table className="w-full text-left">
-//         <thead className="bg-muted/50 text-xs uppercase">
-//           <tr>
-//             <th className="px-8 py-4">Job ID</th>
-//             <th className="px-8 py-4">Customer</th>
-//             <th className="px-8 py-4">Route</th>
-//             <th className="px-8 py-4">Status</th>
-//             <th className="px-8 py-4 text-right">ETA</th>
-//           </tr>
-//         </thead>
-
-//         <tbody>
-//           {MOCK_JOBS.map((job) => (
-//             <tr key={job.id} className="border-t hover:bg-muted/40 transition-colors">
-//               <td className="px-8 py-6 font-mono text-primary">#{job.id}</td>
-//               <td className="px-8 py-6 font-medium">{job.customer}</td>
-//               <td className="px-8 py-6 text-muted-foreground">{job.route}</td>
-//               <td className="px-8 py-6">
-//                 <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${job.statusColor}`}>
-//                   {job.status}
-//                 </span>
-//               </td>
-//               <td className="px-8 py-6 text-right font-mono text-sm">
-//                 {job.eta}
-//               </td>
-//             </tr>
-//           ))}
-//         </tbody>
-//       </table>
-//     </div>
-//   )
-// }
-
 "use client"
 
 import * as React from "react"
@@ -89,8 +11,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { ChevronLeft, ChevronRight, Filter } from "lucide-react"
 
-// Define a rough type for the incoming data
 type Job = {
   _id: string;
   jobId: string;
@@ -107,10 +30,16 @@ type Job = {
   };
 }
 
-export default function JobTable() {
+const ITEMS_PER_PAGE = 7; // Adjust this number to fit your layout perfectly
+
+export default function JobTable({ searchTerm = "" }: { searchTerm?: string }) {
   const [jobs, setJobs] = React.useState<Job[]>([])
   const [loading, setLoading] = React.useState(true)
   const router = useRouter()
+
+  // Pagination & Filter States
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [statusFilter, setStatusFilter] = React.useState("All")
 
   React.useEffect(() => {
     async function fetchJobs() {
@@ -129,6 +58,47 @@ export default function JobTable() {
     fetchJobs()
   }, [])
 
+  // Reset to page 1 whenever a filter or search term changes
+  React.useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter])
+
+  // Dynamically extract all unique statuses from the database for the filter buttons
+  const availableStatuses = React.useMemo(() => {
+    const statuses = new Set(jobs.map(j => j.cargoDetails?.jobStatus || "Processing"))
+    return ["All", ...Array.from(statuses)]
+  }, [jobs])
+
+  // --- ENGINE: Filter & Search ---
+  const filteredJobs = React.useMemo(() => {
+    return jobs.filter(job => {
+      // 1. Search Logic
+      const searchLower = searchTerm.toLowerCase()
+      const matchesSearch = 
+        job.jobId?.toLowerCase().includes(searchLower) ||
+        job.customerDetails?.companyId?.name?.toLowerCase().includes(searchLower) ||
+        job.shipmentDetails?.portOfLoading?.toLowerCase().includes(searchLower) ||
+        job.shipmentDetails?.portOfDischarge?.toLowerCase().includes(searchLower)
+      
+      if (!matchesSearch) return false
+
+      // 2. Status Filter Logic
+      if (statusFilter !== "All") {
+        const jobStatus = job.cargoDetails?.jobStatus || "Processing"
+        if (jobStatus !== statusFilter) return false
+      }
+
+      return true
+    })
+  }, [jobs, searchTerm, statusFilter])
+
+  // --- ENGINE: Pagination ---
+  const totalPages = Math.max(1, Math.ceil(filteredJobs.length / ITEMS_PER_PAGE))
+  const paginatedJobs = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    return filteredJobs.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+  }, [filteredJobs, currentPage])
+
   if (loading) {
     return (
       <div className="bg-surface rounded-xl border shadow-sm p-12 text-center animate-pulse text-muted-foreground">
@@ -138,11 +108,38 @@ export default function JobTable() {
   }
 
   return (
-    <div className="bg-surface rounded-xl border shadow-sm overflow-hidden mb-12">
+    <div className="bg-surface rounded-xl border shadow-sm overflow-hidden mb-12 flex flex-col">
+      
+      {/* TOOLBAR: Filters & Job Count */}
+      <div className="px-6 py-4 border-b bg-muted/20 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-muted-foreground mr-2" />
+          <div className="flex bg-muted/50 p-1 rounded-lg">
+            {availableStatuses.map(status => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                  statusFilter === status 
+                    ? "bg-background text-foreground shadow-sm" 
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="text-xs font-medium text-muted-foreground">
+          Showing {filteredJobs.length} {filteredJobs.length === 1 ? 'Job' : 'Jobs'}
+        </div>
+      </div>
+
+      {/* TABLE */}
       <Table>
-        <TableHeader className="bg-muted/50">
+        <TableHeader className="bg-muted/30">
           <TableRow>
-            <TableHead className="font-bold">Job ID</TableHead>
+            <TableHead className="font-bold px-6 py-4">Job ID</TableHead>
             <TableHead className="font-bold">Customer</TableHead>
             <TableHead className="font-bold">Routing</TableHead>
             <TableHead className="font-bold">Mode</TableHead>
@@ -150,29 +147,33 @@ export default function JobTable() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {jobs.length === 0 ? (
+          {paginatedJobs.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                No active jobs found. Click "Create New Job" to get started!
+              <TableCell colSpan={5} className="text-center py-16 text-muted-foreground">
+                {searchTerm || statusFilter !== "All" 
+                  ? "No jobs match your search filters." 
+                  : "No active jobs found. Click 'Create New Job' to get started!"}
               </TableCell>
             </TableRow>
           ) : (
-            jobs.map((job) => (
+            paginatedJobs.map((job) => (
               <TableRow
                 key={job._id}
                 className="cursor-pointer hover:bg-muted/50 transition-colors"
-                // This prepares us for the next phase: clicking a job opens its specific page!
                 onClick={() => router.push(`/dashboard/jobs/${job.jobId}`)}
               >
-                <TableCell className="font-medium text-primary">{job.jobId}</TableCell>
-                <TableCell>
-                  {/* Notice how we pull the populated name! */}
+                <TableCell className="font-medium text-primary px-6 py-4">{job.jobId}</TableCell>
+                <TableCell className="font-semibold">
                   {job.customerDetails?.companyId?.name || "Unknown Customer"}
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-muted-foreground">
                   {job.shipmentDetails?.portOfLoading || "TBD"} → {job.shipmentDetails?.portOfDischarge || "TBD"}
                 </TableCell>
-                <TableCell>{job.shipmentDetails?.mode}</TableCell>
+                <TableCell>
+                  <span className="text-xs font-medium px-2 py-1 bg-muted rounded-md border">
+                    {job.shipmentDetails?.mode || "N/A"}
+                  </span>
+                </TableCell>
                 <TableCell>
                   <Badge 
                     variant={job.cargoDetails?.jobStatus === "Processing" ? "secondary" : "default"}
@@ -186,6 +187,35 @@ export default function JobTable() {
           )}
         </TableBody>
       </Table>
+
+      {/* PAGINATION FOOTER */}
+      {totalPages > 1 && (
+        <div className="px-6 py-4 border-t bg-muted/10 flex items-center justify-between">
+          <span className="text-xs text-muted-foreground font-medium">
+            Page {currentPage} of {totalPages}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="h-8 px-2 text-xs"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="h-8 px-2 text-xs"
+            >
+              Next <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

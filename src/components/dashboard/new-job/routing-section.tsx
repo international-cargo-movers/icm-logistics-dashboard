@@ -8,7 +8,6 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem, ComboboxEmpty } from "@/components/ui/combobox"
 import { ArrowDown } from "lucide-react"
 
-// Types based on our new PortModel
 type DBPort = {
   _id: string;
   name: string;
@@ -18,26 +17,24 @@ type DBPort = {
   type: string[];
 }
 
-export default function RoutingSection() {
+export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean }) {
   const { control, setValue } = useFormContext()
 
-  // Watch the mode to filter ports (e.g., Sea vs Air)
   const mode = useWatch({ control, name: "shipmentDetails.mode" }) || ""
-  
-  // Watch the countries to trigger the cascading effect
   const originCountry = useWatch({ control, name: "shipmentDetails.originCountry" })
   const destinationCountry = useWatch({ control, name: "shipmentDetails.destinationCountry" })
+  const originPort = useWatch({ control, name: "shipmentDetails.originPort" }) || ""
+  const destinationPort = useWatch({ control, name: "shipmentDetails.destinationPort" }) || ""
 
   const [allPorts, setAllPorts] = React.useState<DBPort[]>([])
   const [countries, setCountries] = React.useState<{name: string, code: string}[]>([])
 
-  // UI State for Comboboxes
   const [openOC, setOpenOC] = React.useState(false); const [searchOC, setSearchOC] = React.useState("")
   const [openOP, setOpenOP] = React.useState(false); const [searchOP, setSearchOP] = React.useState("")
   const [openDC, setOpenDC] = React.useState(false); const [searchDC, setSearchDC] = React.useState("")
   const [openDP, setOpenDP] = React.useState(false); const [searchDP, setSearchDP] = React.useState("")
 
-  // 1. Fetch Master Port Data on mount
+  // --- 1. RESTORED: Fetch Master Data ---
   React.useEffect(() => {
     async function fetchPorts() {
       try {
@@ -45,8 +42,6 @@ export default function RoutingSection() {
         const json = await res.json()
         if (json.success) {
           setAllPorts(json.data)
-          
-          // Extract unique countries from the port list
           const uniqueCountriesMap = new Map()
           json.data.forEach((p: DBPort) => {
             if (!uniqueCountriesMap.has(p.countryCode)) {
@@ -62,32 +57,71 @@ export default function RoutingSection() {
     fetchPorts()
   }, [])
 
-  // 2. Cascading Logic: Clear the Port if the Country changes!
+  // --- 2. RACE CONDITION FIX: Only clear the port if the new country DOESN'T match ---
   React.useEffect(() => {
-    setValue("shipmentDetails.originPort", "", { shouldValidate: true })
-    setSearchOP("")
-  }, [originCountry, setValue])
+    if(!isReadOnly && originCountry && allPorts.length > 0) {
+        const currentPortObj = allPorts.find(p => p.locode === originPort);
+        if (currentPortObj && currentPortObj.countryCode !== originCountry) {
+            setValue("shipmentDetails.originPort", "", { shouldValidate: true })
+        }
+    }
+  }, [originCountry, isReadOnly, allPorts, setValue, originPort])
 
   React.useEffect(() => {
-    setValue("shipmentDetails.destinationPort", "", { shouldValidate: true })
-    setSearchDP("")
-  }, [destinationCountry, setValue])
+    if(!isReadOnly && destinationCountry && allPorts.length > 0) {
+        const currentPortObj = allPorts.find(p => p.locode === destinationPort);
+        if (currentPortObj && currentPortObj.countryCode !== destinationCountry) {
+            setValue("shipmentDetails.destinationPort", "", { shouldValidate: true })
+        }
+    }
+  }, [destinationCountry, isReadOnly, allPorts, setValue, destinationPort])
 
-  // 3. Filter Ports based on selected Country AND Transport Mode
-  const isAir = mode.includes("air")
+  // --- 3. ULTIMATE GHOST DATA FIXES ---
+  // Syncs the visual text boxes when a Quote is linked, OR wipes them when "Clear Selection" is clicked
+  React.useEffect(() => {
+    if (!originCountry) setSearchOC("");
+    else if (countries.length > 0) {
+      const found = countries.find(c => c.code === originCountry);
+      if (found) setSearchOC(found.name);
+    }
+  }, [originCountry, countries]);
+
+  React.useEffect(() => {
+    if (!originPort) setSearchOP("");
+    else if (allPorts.length > 0) {
+      const found = allPorts.find(p => p.locode === originPort);
+      if (found) setSearchOP(found.name);
+    }
+  }, [originPort, allPorts]);
+
+  React.useEffect(() => {
+    if (!destinationCountry) setSearchDC("");
+    else if (countries.length > 0) {
+      const found = countries.find(c => c.code === destinationCountry);
+      if (found) setSearchDC(found.name);
+    }
+  }, [destinationCountry, countries]);
+
+  React.useEffect(() => {
+    if (!destinationPort) setSearchDP("");
+    else if (allPorts.length > 0) {
+      const found = allPorts.find(p => p.locode === destinationPort);
+      if (found) setSearchDP(found.name);
+    }
+  }, [destinationPort, allPorts]);
+
+  const isAir = mode.includes("Air")
   const requiredType = isAir ? "Air" : "Sea"
 
-  const availableOriginPorts = allPorts.filter(p => 
-    p.countryCode === originCountry && p.type.includes(requiredType)
-  )
-  
-  const availableDestPorts = allPorts.filter(p => 
-    p.countryCode === destinationCountry && p.type.includes(requiredType)
-  )
+  const availableOriginPorts = allPorts.filter(p => p.countryCode === originCountry && p.type.includes(requiredType))
+  const availableDestPorts = allPorts.filter(p => p.countryCode === destinationCountry && p.type.includes(requiredType))
 
   return (
     <section>
-      <h2 className="section-title text-xl font-bold mb-4 text-on-surface">Shipment Routing</h2>
+      <div className="flex justify-between items-end mb-4">
+        <h2 className="section-title text-xl font-bold text-on-surface">Shipment Routing</h2>
+        {isReadOnly && <span className="px-2.5 py-1 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest rounded-md">Baseline Locked by Quote</span>}
+      </div>
 
       <Card className="p-8 flex flex-col gap-8 bg-surface-container-lowest border-none shadow-[0_4px_20px_rgba(25,28,30,0.03)]">
         
@@ -99,9 +133,9 @@ export default function RoutingSection() {
             render={({ field }:{field:any}) => (
               <FormItem>
                 <FormLabel className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">Transport Mode *</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
                   <FormControl>
-                    <SelectTrigger className="bg-surface-container-low border-none">
+                    <SelectTrigger className={`border-none ${isReadOnly ? "bg-muted/50 opacity-70 cursor-not-allowed" : "bg-surface-container-low"}`}>
                       <SelectValue placeholder="Select mode" />
                     </SelectTrigger>
                   </FormControl>
@@ -122,7 +156,6 @@ export default function RoutingSection() {
 
         {/* ROW 2: Origin Routing */}
         <div className="grid md:grid-cols-2 gap-6 p-6 bg-surface-container-low/50 rounded-xl border border-outline-variant/20">
-          
           <FormField
             control={control}
             name="shipmentDetails.originCountry"
@@ -130,11 +163,12 @@ export default function RoutingSection() {
               <FormItem>
                 <FormLabel className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">POL Country</FormLabel>
                 <FormControl>
-                  <Combobox open={openOC} onOpenChange={setOpenOC} value={countries.find(c => c.code === field.value)?.name || field.value || ""} inputValue={searchOC} onValueChange={(val) => {
+                  <Combobox open={isReadOnly ? false : openOC} onOpenChange={isReadOnly ? () => {} : setOpenOC} value={countries.find(c => c.code === field.value)?.name || field.value || ""} inputValue={searchOC} onValueChange={(val) => {
+                      if(isReadOnly) return;
                       const selected = countries.find(c => c.name.toLowerCase() === (val || "").toLowerCase())
                       field.onChange(selected ? selected.code : val)
-                    }} onInputValueChange={setSearchOC}>
-                    <ComboboxInput showTrigger placeholder="Select Origin Country..." className="bg-white border-none" />
+                    }} onInputValueChange={isReadOnly ? () => {} : setSearchOC}>
+                    <ComboboxInput showTrigger={!isReadOnly} disabled={isReadOnly} placeholder="Select Origin Country..." className={`border-none ${isReadOnly ? "bg-muted/50 opacity-70 cursor-not-allowed font-semibold text-on-surface" : "bg-white"}`} />
                     <ComboboxContent>
                       <ComboboxList>
                         {countries.map((c) => <ComboboxItem key={c.code} value={c.name}>{c.name}</ComboboxItem>)}
@@ -154,11 +188,12 @@ export default function RoutingSection() {
               <FormItem>
                 <FormLabel className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">Port of Loading</FormLabel>
                 <FormControl>
-                  <Combobox open={openOP} onOpenChange={setOpenOP} value={allPorts.find(p => p.locode === field.value)?.name || field.value || ""} inputValue={searchOP} onValueChange={(val) => {
+                  <Combobox open={isReadOnly ? false : openOP} onOpenChange={isReadOnly ? () => {} : setOpenOP} value={allPorts.find(p => p.locode === field.value)?.name || field.value || ""} inputValue={searchOP} onValueChange={(val) => {
+                      if(isReadOnly) return;
                       const selected = availableOriginPorts.find(p => p.name.toLowerCase() === (val || "").toLowerCase())
                       field.onChange(selected ? selected.locode : val)
-                    }} onInputValueChange={setSearchOP}>
-                    <ComboboxInput showTrigger disabled={!originCountry} placeholder={originCountry ? "Select Port..." : "Select Country First"} className="bg-white border-none disabled:opacity-50" />
+                    }} onInputValueChange={isReadOnly ? () => {} : setSearchOP}>
+                    <ComboboxInput showTrigger={!isReadOnly && !!originCountry} disabled={isReadOnly || !originCountry} placeholder={originCountry ? "Select Port..." : "Select Country First"} className={`border-none ${isReadOnly || !originCountry ? "bg-muted/50 opacity-70 cursor-not-allowed font-semibold text-on-surface" : "bg-white"}`} />
                     <ComboboxContent>
                       <ComboboxList>
                         {availableOriginPorts.map((p) => <ComboboxItem key={p.locode} value={p.name}>{p.name} ({p.locode})</ComboboxItem>)}
@@ -180,7 +215,6 @@ export default function RoutingSection() {
 
         {/* ROW 3: Destination Routing */}
         <div className="grid md:grid-cols-2 gap-6 p-6 bg-surface-container-low/50 rounded-xl border border-outline-variant/20">
-          
           <FormField
             control={control}
             name="shipmentDetails.destinationCountry"
@@ -188,11 +222,12 @@ export default function RoutingSection() {
               <FormItem>
                 <FormLabel className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">POD Country</FormLabel>
                 <FormControl>
-                  <Combobox open={openDC} onOpenChange={setOpenDC} value={countries.find(c => c.code === field.value)?.name || field.value || ""} inputValue={searchDC} onValueChange={(val) => {
+                  <Combobox open={isReadOnly ? false : openDC} onOpenChange={isReadOnly ? () => {} : setOpenDC} value={countries.find(c => c.code === field.value)?.name || field.value || ""} inputValue={searchDC} onValueChange={(val) => {
+                      if(isReadOnly) return;
                       const selected = countries.find(c => c.name.toLowerCase() === (val || "").toLowerCase())
                       field.onChange(selected ? selected.code : val)
-                    }} onInputValueChange={setSearchDC}>
-                    <ComboboxInput showTrigger placeholder="Select Dest. Country..." className="bg-white border-none" />
+                    }} onInputValueChange={isReadOnly ? () => {} : setSearchDC}>
+                    <ComboboxInput showTrigger={!isReadOnly} disabled={isReadOnly} placeholder="Select Dest. Country..." className={`border-none ${isReadOnly ? "bg-muted/50 opacity-70 cursor-not-allowed font-semibold text-on-surface" : "bg-white"}`} />
                     <ComboboxContent>
                       <ComboboxList>
                         {countries.map((c) => <ComboboxItem key={c.code} value={c.name}>{c.name}</ComboboxItem>)}
@@ -212,11 +247,12 @@ export default function RoutingSection() {
               <FormItem>
                 <FormLabel className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">Port of Discharge</FormLabel>
                 <FormControl>
-                  <Combobox open={openDP} onOpenChange={setOpenDP} value={allPorts.find(p => p.locode === field.value)?.name || field.value || ""} inputValue={searchDP} onValueChange={(val) => {
+                  <Combobox open={isReadOnly ? false : openDP} onOpenChange={isReadOnly ? () => {} : setOpenDP} value={allPorts.find(p => p.locode === field.value)?.name || field.value || ""} inputValue={searchDP} onValueChange={(val) => {
+                      if(isReadOnly) return;
                       const selected = availableDestPorts.find(p => p.name.toLowerCase() === (val || "").toLowerCase())
                       field.onChange(selected ? selected.locode : val)
-                    }} onInputValueChange={setSearchDP}>
-                    <ComboboxInput showTrigger disabled={!destinationCountry} placeholder={destinationCountry ? "Select Port..." : "Select Country First"} className="bg-white border-none disabled:opacity-50" />
+                    }} onInputValueChange={isReadOnly ? () => {} : setSearchDP}>
+                    <ComboboxInput showTrigger={!isReadOnly && !!destinationCountry} disabled={isReadOnly || !destinationCountry} placeholder={destinationCountry ? "Select Port..." : "Select Country First"} className={`border-none ${isReadOnly || !destinationCountry ? "bg-muted/50 opacity-70 cursor-not-allowed font-semibold text-on-surface" : "bg-white"}`} />
                     <ComboboxContent>
                       <ComboboxList>
                         {availableDestPorts.map((p) => <ComboboxItem key={p.locode} value={p.name}>{p.name} ({p.locode})</ComboboxItem>)}
@@ -229,7 +265,6 @@ export default function RoutingSection() {
             )}
           />
         </div>
-
       </Card>
     </section>
   )

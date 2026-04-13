@@ -1,0 +1,74 @@
+import { NextResponse } from 'next/server';
+import dbConnect from '@/lib/mongodb';
+import QuoteModel from '@/model/QuoteModel';
+
+// GET: Fetch a single quote to populate the Edit Form
+export async function GET(request: Request, { params }: { params: { quoteId: string } }) {
+    try {
+        await dbConnect();
+        const { quoteId } = await params;
+
+        const quote = await QuoteModel.findOne({ quoteId }).lean();
+
+        if (!quote) {
+            return NextResponse.json({ success: false, error: "Quote not found" }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, data: quote });
+    } catch (error: any) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+}
+
+// PUT: Update an existing quote
+export async function PUT(request: Request, { params }: { params: { quoteId: string } }) {
+    try {
+        await dbConnect();
+        const { quoteId } = await params;
+        const body = await request.json();
+        const { quoteData } = body;
+
+        // We use .findOne() and .save() instead of findOneAndUpdate() 
+        // to ensure our Mongoose pre-save hook (which calculates profit margins) fires correctly!
+        const quote = await QuoteModel.findOne({ quoteId });
+
+        if (!quote) {
+            return NextResponse.json({ success: false, error: "Quote not found" }, { status: 404 });
+        }
+
+        // Update the document properties
+        quote.customerDetails.companyId = quoteData.customerId;
+        quote.customerDetails.contactPerson = quoteData.customerName;
+        quote.routingDetails = {
+            originCountry: quoteData.originCountry,
+            destinationCountry: quoteData.destinationCountry,
+
+            originPort: quoteData.originPort,
+            destinationPort: quoteData.destinationPort,
+            mode: quoteData.mode
+        };
+        quote.cargoSummary = {
+            commodity: quoteData.cargoSummary?.commodity || "General Cargo",
+            equipment: quoteData.cargoSummary?.equipment,
+            estimatedWeight: quoteData.cargoSummary?.estimatedWeight
+        };
+        quote.validity.expiryDate = new Date(quoteData.validUntil);
+        quote.financials.lineItems = quoteData.lineItems.map((item: any) => ({
+            chargeName: item.chargeName,
+            chargeType: item.chargeType,
+            buyPrice: Number(item.buyPrice),
+            sellPrice: Number(item.sellPrice),
+            currency: item.currency || "USD",
+        }));
+
+        // If it was rejected or draft, editing it moves it back to Draft/Sent depending on action
+        if (quote.status === "Rejected") quote.status = "Draft";
+
+        await quote.save();
+
+        return NextResponse.json({ success: true, data: quote });
+    } catch (error: any) {
+        console.error("Update Error:", error);
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+}

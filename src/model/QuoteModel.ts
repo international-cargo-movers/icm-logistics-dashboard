@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
+
 // 1. Interface for Financial Line Items
 export interface IQuoteLineItem {
     chargeName: string;       // e.g., "Ocean Freight", "Customs Clearance"
@@ -18,9 +19,11 @@ export interface IQuote extends Document {
         contactPerson?: string;
     };
     routingDetails: {
-        originPort: string;       // Can be the UN/LOCODE or Port Name
+        originCountry: string;      // NEW
+        originPort: string;
+        destinationCountry: string; // NEW
         destinationPort: string;
-        mode: string;             // e.g., "Sea FCL Export"
+        mode: string;
     };
     cargoSummary: {
         commodity: string;
@@ -54,13 +57,15 @@ const QuoteSchema: Schema<IQuote> = new Schema(
         customerDetails: {
             companyId: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: "Company",
+                ref: "CompanyModel",
                 required: true
             },
             contactPerson: { type: String }
         },
         routingDetails: {
+            originCountry: { type: String, required: true },      // NEW
             originPort: { type: String, required: true },
+            destinationCountry: { type: String, required: true }, // NEW
             destinationPort: { type: String, required: true },
             mode: { type: String, required: true }
         },

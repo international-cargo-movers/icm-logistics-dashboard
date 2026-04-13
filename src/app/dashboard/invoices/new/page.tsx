@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, Search, X } from "lucide-react"
+import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X } from "lucide-react"
 import { pdf } from '@react-pdf/renderer'
 import InvoicePDF from '@/components/dashboard/invoices/InvoicePDF'
 
 import { Form, FormField, FormItem, FormControl } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "sonner"
 
 // --- UTILITY: Number to Words ---
 function numberToWords(num: number): string {
@@ -52,6 +53,7 @@ type InvoiceFormValues = z.infer<typeof invoiceSchema>
 
 export default function SmartInvoiceGenerator() {
     const router = useRouter()
+    // const { toast } = useToast()
     const [jobs, setJobs] = React.useState<any[]>([])
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
@@ -66,39 +68,87 @@ export default function SmartInvoiceGenerator() {
             billingAddress: "",
             origin: "",
             destination: "",
-            lineItems: [
-                { description: "Ocean Freight - 40' High Cube", sacCode: "996511", rate: 3250.00, currency: "USD", roe: 1, gstPercent: 18 },
-            ]
+            lineItems: []
         }
     })
 
     const { control, watch, setValue, register, handleSubmit } = form
-    const { fields, append, remove } = useFieldArray({ control, name: "lineItems" })
+    // We import 'replace' to instantly swap out all line items when a Quote is loaded
+    const { fields, append, remove, replace } = useFieldArray({ control, name: "lineItems" })
 
-    // --- FETCH DATA ---
+    // --- FETCH MASTER DATA ---
     React.useEffect(() => {
         async function fetchJobs() {
-            // Replace with actual fetch once API is ready
-            const res = await fetch("/api/jobs")
-            const json = await res.json()
-            if (json.success) setJobs(json.data)
+            try {
+                const res = await fetch("/api/jobs")
+                const json = await res.json()
+                if (json.success) setJobs(json.data)
+            } catch (error) {
+                toast.error("Could not fetch active jobs.")
+            }
         }
         fetchJobs()
-    }, [])
+    }, [toast])
 
-    const handleJobSelect = (selectedJobId: string) => {
+    // --- THE PIPELINE BRIDGE (Quote -> Job -> Invoice) ---
+    const handleJobSelect = async (selectedJobId: string) => {
         const job = jobs.find(j => j.jobId === selectedJobId)
         if (!job) return
 
+        // 1. Auto-fill the Baseline Job details
         setValue("jobId", job._id)
         setValue("customerName", job.customerDetails?.companyId?.name || "Unknown Customer")
-        setValue("billingAddress", job.customerDetails?.companyId?.billingAddress || "No Address")
+
+        // Smarter Address formatting mapping from JobModel fields
+        const addressParts = [
+            job.customerDetails?.streetAddress,
+            job.customerDetails?.city,
+            job.customerDetails?.state,
+            job.customerDetails?.country
+        ].filter(Boolean)
+        setValue("billingAddress", addressParts.join(", ") || "No Address Provided")
+
         setValue("origin", job.shipmentDetails?.portOfLoading || "TBD")
         setValue("destination", job.shipmentDetails?.portOfDischarge || "TBD")
+
+        // 2. Fetch the linked Quote to auto-generate the Financials!
+        if (job.quoteReference) {
+            toast.message(`Fetching Financials...\nPulling approved rates from Quote: ${job.quoteReference}`)
+            try {
+                const quoteRes = await fetch(`/api/quotes/${job.quoteReference}`)
+                const quoteJson = await quoteRes.json()
+
+                if (quoteJson.success && quoteJson.data) {
+                    const quoteLineItems = quoteJson.data.financials?.lineItems || []
+
+                    // Map Quote schema strictly to Invoice schema
+                    const invoiceReadyLines = quoteLineItems.map((item: any) => ({
+                        description: item.chargeName || "Freight Charge",
+                        sacCode: "996511", // Standard freight SAC Code
+                        rate: Number(item.sellPrice) || 0, // IMPORTANT: We only bill the Sell Price!
+                        currency: item.currency || "USD",
+                        roe: 1, // Can be adjusted by operator for forex
+                        gstPercent: 18 // Default 18% for Indian freight operations
+                    }))
+
+                    if (invoiceReadyLines.length > 0) {
+                        replace(invoiceReadyLines) // instantly overwrites the table
+                        toast.message("Financials Loaded.\nSuccessfully applied sell rates from the approved quote.")
+                    } else {
+                        replace([{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
+                    }
+                }
+            } catch (error) {
+                toast.error("Failed to fetch linked quote financials.")
+            }
+        } else {
+            toast.message("Manual Entry Required.\nThis job has no linked quote. Please add line items manually.")
+            replace([{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
+        }
     }
 
     // --- LIVE MATH ENGINE ---
-    const lineItems = watch("lineItems")
+    const lineItems = watch("lineItems") || []
     const totals = lineItems.reduce((acc, item) => {
         const taxableValue = (item.rate || 0) * (item.roe || 1)
         const gstAmount = taxableValue * ((item.gstPercent || 0) / 100)
@@ -112,57 +162,40 @@ export default function SmartInvoiceGenerator() {
     async function onSubmit(data: InvoiceFormValues) {
         setIsSubmitting(true)
         try {
-            // 0. Find the original job from our state to grab the hidden companyId
             const linkedJob = jobs.find(j => j._id === data.jobId);
             const companyId = linkedJob?.customerDetails?.companyId?._id || linkedJob?.customerDetails?.companyId;
 
-            // 1. Calculate the exact math for EVERY row so the database is happy
             const processedLineItems = data.lineItems.map(item => {
                 const taxableValue = (item.rate || 0) * (item.roe || 1);
                 const gstAmount = taxableValue * ((item.gstPercent || 0) / 100);
-                return {
-                    ...item,
-                    taxableValue,
-                    gstAmount
-                };
+                return { ...item, taxableValue, gstAmount };
             });
 
-            // 2. Build the EXACT payload that matches InvoiceModel.ts
             const invoicePayload = {
                 invoiceNo: data.invoiceNo,
-                invoiceDate: data.issueDate, // Map issueDate to invoiceDate
+                invoiceDate: data.issueDate,
                 jobId: data.jobId,
-
-                // Neatly nest the customer details
                 customerDetails: {
                     companyId: companyId,
                     name: data.customerName,
                     billingAddress: data.billingAddress
                 },
-
-                // Neatly nest the routing details
                 shipmentSnapshot: {
                     origin: data.origin,
                     destination: data.destination,
                     pol: data.origin,
                     pod: data.destination
                 },
-
-                // Use the newly processed rows
                 lineItems: processedLineItems,
-
-                // Map our React totals to the exact Mongoose keys
                 totals: {
                     totalTaxable: totals.taxable,
                     totalGst: totals.gst,
                     roundOff: 0,
                     netAmount: totals.net
                 },
-
                 status: "Unpaid"
             }
 
-            // 3. Send the translated payload to MongoDB
             const dbResponse = await fetch("/api/invoices", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -171,25 +204,18 @@ export default function SmartInvoiceGenerator() {
 
             const dbResult = await dbResponse.json();
 
-            if (!dbResult.success) {
-                throw new Error(dbResult.error || "Failed to save to database");
-            }
+            if (!dbResult.success) throw new Error(dbResult.error || "Failed to save to database");
 
-            console.log("Invoice securely saved to DB:", dbResult.data);
-
-            // 4. Generate the PDF Blob using the exact same payload
             const blob = await pdf(<InvoicePDF data={invoicePayload} />).toBlob()
             const url = URL.createObjectURL(blob)
             window.open(url, '_blank')
 
-            alert("Transaction Recorded & PDF Generated!")
-
-            // 5. Redirect the user back to the dashboard
+            toast.success("Transaction Recorded & PDF Generated!")
             router.push("/dashboard")
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Transaction failed:", error)
-            alert("Something went wrong saving the invoice. Check console.")
+            toast.error("Failed to generate invoice.")
         } finally {
             setIsSubmitting(false)
         }
@@ -197,7 +223,6 @@ export default function SmartInvoiceGenerator() {
 
     return (
         <div className="bg-slate-50 text-slate-900 min-h-screen font-sans pb-12">
-
             {/* STICKY ACTION BAR */}
             <div className="sticky px-6 py-2 top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-10 h-16 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
@@ -243,7 +268,7 @@ export default function SmartInvoiceGenerator() {
                                     {jobs.length === 0 && <SelectItem value="none" disabled>Loading jobs...</SelectItem>}
                                     {jobs.map(job => (
                                         <SelectItem key={job.jobId} value={job.jobId}>
-                                            {job.jobId} - {job.customerDetails?.companyId?.name}
+                                            {job.jobId} - {job.customerDetails?.companyId?.name || "Unknown"}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -257,61 +282,38 @@ export default function SmartInvoiceGenerator() {
                             <h2 className="text-xs font-black uppercase tracking-widest text-[#45464d]">Associated Shipment Data (Read-only)</h2>
                         </div>
 
-                        {/* THE FIX: Changed to a strict 2-column grid so it NEVER stacks vertically */}
                         <div className="p-8 flex gap-12 items-start">
-
-                            {/* LEFT SIDE */}
                             <div className="flex-1 min-w-0">
                                 <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-2 block">
                                     Consignee / Bill To
                                 </label>
-
-                                <p className="text-sm font-bold text-[#191c1e]">
-                                    {watch("customerName") || "—"}
-                                </p>
-
+                                <p className="text-sm font-bold text-[#191c1e]">{watch("customerName") || "—"}</p>
                                 <p className="text-xs text-[#54647a] mt-1 leading-relaxed whitespace-pre-wrap">
                                     {watch("billingAddress") || "Select a job to view details."}
                                 </p>
                             </div>
 
-                            {/* RIGHT SIDE */}
                             <div className="flex-1 flex gap-6">
-
-                                {/* ORIGIN */}
                                 <div className="flex-1 bg-white p-5 rounded-xl border border-[#c6c6cd]/20 shadow-sm p-4">
-                                    <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-3 block">
-                                        Origin
-                                    </label>
-
+                                    <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-3 block">Origin</label>
                                     <div className="flex items-center gap-3">
                                         <MapPin className="w-5 h-5 text-[#111c2d]" />
                                         <div>
-                                            <div className="text-xs font-bold text-[#191c1e]">
-                                                {watch("origin") || "—"}
-                                            </div>
+                                            <div className="text-xs font-bold text-[#191c1e]">{watch("origin") || "—"}</div>
                                             <div className="text-[10px] text-[#45464d] mt-0.5">POL</div>
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* DESTINATION */}
                                 <div className="flex-1 bg-white p-5 rounded-xl border border-[#c6c6cd]/20 shadow-sm p-4">
-                                    <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-3 block">
-                                        Destination
-                                    </label>
-
+                                    <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-3 block">Destination</label>
                                     <div className="flex items-center gap-3">
                                         <Anchor className="w-5 h-5 text-[#188ace]" />
                                         <div>
-                                            <div className="text-xs font-bold text-[#191c1e]">
-                                                {watch("destination") || "—"}
-                                            </div>
+                                            <div className="text-xs font-bold text-[#191c1e]">{watch("destination") || "—"}</div>
                                             <div className="text-[10px] text-[#45464d] mt-0.5">POD</div>
                                         </div>
                                     </div>
                                 </div>
-
                             </div>
                         </div>
                     </div>
@@ -322,7 +324,7 @@ export default function SmartInvoiceGenerator() {
                             <h2 className="text-sm font-extrabold text-slate-900">Billing Items</h2>
                             <button
                                 type="button"
-                                onClick={() => append({ description: "", sacCode: "", rate: 0, currency: "USD", roe: 1, gstPercent: 18 })}
+                                onClick={() => append({ description: "", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 })}
                                 className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
                             >
                                 <PlusCircle className="w-4 h-4" /> Add Charge Line
@@ -356,7 +358,7 @@ export default function SmartInvoiceGenerator() {
                                                         {...register(`lineItems.${index}.description`)}
                                                         className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none resize-none leading-relaxed"
                                                         placeholder="Description..."
-                                                        rows={2} // Gives it enough space to wrap naturally
+                                                        rows={2}
                                                     />
                                                 </td>
                                                 <td className="px-4 py-4">
@@ -393,7 +395,7 @@ export default function SmartInvoiceGenerator() {
                                                     {lineTaxable.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <button type="button" onClick={() => remove(index)} className="otext-slate-300 hover:text-red-500 hover:scale-110 transition-colors">
+                                                    <button type="button" onClick={() => remove(index)} className="text-slate-300 hover:text-red-500 hover:scale-110 transition-colors">
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </td>

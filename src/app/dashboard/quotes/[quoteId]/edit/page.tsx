@@ -2,9 +2,10 @@
 
 import * as React from "react"
 import { useState, useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
 import { pdf } from '@react-pdf/renderer'
 import QuotePDF from '@/components/dashboard/quotes/QuotePDF'
-import { Plus, Trash2, ArrowRight, Check, ChevronsUpDown, Download, Mail } from "lucide-react"
+import { Plus, Trash2, ArrowRight, Check, ChevronsUpDown, Save, Mail, Download } from "lucide-react"
 
 // Shadcn UI Imports
 import { cn } from "@/lib/utils"
@@ -14,53 +15,64 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 
-export default function NewQuotePage() {
-  const [isSavingPdf, setIsSavingPdf] = useState(false)
-  const [isSendingEmail, setIsSendingEmail] = useState(false)
+export default function EditQuotePage() {
+  const params = useParams()
+  const router = useRouter()
+  const quoteId = params.quoteId as string
 
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
+  
   const [customers, setCustomers] = useState<any[]>([])
   const [ports, setPorts] = useState<any[]>([])
-  const [countries, setCountries] = useState<{ name: string, code: string }[]>([])
+  const [countries, setCountries] = useState<{name: string, code: string}[]>([])
 
   const [openCustomer, setOpenCustomer] = useState(false)
-  const [customerSearch, setCustomerSearch] = useState("") // NEW: Tracks the search input
-
-  // Combobox States for Routing
   const [openOC, setOpenOC] = useState(false); const [searchOC, setSearchOC] = useState("")
   const [openOP, setOpenOP] = useState(false); const [searchOP, setSearchOP] = useState("")
   const [openDC, setOpenDC] = useState(false); const [searchDC, setSearchDC] = useState("")
   const [openDP, setOpenDP] = useState(false); const [searchDP, setSearchDP] = useState("")
 
   const [quoteData, setQuoteData] = useState({
-    quoteRef: `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+    quoteRef: quoteId,
     validityDays: 15,
-    customerId: "",
-    customerName: "",
-    customerEmail: "",
-    originCountry: "",
-    originPort: "",
+    customerId: "",       
+    customerName: "",     
+    customerEmail: "",    
+    originCountry: "",    
+    originPort: "",       
     destinationCountry: "",
-    destinationPort: "",
-    mode: "",
+    destinationPort: "",  
+    mode: "Sea FCL Export", 
     cargoSummary: {
       commodity: "",
       equipment: "",
       estimatedWeight: ""
     },
-    lineItems: [
-      { chargeName: "Ocean Freight - 40' HC", chargeType: "Freight", buyPrice: 2800, sellPrice: 3250, currency: "USD" },
-      { chargeName: "Terminal Handling", chargeType: "Origin", buyPrice: 120, sellPrice: 150, currency: "USD" }
-    ]
+    lineItems: [] as any[]
   })
 
+  // 1. Fetch Master Data AND Existing Quote Data
   useEffect(() => {
-    async function fetchMasterData() {
+    async function loadData() {
       try {
-        const [companyRes, portRes] = await Promise.all([fetch("/api/companies"), fetch("/api/ports")]);
+        const [companyRes, portRes, quoteRes] = await Promise.all([ 
+          fetch("/api/companies"), 
+          fetch("/api/ports"),
+          fetch(`/api/quotes/${quoteId}`) 
+        ]);
+        
         const companyJson = await companyRes.json();
         const portJson = await portRes.json();
+        const quoteJson = await quoteRes.json();
 
-        if (companyJson.success) setCustomers(companyJson.data.filter((c: any) => c.type.includes("Customer")));
+        let loadedCustomers: any[] = [];
+        if (companyJson.success) {
+            loadedCustomers = companyJson.data.filter((c: any) => c.type.includes("Customer"));
+            setCustomers(loadedCustomers);
+        }
+
         if (portJson.success) {
           setPorts(portJson.data);
           const uniqueCountriesMap = new Map();
@@ -71,76 +83,86 @@ export default function NewQuotePage() {
           });
           setCountries(Array.from(uniqueCountriesMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
         }
-      } catch (error) { console.error("Failed to load master data", error); }
-    }
-    fetchMasterData();
-  }, [])
 
-  // --- NEW: QUICK ADD CUSTOMER ---
-  const handleQuickAddCustomer = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!customerSearch.trim()) return;
-    try {
-      const res = await fetch("/api/companies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: customerSearch.trim(),
-          type: ["Customer"],
-          email: quoteData.customerEmail // FIX: Changed to match your DB schema
-        })
-      });
-      const json = await res.json();
-      if (json.success) {
-        const newCustomer = json.data;
-        setCustomers([...customers, newCustomer]);
-        // FIX: Ensure the email populates instantly upon creation
-        setQuoteData({ ...quoteData, customerId: newCustomer._id, customerName: newCustomer.name, customerEmail: newCustomer.email || "" });
-        setOpenCustomer(false);
-        setCustomerSearch("");
-        toast.success(`"${newCustomer.name}" added to Master Directory!`);
-      } else {
-        toast.error(json.error || "Failed to create customer");
+        // Map DB data back to the UI State
+        if (quoteJson.success) {
+          const q = quoteJson.data;
+          
+          const issue = new Date(q.validity.issueDate).getTime();
+          const expiry = new Date(q.validity.expiryDate).getTime();
+          const diffDays = Math.ceil((expiry - issue) / (1000 * 60 * 60 * 24));
+
+          // Cross-reference with Master Directory to get the most up-to-date email
+          const linkedCustomer = loadedCustomers.find(c => c._id === q.customerDetails.companyId);
+          const activeEmail = linkedCustomer?.email || linkedCustomer?.contactEmail || q.customerDetails.email || "";
+
+          setQuoteData({
+            quoteRef: q.quoteId,
+            validityDays: diffDays || 15,
+            customerId: q.customerDetails.companyId,
+            customerName: q.customerDetails.contactPerson || linkedCustomer?.name || "",
+            customerEmail: activeEmail, 
+            originCountry: q.routingDetails.originCountry || (q.routingDetails.originPort ? q.routingDetails.originPort.substring(0, 2) : ""),
+            originPort: q.routingDetails.originPort,
+            destinationCountry: q.routingDetails.destinationCountry || (q.routingDetails.destinationPort ? q.routingDetails.destinationPort.substring(0, 2) : ""),
+            destinationPort: q.routingDetails.destinationPort,
+            mode: q.routingDetails.mode,
+            cargoSummary: {
+              commodity: q.cargoSummary?.commodity || "",
+              equipment: q.cargoSummary?.equipment || "",
+              estimatedWeight: q.cargoSummary?.estimatedWeight || ""
+            },
+            lineItems: q.financials.lineItems || []
+          });
+        } else {
+            toast.error("Quote not found!");
+            router.push('/dashboard/quotes');
+        }
+      } catch (error) { 
+        console.error("Failed to load data", error); 
+      } finally {
+        setIsLoading(false);
       }
-    } catch (e) {
-      toast.error("Failed to add customer");
     }
-  }
+    loadData();
+  }, [quoteId, router])
 
-  // --- NEW: AUTO-SYNC EMAIL ON BLUR ---
+  // --- AUTO-SYNC EMAIL ON BLUR ---
   const handleEmailBlur = async () => {
     if (quoteData.customerId && quoteData.customerEmail) {
       const customer = customers.find(c => c._id === quoteData.customerId);
-      // FIX: Check against 'email' instead of 'contactEmail'
       if (customer && customer.email !== quoteData.customerEmail) {
-        try {
-          const res = await fetch(`/api/companies/${quoteData.customerId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            // FIX: Send 'email' to the backend
-            body: JSON.stringify({ email: quoteData.customerEmail })
-          });
-          if (res.ok) {
-            toast.success("Customer email updated in Master Directory!");
-            setCustomers(customers.map(c => c._id === quoteData.customerId ? { ...c, email: quoteData.customerEmail } : c));
-          }
-        } catch (e) {
-          console.error("Failed to sync email", e);
-        }
+         try {
+           const res = await fetch(`/api/companies/${quoteData.customerId}`, {
+             method: "PUT",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({ email: quoteData.customerEmail }) 
+           });
+           if (res.ok) {
+             toast.success("Customer email updated in Master Directory!");
+             setCustomers(customers.map(c => c._id === quoteData.customerId ? { ...c, email: quoteData.customerEmail } : c));
+           }
+         } catch (e) {
+           console.error("Failed to sync email", e);
+         }
       }
     }
   }
 
   // Cascading Logic: Clear port if country changes
   useEffect(() => {
-    setQuoteData(prev => ({ ...prev, originPort: "" }))
-    setSearchOP("")
-  }, [quoteData.originCountry])
+    if (!isLoading) {
+      setQuoteData(prev => ({ ...prev, originPort: "" }))
+      setSearchOP("")
+    }
+  }, [quoteData.originCountry, isLoading])
 
   useEffect(() => {
-    setQuoteData(prev => ({ ...prev, destinationPort: "" }))
-    setSearchDP("")
-  }, [quoteData.destinationCountry])
+    if (!isLoading) {
+      setQuoteData(prev => ({ ...prev, destinationPort: "" }))
+      setSearchDP("")
+    }
+  }, [quoteData.destinationCountry, isLoading])
 
   const isAir = quoteData.mode.includes("Air")
   const requiredType = isAir ? "Air" : "Sea"
@@ -160,14 +182,15 @@ export default function NewQuotePage() {
   }
 
   const preparePayload = () => {
-    if (!quoteData.customerId || !quoteData.originPort || !quoteData.destinationPort || !quoteData.mode) {
-      toast.error("Please select a Customer and complete Routing details before saving.");
+    if (!quoteData.customerId || !quoteData.originPort || !quoteData.destinationPort) {
+      toast.error("Missing Fields", { description: "Please select a Customer and Routing details before saving." });
       return null;
     }
     if (!quoteData.cargoSummary.equipment || quoteData.cargoSummary.equipment.trim() === "") {
-      toast.error("Please specify the Equipment / Volume in the Cargo Summary (e.g., 1x 40' HC).");
+      toast.error("Missing Cargo Specs", { description: "Please specify the Equipment / Volume in the Cargo Summary." });
       return null;
     }
+
     return {
       ...quoteData,
       totalBuy,
@@ -178,45 +201,48 @@ export default function NewQuotePage() {
     };
   }
 
-  const handleDownloadPDF = async () => {
+  const handleUpdate = async () => {
     const finalData = preparePayload();
     if (!finalData) return;
 
-    setIsSavingPdf(true);
+    setIsSaving(true);
     try {
       const blob = await pdf(<QuotePDF data={finalData} />).toBlob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Quotation_${finalData.quoteRef}.pdf`;
+      link.download = `Quotation_${finalData.quoteRef}_Revised.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      const response = await fetch('/api/quotes/send', {
-        method: 'POST',
+      const response = await fetch(`/api/quotes/${quoteId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quoteData: finalData })
+        body: JSON.stringify({ quoteData: finalData }) 
       });
 
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Database rejection.");
-
-      toast.success("Quote Saved and PDF Downloaded!");
+      if (!response.ok) throw new Error(result.error || "Update failed.");
+      
+      toast.success("Quote Revised Successfully!");
+      router.push('/dashboard/quotes');
+      
     } catch (error: any) {
-      toast.error(`Failed to save quote: ${error.message}`);
+      toast.error("Update Failed", { description: error.message });
     } finally {
-      setIsSavingPdf(false);
+      setIsSaving(false);
     }
   }
 
   const handleSendEmail = async () => {
     const finalData = preparePayload();
     if (!finalData) return;
-    if (!finalData.customerEmail) return toast.error("Please provide a valid Customer Email.");
+    if (!quoteData.customerEmail) return toast.error("Please provide a valid Customer Email.");
 
     setIsSendingEmail(true);
     try {
+      // 1. Generate the PDF payload
       const blob = await pdf(<QuotePDF data={finalData} />).toBlob();
       const base64String = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -225,36 +251,48 @@ export default function NewQuotePage() {
         reader.onerror = (error) => reject(error);
       });
 
-      const response = await fetch('/api/quotes/send', {
+      // 2. Save the revision first
+      const updateResponse = await fetch(`/api/quotes/${quoteId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quoteData: finalData }) 
+      });
+      if (!updateResponse.ok) throw new Error("Failed to save revision before emailing.");
+
+      // 3. Dispatch the email via your API
+      const emailResponse = await fetch('/api/quotes/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quoteData: finalData, pdfBase64: base64String })
+        // Passing isRevision flag in case your backend needs to know it's not a brand new creation
+        body: JSON.stringify({ quoteData: finalData, pdfBase64: base64String, isRevision: true }) 
       });
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Email pipeline failed.");
+      const result = await emailResponse.json();
+      if (!emailResponse.ok) throw new Error(result.error || "Email pipeline failed.");
 
-      toast.success("Quote Saved and Emailed Successfully!");
+      toast.success("Quote Revised and Emailed Successfully!");
+      router.push('/dashboard/quotes');
     } catch (error: any) {
-      toast.error(`Failed to send quote: ${error.message}`);
+      toast.error(`Failed to send email: ${error.message}`);
     } finally {
       setIsSendingEmail(false);
     }
   }
 
+  if (isLoading) return <div className="p-12 text-center font-bold">Loading Quote Data...</div>
+
   return (
     <div className="flex-1 overflow-y-auto px-16 py-12 bg-surface text-on-surface font-sans min-h-screen">
       <div className="max-w-5xl mx-auto space-y-8">
-
+        
         <div className="space-y-2">
-          <h1 className="text-4xl font-extrabold tracking-tight text-on-surface">Generate Quote</h1>
-          <p className="text-on-surface-variant text-lg">Build financials, select routing, and lock in margins.</p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-on-surface">Edit Quote: {quoteId}</h1>
+          <p className="text-on-surface-variant text-lg">Revise pricing and routing for this active negotiation.</p>
         </div>
 
         <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm border border-outline-variant/20">
           <div className="p-8 space-y-10">
-
-            {/* Top Row: Customer & Settings */}
+            
             <div className="grid grid-cols-2 gap-10">
               <section className="space-y-6">
                 <div className="flex items-center gap-2 border-l-4 border-primary pl-4">
@@ -272,27 +310,15 @@ export default function NewQuotePage() {
                       </PopoverTrigger>
                       <PopoverContent className="w-[400px] p-0" align="start">
                         <Command>
-                          <CommandInput
-                            placeholder="Search customers..."
-                            value={customerSearch}
-                            onValueChange={setCustomerSearch}
-                          />
+                          <CommandInput placeholder="Search customers..." />
                           <CommandList>
-                            <CommandEmpty className="py-6 text-center text-sm">
-                              <p className="text-muted-foreground mb-3">No customer found.</p>
-                              {/* QUICK ADD BUTTON */}
-                              <Button type="button" size="sm" onClick={handleQuickAddCustomer} className="bg-primary text-on-primary">
-                                + Quick Add "{customerSearch}"
-                              </Button>
-                            </CommandEmpty>
+                            <CommandEmpty>No customer found.</CommandEmpty>
                             <CommandGroup>
                               {customers.map((c) => (
                                 <CommandItem key={c._id} value={c.name} onSelect={() => {
-                                  // FIX: Pulls 'c.email' (with a fallback to contactEmail just in case you have legacy data)
-                                  setQuoteData({ ...quoteData, customerId: c._id, customerName: c.name, customerEmail: c.email || c.contactEmail || "" });
-                                  setOpenCustomer(false);
-                                  setCustomerSearch("");
-                                }}>
+                                    setQuoteData({ ...quoteData, customerId: c._id, customerName: c.name, customerEmail: c.email || c.contactEmail || "" });
+                                    setOpenCustomer(false);
+                                  }}>
                                   <Check className={cn("mr-2 h-4 w-4", quoteData.customerId === c._id ? "opacity-100 text-primary" : "opacity-0")} />
                                   {c.name}
                                 </CommandItem>
@@ -303,15 +329,17 @@ export default function NewQuotePage() {
                       </PopoverContent>
                     </Popover>
                   </div>
+                  
+                  {/* EMAL SYNC BOX */}
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-on-surface-variant block">Customer Email (Editable)</label>
-                    <input
-                      type="email"
-                      value={quoteData.customerEmail}
-                      onChange={(e) => setQuoteData({ ...quoteData, customerEmail: e.target.value })}
-                      onBlur={handleEmailBlur} // SYNC ON BLUR
-                      placeholder="manager@company.com"
-                      className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    <input 
+                      type="email" 
+                      value={quoteData.customerEmail} 
+                      onChange={(e) => setQuoteData({ ...quoteData, customerEmail: e.target.value })} 
+                      onBlur={handleEmailBlur}
+                      placeholder="manager@company.com" 
+                      className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" 
                     />
                   </div>
                 </div>
@@ -328,18 +356,18 @@ export default function NewQuotePage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-on-surface-variant block">Validity (Days)</label>
-                    <input type="number" value={quoteData.validityDays} onChange={(e) => setQuoteData({ ...quoteData, validityDays: parseInt(e.target.value) || 0 })} className="w-full bg-surface-container-low border-none rounded-lg h-12 px-4 focus:ring-2 focus:ring-primary/20 text-sm outline-none" />
+                    <input type="number" value={quoteData.validityDays} onChange={(e) => setQuoteData({...quoteData, validityDays: parseInt(e.target.value) || 0})} className="w-full bg-surface-container-low border-none rounded-lg h-12 px-4 focus:ring-2 focus:ring-primary/20 text-sm outline-none" />
                   </div>
                 </div>
               </section>
             </div>
 
-            {/* Middle Row: Routing (UPDATED WITH CASCADING COUNTRIES) */}
+            {/* Middle Row: Routing */}
             <section className="space-y-6 pt-6 border-t border-outline-variant/10">
               <div className="flex items-center justify-between border-l-4 border-primary pl-4">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Routing Data</h2>
                 <div className="w-48">
-                  <Select value={quoteData.mode} onValueChange={(val) => setQuoteData({ ...quoteData, mode: val })}>
+                  <Select value={quoteData.mode} onValueChange={(val) => setQuoteData({...quoteData, mode: val})}>
                     <SelectTrigger className="w-full bg-primary/10 border-none h-9 text-xs font-bold text-primary focus:ring-0 focus:ring-offset-0">
                       <SelectValue placeholder="Mode" />
                     </SelectTrigger>
@@ -354,9 +382,9 @@ export default function NewQuotePage() {
                   </Select>
                 </div>
               </div>
-
+              
               <div className="flex items-start gap-6 bg-surface-container-low p-6 rounded-xl border border-outline-variant/10">
-
+                
                 {/* ORIGIN STACK */}
                 <div className="flex-1 space-y-4">
                   <div className="space-y-1.5">
@@ -416,7 +444,7 @@ export default function NewQuotePage() {
                 </div>
 
                 <div className="mt-12 text-on-surface-variant"><ArrowRight className="w-6 h-6" /></div>
-
+                
                 {/* DESTINATION STACK */}
                 <div className="flex-1 space-y-4">
                   <div className="space-y-1.5">
@@ -486,15 +514,15 @@ export default function NewQuotePage() {
               <div className="grid grid-cols-3 gap-4 bg-surface-container-low p-5 rounded-xl border border-outline-variant/10">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-on-surface-variant block">Commodity</label>
-                  <input type="text" value={quoteData.cargoSummary.commodity} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, commodity: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  <input type="text" value={quoteData.cargoSummary.commodity} onChange={(e) => setQuoteData({...quoteData, cargoSummary: {...quoteData.cargoSummary, commodity: e.target.value}})} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-on-surface-variant block">Equipment / Volume</label>
-                  <input type="text" placeholder="e.g. 1x 40' HC or 15 CBM" value={quoteData.cargoSummary.equipment} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, equipment: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  <input type="text" placeholder="e.g. 1x 40' HC or 15 CBM" value={quoteData.cargoSummary.equipment} onChange={(e) => setQuoteData({...quoteData, cargoSummary: {...quoteData.cargoSummary, equipment: e.target.value}})} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-on-surface-variant block">Est. Gross Weight</label>
-                  <input type="text" placeholder="e.g. 12,500 kg" value={quoteData.cargoSummary.estimatedWeight} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, estimatedWeight: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  <input type="text" placeholder="e.g. 12,500 kg" value={quoteData.cargoSummary.estimatedWeight} onChange={(e) => setQuoteData({...quoteData, cargoSummary: {...quoteData.cargoSummary, estimatedWeight: e.target.value}})} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
               </div>
             </section>
@@ -507,7 +535,7 @@ export default function NewQuotePage() {
                   <Plus className="w-3.5 h-3.5" /> Add Charge
                 </button>
               </div>
-
+              
               <div className="border border-outline-variant/20 rounded-xl overflow-hidden">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -551,37 +579,37 @@ export default function NewQuotePage() {
           {/* Footer Metrics & Actions */}
           <div className="bg-surface-container-low p-8 flex items-center justify-between border-t border-outline-variant/20">
             <div className="flex gap-12">
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Total Buy Cost</span>
-                <div className="text-xl font-bold text-error tabular-nums">${totalBuy.toLocaleString()}</div>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Total Sell To Client</span>
-                <div className="text-xl font-bold text-primary tabular-nums">${totalSell.toLocaleString()}</div>
-              </div>
-              <div className="space-y-1 border-l border-outline-variant/30 pl-12">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Net Profit Margin</span>
-                <div className="text-2xl font-black text-emerald-600 tabular-nums">${profitMargin.toLocaleString()}</div>
-              </div>
+               <div className="space-y-1">
+                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Total Buy Cost</span>
+                 <div className="text-xl font-bold text-error tabular-nums">${totalBuy.toLocaleString()}</div>
+               </div>
+               <div className="space-y-1">
+                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Total Sell To Client</span>
+                 <div className="text-xl font-bold text-primary tabular-nums">${totalSell.toLocaleString()}</div>
+               </div>
+               <div className="space-y-1 border-l border-outline-variant/30 pl-12">
+                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Net Profit Margin</span>
+                 <div className="text-2xl font-black text-emerald-600 tabular-nums">${profitMargin.toLocaleString()}</div>
+               </div>
             </div>
-
+            
             <div className="flex gap-4">
-              <button
-                onClick={handleDownloadPDF}
-                disabled={isSavingPdf || isSendingEmail}
+              <button 
+                onClick={handleUpdate}
+                disabled={isSaving || isSendingEmail}
                 className="px-6 py-3 bg-white border border-outline-variant/30 text-on-surface-variant rounded-lg font-bold flex items-center gap-2 hover:bg-surface-container transition-colors disabled:opacity-50"
               >
                 <Download className="w-4 h-4" />
-                {isSavingPdf ? "Processing..." : "Save & Download PDF"}
+                {isSaving ? "Saving..." : "Save Revision & Download"}
               </button>
 
               <button
                 onClick={handleSendEmail}
-                disabled={isSavingPdf || isSendingEmail}
+                disabled={isSaving || isSendingEmail}
                 className="px-8 py-3 bg-primary text-on-primary rounded-lg font-bold shadow-lg shadow-primary/20 flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 <Mail className="w-4 h-4" />
-                {isSendingEmail ? "Sending..." : "Save & Email Client"}
+                {isSendingEmail ? "Sending..." : "Save Revision & Email"}
               </button>
             </div>
           </div>

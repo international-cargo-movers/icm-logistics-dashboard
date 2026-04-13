@@ -3,7 +3,6 @@ import { useFormContext } from "react-hook-form"
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { JobFormValues } from "@/app/dashboard/new-job/page"
 
 import { Combobox, ComboboxEmpty, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem } from "@/components/ui/combobox"
@@ -22,7 +21,7 @@ type DBCompany = {
 
 const isValidMongoId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
 
-export default function CustomerSection() {
+export default function CustomerSection({ isReadOnly }: { isReadOnly?: boolean }) {
   const { control, setValue, watch } = useFormContext<JobFormValues>()
   
   const [open, setOpen] = React.useState(false)
@@ -38,14 +37,28 @@ export default function CustomerSection() {
           const customerOnly = json.data.filter((c:any)=>c.type && c.type.includes("Customer"))
           setCompanies(customerOnly)
         }
-      } catch (error) {
-        console.error("Failed to Fetch companies: ", error)
-      }
+      } catch (error) { console.error("Failed to Fetch companies: ", error) }
     }
     fetchCompanies()
   }, [])
 
-const handleCompanySelect = (selectedIdOrName: string) => {
+  const currentCompanyId = watch("customerDetails.companyId") || ""
+  const isKnownCompany = isValidMongoId(currentCompanyId) && companies.some(c => c._id === currentCompanyId)
+
+  // THE ULTIMATE GHOST-DATA FIX
+  // This explicitly guarantees that the visual text box matches the background data state at all times!
+  React.useEffect(() => {
+    if (!currentCompanyId) {
+      setSearchQuery(""); // Instantly wipe visual text when "Clear Selection" is clicked
+    } else if (companies.length > 0) {
+      const foundCompany = companies.find(c => c._id === currentCompanyId);
+      if (foundCompany) {
+        setSearchQuery(foundCompany.name); // Instantly paint the visual text when Quote is linked
+      }
+    }
+  }, [currentCompanyId, companies]);
+
+  const handleCompanySelect = (selectedIdOrName: string) => {
     const foundCompany = companies.find(c => c._id === selectedIdOrName)
     
     if (foundCompany && isValidMongoId(foundCompany._id)) { 
@@ -69,33 +82,27 @@ const handleCompanySelect = (selectedIdOrName: string) => {
 
   const handleHoldText = (nameToKeep: string, onChange: (val: string) => void) => {
     if (!nameToKeep) return;
-    
     const existing = companies.find(c => c.name.toLowerCase() === nameToKeep.toLowerCase());
     if (existing) {
       onChange(existing._id);
       handleCompanySelect(existing._id);
       setSearchQuery(existing.name);
-      setOpen(false);
-      return;
-    }
-
-    if (!companies.some(c => c.name.toLowerCase() === nameToKeep.toLowerCase())) {
+    } else {
       setCompanies(prev => [...prev, { _id: nameToKeep, name: nameToKeep }]);
+      onChange(nameToKeep);
+      handleCompanySelect(nameToKeep);
     }
-
-    onChange(nameToKeep);
-    handleCompanySelect(nameToKeep);
     setOpen(false);
   }
 
-  const currentCompanyId = watch("customerDetails.companyId") || ""
-  const isKnownCompany = isValidMongoId(currentCompanyId) && companies.some(c => c._id === currentCompanyId)
-
   return (
     <section>
-      <h2 className="section-title text-xl font-bold mb-4">Customer Details</h2>
+      <div className="flex justify-between items-end mb-4">
+        <h2 className="section-title text-xl font-bold text-on-surface">Customer Details</h2>
+        {isReadOnly && <span className="px-2.5 py-1 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest rounded-md">Baseline Locked by Quote</span>}
+      </div>
 
-      <Card className="p-8 grid md:grid-cols-2 gap-8">
+      <Card className="p-8 grid md:grid-cols-2 gap-8 bg-surface-container-lowest border-none shadow-[0_4px_20px_rgba(25,28,30,0.03)]">
         <div>
           <FormField
             control={control}
@@ -105,21 +112,15 @@ const handleCompanySelect = (selectedIdOrName: string) => {
                 <FormLabel>Company Name *</FormLabel>
                 <FormControl>
                   <Combobox
-                    open={open}
-                    onOpenChange={setOpen}
-                    
-                    // FIX 1: Feed the Combobox UI the Name instead of the ID so it matches!
+                    open={isReadOnly ? false : open}
+                    onOpenChange={isReadOnly ? () => {} : setOpen}
                     value={companies.find(c => c._id === field.value)?.name || field.value} 
-                    
                     inputValue={searchQuery}
                     onValueChange={(val: string | null) => {
+                      if (isReadOnly) return;
                       const safeVal = val || ""
-                      
-                      // FIX 2: Since the Combobox now returns a Name, we look up the company by Name!
                       const selectedComp = companies.find(c => c.name.toLowerCase() === safeVal.toLowerCase())
-                      
                       if (selectedComp) {
-                        // Secretly pass the real MongoDB ID to the form behind the scenes
                         field.onChange(selectedComp._id)
                         handleCompanySelect(selectedComp._id)
                         setSearchQuery(selectedComp.name)
@@ -129,6 +130,7 @@ const handleCompanySelect = (selectedIdOrName: string) => {
                       }
                     }}
                     onInputValueChange={(val: string) => {
+                      if (isReadOnly) return;
                       setSearchQuery(val)
                       if (val === "") {
                         field.onChange("")
@@ -137,46 +139,29 @@ const handleCompanySelect = (selectedIdOrName: string) => {
                     }}
                   >
                     <ComboboxInput 
-                      showTrigger 
+                      showTrigger={!isReadOnly}
+                      disabled={isReadOnly}
                       placeholder="Search or type new..." 
-                      onBlur={() => {
-                        if (searchQuery) handleHoldText(searchQuery, field.onChange)
-                      }}
+                      className={isReadOnly ? "bg-muted/50 opacity-70 cursor-not-allowed border-none text-on-surface font-semibold" : "border-none"}
+                      onBlur={() => { if (searchQuery && !isReadOnly) handleHoldText(searchQuery, field.onChange) }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                        if (e.key === 'Enter' && !isReadOnly) {
                           e.preventDefault() 
                           e.stopPropagation() 
                           if (searchQuery) handleHoldText(searchQuery, field.onChange)
                         }
                       }}
                     />
-                    
                     <ComboboxContent>
                       <ComboboxList>
                         {companies.map((c) => (
-                          <ComboboxItem 
-                            key={c._id} 
-                            // FIX 3: The item value is now the Name! This stops the ID from jumping into the text box.
-                            value={c.name}
-                            className={isValidMongoId(c._id) ? "" : "hidden"}
-                          >
-                            {c.name}
-                          </ComboboxItem>
+                          <ComboboxItem key={c._id} value={c.name} className={isValidMongoId(c._id) ? "" : "hidden"}>{c.name}</ComboboxItem>
                         ))}
-
                         <ComboboxEmpty>
-                          <div 
-                            onPointerDown={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              handleHoldText(searchQuery, field.onChange)
-                            }}
-                            className="cursor-pointer px-4 py-3 text-sm text-center hover:bg-muted text-primary font-medium transition-colors"
-                          >
+                          <div onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleHoldText(searchQuery, field.onChange) }} className="cursor-pointer px-4 py-3 text-sm text-center hover:bg-muted text-primary font-medium transition-colors">
                             Create "{searchQuery}"
                           </div>
                         </ComboboxEmpty>
-                        
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
@@ -187,7 +172,6 @@ const handleCompanySelect = (selectedIdOrName: string) => {
           />
         </div>
 
-        {/* ... Rest of the component stays exactly the same (Sales Person & Billing Address) ... */}
         <div>
           <FormField
             control={control}
@@ -195,21 +179,13 @@ const handleCompanySelect = (selectedIdOrName: string) => {
             render={({ field }: { field: any }) => (
               <FormItem>
                 <FormLabel>Sales Person</FormLabel>
-                <FormControl>
-                  <Input 
-                    placeholder={isKnownCompany ? "Auto-filled" : "Enter sales person name..."} 
-                    readOnly={isKnownCompany} 
-                    className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} 
-                    {...field} 
-                  />
-                </FormControl>
+                <FormControl><Input placeholder="Enter sales person name..." {...field} value={field.value || ""} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
         </div>
 
-{/* ROW 2: Tax ID & Street Address */}
         <div>
           <FormField
             control={control}
@@ -217,9 +193,7 @@ const handleCompanySelect = (selectedIdOrName: string) => {
             render={({ field }: { field: any }) => (
               <FormItem>
                 <FormLabel>Tax ID (GSTIN/EIN)</FormLabel>
-                <FormControl>
-                  <Input placeholder={isKnownCompany ? "Auto-filled" : "e.g. 27AAAAA0000A1Z5"} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
-                </FormControl>
+                <FormControl><Input placeholder="e.g. 27AAAAA0000A1Z5" {...field} value={field.value || ""} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -233,16 +207,13 @@ const handleCompanySelect = (selectedIdOrName: string) => {
             render={({ field }: { field: any }) => (
               <FormItem>
                 <FormLabel>Street Address</FormLabel>
-                <FormControl>
-                  <Input placeholder={isKnownCompany ? "Auto-filled" : "123 Logistics Way..."} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
-                </FormControl>
+                <FormControl><Input placeholder="123 Logistics Way..." {...field} value={field.value || ""} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
         </div>
 
-        {/* ROW 3: City & State */}
         <div>
           <FormField
             control={control}
@@ -250,9 +221,7 @@ const handleCompanySelect = (selectedIdOrName: string) => {
             render={({ field }: { field: any }) => (
               <FormItem>
                 <FormLabel>City</FormLabel>
-                <FormControl>
-                  <Input placeholder={isKnownCompany ? "Auto-filled" : "City"} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
-                </FormControl>
+                <FormControl><Input placeholder="City" {...field} value={field.value || ""} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -266,16 +235,13 @@ const handleCompanySelect = (selectedIdOrName: string) => {
             render={({ field }: { field: any }) => (
               <FormItem>
                 <FormLabel>State / Province</FormLabel>
-                <FormControl>
-                  <Input placeholder={isKnownCompany ? "Auto-filled" : "State"} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
-                </FormControl>
+                <FormControl><Input placeholder="State" {...field} value={field.value || ""} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
         </div>
 
-        {/* ROW 4: Zip Code & Country */}
         <div>
           <FormField
             control={control}
@@ -283,9 +249,7 @@ const handleCompanySelect = (selectedIdOrName: string) => {
             render={({ field }: { field: any }) => (
               <FormItem>
                 <FormLabel>Zip / Postal Code</FormLabel>
-                <FormControl>
-                  <Input placeholder={isKnownCompany ? "Auto-filled" : "Zip Code"} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
-                </FormControl>
+                <FormControl><Input placeholder="Zip Code" {...field} value={field.value || ""} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -299,9 +263,7 @@ const handleCompanySelect = (selectedIdOrName: string) => {
             render={({ field }: { field: any }) => (
               <FormItem>
                 <FormLabel>Country</FormLabel>
-                <FormControl>
-                  <Input placeholder={isKnownCompany ? "Auto-filled" : "Country"} readOnly={isKnownCompany} className={isKnownCompany ? "bg-muted/50 cursor-not-allowed" : ""} {...field} value={field.value || ""} />
-                </FormControl>
+                <FormControl><Input placeholder="Country" {...field} value={field.value || ""} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}

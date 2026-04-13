@@ -1,57 +1,133 @@
+"use client"
+
+import * as React from "react"
 import Link from "next/link"
-import dbConnect from "@/lib/mongodb"
-import InvoiceModel from "@/model/InvoiceModel"
+import { useRouter } from "next/navigation"
 import { 
   Search, Bell, HelpCircle, Wallet, Clock, AlertTriangle, 
-  Calendar, Filter, Eye, Download, Send, Plus, CheckCircle
+  Calendar, Filter, Eye, Download, Plus, Edit
 } from "lucide-react"
+import { pdf } from '@react-pdf/renderer'
+import InvoicePDF from '@/components/dashboard/invoices/InvoicePDF'
+import { toast } from "sonner"
 
 // --- Helper for Status Colors ---
 function getStatusBadge(status: string) {
-  switch(status.toLowerCase()) {
-    case 'paid':
-      return "bg-emerald-100 text-emerald-700";
+  switch(status?.toLowerCase()) {
+    case 'paid': return "bg-emerald-100 text-emerald-700";
     case 'pending':
-    case 'unpaid':
-      return "bg-amber-100 text-amber-700";
-    case 'overdue':
-      return "bg-red-100 text-red-700";
-    default:
-      return "bg-slate-100 text-slate-700";
+    case 'draft':
+    case 'unpaid': return "bg-amber-100 text-amber-700";
+    case 'overdue': return "bg-red-100 text-red-700";
+    default: return "bg-slate-100 text-slate-700";
   }
 }
 
-export default async function InvoicesDashboardPage() {
-  await dbConnect();
+export default function InvoicesDashboardPage() {
+  const router = useRouter()
+  const [invoices, setInvoices] = React.useState<any[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+
+  // --- FILTER STATES ---
+  const [searchTerm, setSearchTerm] = React.useState("")
+  const [statusFilter, setStatusFilter] = React.useState("All")
+  const [dateFilter, setDateFilter] = React.useState("All") // "All" | "30Days"
 
   // --- 1. FETCH LIVE DATA ---
-  // Grab all invoices from the database, newest first
-  const invoices = await InvoiceModel.find({}).sort({ createdAt: -1 }).lean();
+  React.useEffect(() => {
+    async function fetchInvoices() {
+      try {
+        const res = await fetch('/api/invoices')
+        const json = await res.json()
+        if (json.success) setInvoices(json.data)
+      } catch (error) {
+        toast.error("Failed to fetch invoices")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchInvoices()
+  }, [])
 
-  // --- 2. CRUNCH THE KPIs ---
-  const stats = invoices.reduce((acc: any, inv: any) => {
-    const amount = inv.totals?.netAmount || 0;
-    acc.totalRevenue += amount;
-    
-    if (inv.status === "Unpaid" || inv.status === "Pending") {
-      acc.outstanding += amount;
-    }
-    if (inv.status === "Overdue") {
-      acc.overdue += amount;
-    }
-    return acc;
-  }, { totalRevenue: 0, outstanding: 0, overdue: 0 });
+  // --- 2. LIVE FILTERING ENGINE ---
+  const filteredInvoices = React.useMemo(() => {
+    return invoices.filter(inv => {
+      // A. Search Match
+      const searchLower = searchTerm.toLowerCase()
+      const matchesSearch = 
+        inv.invoiceNo?.toLowerCase().includes(searchLower) ||
+        inv.customerDetails?.name?.toLowerCase().includes(searchLower) ||
+        inv.jobId?.toLowerCase().includes(searchLower)
+      if (!matchesSearch) return false
+
+      // B. Status Match
+      if (statusFilter !== "All") {
+        const stat = inv.status?.toLowerCase() || "pending"
+        if (statusFilter === "Paid" && stat !== "paid") return false
+        if (statusFilter === "Pending" && stat !== "unpaid" && stat !== "pending" && stat !== "draft") return false
+        if (statusFilter === "Overdue" && stat !== "overdue") return false
+      }
+
+      // C. Date Match (Last 30 Days)
+      if (dateFilter === "30Days") {
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        const invDate = new Date(inv.invoiceDate || inv.createdAt)
+        if (invDate < thirtyDaysAgo) return false
+      }
+
+      return true
+    })
+  }, [invoices, searchTerm, statusFilter, dateFilter])
+
+  // --- 3. DYNAMIC KPIs (Updates when filters change!) ---
+  const stats = React.useMemo(() => {
+    return filteredInvoices.reduce((acc: any, inv: any) => {
+      const amount = inv.totals?.netAmount || 0;
+      acc.totalRevenue += amount;
+      
+      const stat = inv.status?.toLowerCase() || "pending"
+      if (stat === "unpaid" || stat === "pending" || stat === "draft") acc.outstanding += amount;
+      if (stat === "overdue") acc.overdue += amount;
+      
+      return acc;
+    }, { totalRevenue: 0, outstanding: 0, overdue: 0 });
+  }, [filteredInvoices])
+
+  // --- 4. ACTION HANDLERS ---
+  const handleView = async (inv: any) => {
+    toast.info("Opening Invoice...")
+    try {
+      const blob = await pdf(<InvoicePDF data={inv} />).toBlob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+    } catch (error) { toast.error("Failed to generate PDF view") }
+  }
+
+  const handleDownload = async (inv: any) => {
+    toast.info("Downloading PDF...")
+    try {
+      const blob = await pdf(<InvoicePDF data={inv} />).toBlob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${inv.invoiceNo}.pdf`
+      link.click()
+    } catch (error) { toast.error("Failed to download PDF") }
+  }
 
   return (
     <div className="bg-slate-50 min-h-screen text-slate-900 font-sans pb-16">
       
-      {/* TOP NAV BAR (Optional: Remove if you have a global layout header) */}
+      {/* TOP NAV BAR */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm flex justify-between items-center h-16 px-8">
         <div className="flex items-center gap-6">
           <div className="relative group">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
             <input 
               type="text" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search invoices, jobs, or clients..." 
               className="bg-slate-100 border-none rounded-lg py-2 pl-10 pr-4 text-sm w-80 focus:ring-2 focus:ring-slate-300 transition-all outline-none" 
             />
@@ -86,17 +162,13 @@ export default async function InvoicesDashboardPage() {
 
         {/* KPI BENTO GRID */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          
           <div className="bg-slate-200/50 p-1 rounded-xl">
             <div className="bg-white p-8 rounded-lg flex flex-col gap-4 border border-slate-100 m-0">
               <div className="flex justify-between items-start">
-                <div className="p-3 bg-blue-50 rounded-full text-blue-600">
-                  <Wallet className="w-6 h-6" />
-                </div>
-                <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2 py-1 rounded-full">+12.5%</span>
+                <div className="p-3 bg-blue-50 rounded-full text-blue-600"><Wallet className="w-6 h-6" /></div>
               </div>
               <div>
-                <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mb-1">Total Revenue</p>
+                <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mb-1">Total Filtered Revenue</p>
                 <h2 className="text-3xl font-black text-slate-900 tracking-tighter">₹{stats.totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 2})}</h2>
               </div>
             </div>
@@ -105,10 +177,7 @@ export default async function InvoicesDashboardPage() {
           <div className="bg-slate-200/50 p-1 rounded-xl">
             <div className="bg-white p-8 rounded-lg flex flex-col gap-4 border border-slate-100">
               <div className="flex justify-between items-start">
-                <div className="p-3 bg-slate-100 rounded-full text-slate-600">
-                  <Clock className="w-6 h-6" />
-                </div>
-                <span className="text-xs font-bold text-slate-400 px-2 py-1">MTD</span>
+                <div className="p-3 bg-amber-50 rounded-full text-amber-600"><Clock className="w-6 h-6" /></div>
               </div>
               <div>
                 <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mb-1">Outstanding Receivables</p>
@@ -120,10 +189,7 @@ export default async function InvoicesDashboardPage() {
           <div className="bg-slate-200/50 p-1 rounded-xl">
             <div className="bg-white p-8 rounded-lg flex flex-col gap-4 border border-slate-100">
               <div className="flex justify-between items-start">
-                <div className="p-3 bg-red-50 rounded-full text-red-600">
-                  <AlertTriangle className="w-6 h-6" />
-                </div>
-                <span className="text-xs font-bold text-red-700 bg-red-100 px-2 py-1 rounded-full">ACTION REQ.</span>
+                <div className="p-3 bg-red-50 rounded-full text-red-600"><AlertTriangle className="w-6 h-6" /></div>
               </div>
               <div>
                 <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mb-1">Overdue Amount</p>
@@ -131,21 +197,28 @@ export default async function InvoicesDashboardPage() {
               </div>
             </div>
           </div>
-
         </div>
 
-        {/* FILTER BAR */}
+        {/* INTERACTIVE FILTER BAR */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
             <div className="flex bg-slate-200/50 rounded-lg p-1">
-              <button className="px-4 py-1.5 text-xs font-bold rounded-md bg-white shadow-sm text-slate-900">All Invoices</button>
-              <button className="px-4 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors">Paid</button>
-              <button className="px-4 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors">Pending</button>
-              <button className="px-4 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors">Overdue</button>
+              {["All", "Paid", "Pending", "Overdue"].map(status => (
+                <button 
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${statusFilter === status ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-900"}`}
+                >
+                  {status === "All" ? "All Invoices" : status}
+                </button>
+              ))}
             </div>
             <div className="h-6 w-[1px] bg-slate-300"></div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:border-slate-400 transition-all">
-              <Calendar className="w-4 h-4" /> Last 30 Days
+            <button 
+              onClick={() => setDateFilter(prev => prev === "All" ? "30Days" : "All")}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-xs font-bold transition-all ${dateFilter === "30Days" ? "bg-slate-900 text-white border-slate-900" : "bg-white border-slate-200 text-slate-600 hover:border-slate-400"}`}
+            >
+              <Calendar className="w-4 h-4" /> {dateFilter === "30Days" ? "Showing: Last 30 Days" : "Filter: Last 30 Days"}
             </button>
           </div>
           <button className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors">
@@ -169,73 +242,55 @@ export default async function InvoicesDashboardPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               
-              {invoices.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-500">No invoices generated yet. Create your first one above!</td>
-                </tr>
+              {isLoading ? (
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-sm font-bold text-slate-500">Loading Invoices...</td></tr>
+              ) : filteredInvoices.length === 0 ? (
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-sm font-bold text-slate-500">No invoices match your filters.</td></tr>
+              ) : (
+                filteredInvoices.map((inv: any) => (
+                  <tr key={inv._id} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-6 py-5 font-mono text-xs font-bold text-slate-900">{inv.invoiceNo}</td>
+                    <td className="px-6 py-5 text-sm text-slate-600">
+                      {new Date(inv.invoiceDate || inv.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                    <td className="px-6 py-5">
+                      <span className="text-sm font-bold text-slate-900">{inv.customerDetails?.name || "Unknown"}</span>
+                    </td>
+                    <td className="px-6 py-5">
+                      <span className="text-xs font-bold text-blue-600">{inv.jobId?.toString().slice(-6).toUpperCase() || "N/A"}</span>
+                    </td>
+                    <td className="px-6 py-5 font-mono text-sm font-bold text-slate-900 text-right">
+                      ₹{inv.totals?.netAmount?.toLocaleString(undefined, {minimumFractionDigits: 2}) || "0.00"}
+                    </td>
+                    <td className="px-6 py-5 text-center">
+                      <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full ${getStatusBadge(inv.status)}`}>
+                        {inv.status || "Pending"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-5 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-100 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => handleView(inv)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="View PDF">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDownload(inv)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors" title="Download PDF">
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => router.push(`/dashboard/invoices/edit/${inv.invoiceNo}`)} className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title="Edit Invoice">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
-
-              {invoices.map((inv: any) => (
-                <tr key={inv._id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-6 py-5 font-mono text-xs font-bold text-slate-900">{inv.invoiceNo}</td>
-                  <td className="px-6 py-5 text-sm text-slate-600">
-                    {new Date(inv.invoiceDate || inv.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </td>
-                  <td className="px-6 py-5">
-                    <span className="text-sm font-bold text-slate-900">{inv.customerDetails?.name || "Unknown"}</span>
-                  </td>
-                  <td className="px-6 py-5">
-                    <span className="text-xs font-bold text-blue-600">{inv.jobId?.toString().slice(-6).toUpperCase() || "N/A"}</span>
-                  </td>
-                  <td className="px-6 py-5 font-mono text-sm font-bold text-slate-900 text-right">
-                    ₹{inv.totals?.netAmount?.toLocaleString(undefined, {minimumFractionDigits: 2}) || "0.00"}
-                  </td>
-                  <td className="px-6 py-5 text-center">
-                    <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full ${getStatusBadge(inv.status || 'Pending')}`}>
-                      {inv.status || "Pending"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-5 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-100 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-200 rounded transition-colors"><Eye className="w-4 h-4" /></button>
-                      <button className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-200 rounded transition-colors"><Download className="w-4 h-4" /></button>
-                      <button className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-200 rounded transition-colors"><Send className="w-4 h-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
 
             </tbody>
           </table>
           
-          {/* PAGINATION */}
           <div className="px-6 py-4 bg-slate-50 flex items-center justify-between border-t border-slate-100">
-            <span className="text-xs text-slate-500 font-medium">Showing {invoices.length} total invoices</span>
+            <span className="text-xs text-slate-500 font-medium">Showing {filteredInvoices.length} invoices</span>
           </div>
         </div>
-
-        {/* BOTTOM CHARTS (Editorial Feel) */}
-        <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
-          
-          <div className="bg-slate-200/50 p-1 rounded-xl">
-            <div className="bg-white p-6 rounded-lg border border-slate-100">
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 mb-6">Payment Velocity</h3>
-              <div className="flex items-end gap-3 h-48">
-                <div className="flex-1 bg-slate-200 rounded-t-sm hover:bg-slate-300 transition-colors" style={{ height: '60%' }}></div>
-                <div className="flex-1 bg-slate-200 rounded-t-sm hover:bg-slate-300 transition-colors" style={{ height: '45%' }}></div>
-                <div className="flex-1 bg-slate-900 rounded-t-sm" style={{ height: '85%' }}></div>
-                <div className="flex-1 bg-slate-200 rounded-t-sm hover:bg-slate-300 transition-colors" style={{ height: '55%' }}></div>
-                <div className="flex-1 bg-slate-200 rounded-t-sm hover:bg-slate-300 transition-colors" style={{ height: '70%' }}></div>
-                <div className="flex-1 bg-slate-200 rounded-t-sm hover:bg-slate-300 transition-colors" style={{ height: '40%' }}></div>
-                <div className="flex-1 bg-slate-200 rounded-t-sm hover:bg-slate-300 transition-colors" style={{ height: '65%' }}></div>
-              </div>
-              <div className="flex justify-between mt-4 text-[10px] font-bold text-slate-400 uppercase">
-                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
   )

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/dashboard/Sidebar";
+import { Toaster } from "@/components/ui/sonner"
+import AuthProvider from "@/components/AuthProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,11 +29,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="bg-surface text-on-background antialiased font-body min-h-screen flex">
-      <Sidebar />
-      <div className="ml-64 flex-1 flex flex-col min-h-screen min-w-0">
-        {children}
-      </div>
+      {/* Removed the 'flex' class so the login page can center properly */}
+      <body className="bg-surface text-on-background antialiased font-body min-h-screen">
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );
