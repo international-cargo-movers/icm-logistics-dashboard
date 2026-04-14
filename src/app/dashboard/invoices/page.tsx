@@ -28,12 +28,10 @@ export default function InvoicesDashboardPage() {
   const [invoices, setInvoices] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
 
-  // --- FILTER STATES ---
   const [searchTerm, setSearchTerm] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("All")
-  const [dateFilter, setDateFilter] = React.useState("All") // "All" | "30Days"
+  const [dateFilter, setDateFilter] = React.useState("All") 
 
-  // --- 1. FETCH LIVE DATA ---
   React.useEffect(() => {
     async function fetchInvoices() {
       try {
@@ -49,18 +47,15 @@ export default function InvoicesDashboardPage() {
     fetchInvoices()
   }, [])
 
-  // --- 2. LIVE FILTERING ENGINE ---
   const filteredInvoices = React.useMemo(() => {
     return invoices.filter(inv => {
-      // A. Search Match
       const searchLower = searchTerm.toLowerCase()
       const matchesSearch = 
         inv.invoiceNo?.toLowerCase().includes(searchLower) ||
         inv.customerDetails?.name?.toLowerCase().includes(searchLower) ||
         inv.jobId?.toLowerCase().includes(searchLower)
       if (!matchesSearch) return false
-
-      // B. Status Match
+      
       if (statusFilter !== "All") {
         const stat = inv.status?.toLowerCase() || "pending"
         if (statusFilter === "Paid" && stat !== "paid") return false
@@ -68,19 +63,16 @@ export default function InvoicesDashboardPage() {
         if (statusFilter === "Overdue" && stat !== "overdue") return false
       }
 
-      // C. Date Match (Last 30 Days)
       if (dateFilter === "30Days") {
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
         const invDate = new Date(inv.invoiceDate || inv.createdAt)
         if (invDate < thirtyDaysAgo) return false
       }
-
       return true
     })
   }, [invoices, searchTerm, statusFilter, dateFilter])
 
-  // --- 3. DYNAMIC KPIs (Updates when filters change!) ---
   const stats = React.useMemo(() => {
     return filteredInvoices.reduce((acc: any, inv: any) => {
       const amount = inv.totals?.netAmount || 0;
@@ -94,11 +86,33 @@ export default function InvoicesDashboardPage() {
     }, { totalRevenue: 0, outstanding: 0, overdue: 0 });
   }, [filteredInvoices])
 
-  // --- 4. ACTION HANDLERS ---
+  // --- THE FIX: Payload Formatter ---
+  // This forces the raw database object to match the shape of the `page.tsx` creation payload
+  const formatPayloadForPDF = (inv: any) => {
+    return {
+      ...inv, // Keep all base fields
+      invoiceNo: inv.invoiceNo,
+      // Map DB 'invoiceDate' to what the PDF expects ('issueDate')
+      issueDate: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[0] : "",
+      
+      // Force the custom job string into BOTH jobId and jobReference fields
+      // This ensures that no matter which variable the PDF reads, it gets "FR-595212"
+      jobId: inv.jobReference || (inv.jobId?.jobId ? inv.jobId.jobId : inv.jobId),
+      jobReference: inv.jobReference || (inv.jobId?.jobId ? inv.jobId.jobId : inv.jobId),
+      
+      customerName: inv.customerDetails?.name || "Unknown",
+      billingAddress: inv.customerDetails?.billingAddress || "",
+      lineItems: inv.lineItems || [],
+      totals: inv.totals || {}
+    };
+  };
+
+  // --- ACTION HANDLERS ---
   const handleView = async (inv: any) => {
     toast.info("Opening Invoice...")
     try {
-      const blob = await pdf(<InvoicePDF data={inv} />).toBlob()
+      const cleanPayload = formatPayloadForPDF(inv);
+      const blob = await pdf(<InvoicePDF data={cleanPayload} />).toBlob()
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
     } catch (error) { toast.error("Failed to generate PDF view") }
@@ -107,11 +121,12 @@ export default function InvoicesDashboardPage() {
   const handleDownload = async (inv: any) => {
     toast.info("Downloading PDF...")
     try {
-      const blob = await pdf(<InvoicePDF data={inv} />).toBlob()
+      const cleanPayload = formatPayloadForPDF(inv);
+      const blob = await pdf(<InvoicePDF data={cleanPayload} />).toBlob()
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `${inv.invoiceNo}.pdf`
+      link.download = `${cleanPayload.invoiceNo}.pdf`
       link.click()
     } catch (error) { toast.error("Failed to download PDF") }
   }
@@ -257,7 +272,7 @@ export default function InvoicesDashboardPage() {
                       <span className="text-sm font-bold text-slate-900">{inv.customerDetails?.name || "Unknown"}</span>
                     </td>
                     <td className="px-6 py-5">
-                      <span className="text-xs font-bold text-blue-600">{inv.jobId?.toString().slice(-6).toUpperCase() || "N/A"}</span>
+                      <span className="text-xs font-bold text-blue-600">{inv.jobReference || inv.jobId?.jobId || inv.jobId?.toString() || "N/A"}</span>
                     </td>
                     <td className="px-6 py-5 font-mono text-sm font-bold text-slate-900 text-right">
                       ₹{inv.totals?.netAmount?.toLocaleString(undefined, {minimumFractionDigits: 2}) || "0.00"}

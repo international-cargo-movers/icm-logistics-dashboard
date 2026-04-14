@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield } from "lucide-react"
+import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield, FileText } from "lucide-react"
 import { pdf } from '@react-pdf/renderer'
 import InvoicePDF from '@/components/dashboard/invoices/InvoicePDF'
 
@@ -24,22 +24,41 @@ function numberToWords(num: number): string {
         if (n < 100) return b[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + a[n % 10] : "");
         if (n < 1000) return a[Math.floor(n / 100)] + " Hundred" + (n % 100 !== 0 ? " and " + convert(n % 100) : "");
         if (n < 100000) return convert(Math.floor(n / 1000)) + " Thousand" + (n % 1000 !== 0 ? " " + convert(n % 1000) : "");
-        return num.toString();
+        if (n < 10000000) return convert(Math.floor(n / 100000)) + " Lakh" + (n % 100000 !== 0 ? " " + convert(n % 100000) : "");
+        return convert(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 !== 0 ? " " + convert(n % 10000000) : "");
     };
     const wholeNumber = Math.floor(num);
     const decimal = Math.round((num - wholeNumber) * 100);
-    return `${convert(wholeNumber)} & ${decimal}/100`;
+    return `INR ${convert(wholeNumber)} ${decimal > 0 ? ` & ${decimal}/100` : ""} Only`;
 }
 
-// --- SCHEMA ---
+// --- SCHEMA (Updated with Advanced Routing & Tax fields) ---
 const invoiceSchema = z.object({
     invoiceNo: z.string().min(1, "Required"),
     issueDate: z.string(),
     jobId: z.string().min(1, "Required"),
+    jobReference:z.string().min(1,"Required"),
     customerName: z.string(),
     billingAddress: z.string(),
+    gstin: z.string().optional(),
+    stateCode: z.string().optional(),
     origin: z.string(),
     destination: z.string(),
+    
+    // Advanced Routing Details
+    oblMawb: z.string().optional(),
+    hblHawb: z.string().optional(),
+    containerNo: z.string().optional(),
+    vesselFlight: z.string().optional(),
+    commodity: z.string().optional(),
+    egm: z.string().optional(),
+    igm: z.string().optional(),
+    sbNo: z.string().optional(),
+    noOfPackages: z.coerce.number().optional(),
+    grossWeight: z.coerce.number().optional(),
+    volumetricWeight: z.coerce.number().optional(),
+    chargeableWeight: z.coerce.number().optional(),
+
     lineItems: z.array(z.object({
         description: z.string().min(1),
         sacCode: z.string(),
@@ -55,120 +74,89 @@ type InvoiceFormValues = z.infer<typeof invoiceSchema>
 export default function SmartInvoiceGenerator() {
     const router = useRouter()
     const { data: session, status } = useSession()
-    // const { toast } = useToast()
     const [jobs, setJobs] = React.useState<any[]>([])
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
-    // --- FORM INIT ---
     const form = useForm<InvoiceFormValues>({
         resolver: zodResolver(invoiceSchema) as any,
         defaultValues: {
             invoiceNo: `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
             issueDate: new Date().toISOString().split('T')[0],
-            jobId: "",
-            customerName: "",
-            billingAddress: "",
-            origin: "",
-            destination: "",
+            jobId: "", customerName: "", billingAddress: "", gstin: "", stateCode: "",
+            origin: "", destination: "",
+            oblMawb: "", hblHawb: "", containerNo: "", vesselFlight: "", commodity: "",
+            egm: "", igm: "", sbNo: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0, chargeableWeight: 0,
             lineItems: []
         }
     })
 
     const { control, watch, setValue, register, handleSubmit } = form
-    // We import 'replace' to instantly swap out all line items when a Quote is loaded
     const { fields, append, remove, replace } = useFieldArray({ control, name: "lineItems" })
 
-    // --- FETCH MASTER DATA ---
     React.useEffect(() => {
         async function fetchJobs() {
             try {
                 const res = await fetch("/api/jobs")
                 const json = await res.json()
                 if (json.success) setJobs(json.data)
-            } catch (error) {
-                toast.error("Could not fetch active jobs.")
-            }
+            } catch (error) { toast.error("Could not fetch active jobs.") }
         }
         fetchJobs()
-    }, [toast])
+    }, [])
 
-    // --- THE PIPELINE BRIDGE (Quote -> Job -> Invoice) ---
     const handleJobSelect = async (selectedJobId: string) => {
         const job = jobs.find(j => j.jobId === selectedJobId)
         if (!job) return
 
-        // 1. Auto-fill the Baseline Job details
         setValue("jobId", job._id)
+        setValue("jobReference",job.jobId)
         setValue("customerName", job.customerDetails?.companyId?.name || "Unknown Customer")
-
-        // Smarter Address formatting mapping from JobModel fields
+        
         const addressParts = [
-            job.customerDetails?.streetAddress,
-            job.customerDetails?.city,
-            job.customerDetails?.state,
-            job.customerDetails?.country
+            job.customerDetails?.streetAddress, job.customerDetails?.city, 
+            job.customerDetails?.state, job.customerDetails?.country
         ].filter(Boolean)
         setValue("billingAddress", addressParts.join(", ") || "No Address Provided")
-
         setValue("origin", job.shipmentDetails?.portOfLoading || "TBD")
         setValue("destination", job.shipmentDetails?.portOfDischarge || "TBD")
+        setValue("commodity", job.shipmentDetails?.commodity || "General Cargo")
+        setValue("grossWeight", job.shipmentDetails?.grossWeight || 0)
 
-        // 2. Fetch the linked Quote to auto-generate the Financials!
         if (job.quoteReference) {
-            toast.message(`Fetching Financials...\nPulling approved rates from Quote: ${job.quoteReference}`)
+            toast.message(`Fetching Financials from Quote: ${job.quoteReference}`)
             try {
                 const quoteRes = await fetch(`/api/quotes/${job.quoteReference}`)
                 const quoteJson = await quoteRes.json()
 
                 if (quoteJson.success && quoteJson.data) {
-                    const quoteLineItems = quoteJson.data.financials?.lineItems || []
-
-                    // Map Quote schema strictly to Invoice schema
-                    const invoiceReadyLines = quoteLineItems.map((item: any) => ({
+                    const invoiceReadyLines = (quoteJson.data.financials?.lineItems || []).map((item: any) => ({
                         description: item.chargeName || "Freight Charge",
-                        sacCode: "996511", // Standard freight SAC Code
-                        rate: Number(item.sellPrice) || 0, // IMPORTANT: We only bill the Sell Price!
+                        sacCode: "996511",
+                        rate: Number(item.sellPrice) || 0,
                         currency: item.currency || "USD",
-                        roe: 1, // Can be adjusted by operator for forex
-                        gstPercent: 18 // Default 18% for Indian freight operations
+                        roe: item.roe || 1,
+                        gstPercent: 18 
                     }))
-
-                    if (invoiceReadyLines.length > 0) {
-                        replace(invoiceReadyLines) // instantly overwrites the table
-                        toast.message("Financials Loaded.\nSuccessfully applied sell rates from the approved quote.")
-                    } else {
-                        replace([{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
-                    }
+                    replace(invoiceReadyLines.length > 0 ? invoiceReadyLines : [{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
                 }
-            } catch (error) {
-                toast.error("Failed to fetch linked quote financials.")
-            }
+            } catch (error) { toast.error("Failed to fetch linked quote financials.") }
         } else {
-            toast.message("Manual Entry Required.\nThis job has no linked quote. Please add line items manually.")
             replace([{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
         }
     }
-    // 4. --- THE CLIENT LOCK ---
-    if (status === "loading") {
-        return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials...</div>
-    }
 
+    if (status === "loading") return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials...</div>
     if (session && !["SuperAdmin", "Finance"].includes(session?.user?.role || "")) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
                 <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
                 <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
-                <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to generate financial documents.</p>
-                <button
-                    onClick={() => router.back()}
-                    className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
-                >
-                    Go Back
-                </button>
+                <p className="text-slate-500 max-w-md">Your current role does not have clearance to generate financial documents.</p>
+                <button onClick={() => router.back()} className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors">Go Back</button>
             </div>
         )
     }
-    // --- LIVE MATH ENGINE ---
+
     const lineItems = watch("lineItems") || []
     const totals = lineItems.reduce((acc, item) => {
         const taxableValue = (item.rate || 0) * (item.roe || 1)
@@ -196,89 +184,74 @@ export default function SmartInvoiceGenerator() {
                 invoiceNo: data.invoiceNo,
                 invoiceDate: data.issueDate,
                 jobId: data.jobId,
+                jobReference: data.jobReference,
                 customerDetails: {
                     companyId: companyId,
                     name: data.customerName,
-                    billingAddress: data.billingAddress
+                    billingAddress: data.billingAddress,
+                    gstin: data.gstin,
+                    stateCode: data.stateCode
                 },
                 shipmentSnapshot: {
-                    origin: data.origin,
-                    destination: data.destination,
-                    pol: data.origin,
-                    pod: data.destination
+                    origin: data.origin, destination: data.destination, pol: data.origin, pod: data.destination,
+                    oblMawb: data.oblMawb, hblHawb: data.hblHawb, containerNo: data.containerNo, vesselFlight: data.vesselFlight,
+                    commodity: data.commodity, egm: data.egm, igm: data.igm, sbNo: data.sbNo,
+                    noOfPackages: data.noOfPackages, grossWeight: data.grossWeight, volumetricWeight: data.volumetricWeight, chargeableWeight: data.chargeableWeight
                 },
                 lineItems: processedLineItems,
                 totals: {
                     totalTaxable: totals.taxable,
                     totalGst: totals.gst,
                     roundOff: 0,
-                    netAmount: totals.net
+                    netAmount: totals.net,
+                    amountInWords: numberToWords(totals.net)
                 },
                 status: "Unpaid"
             }
 
             const dbResponse = await fetch("/api/invoices", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(invoicePayload)
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(invoicePayload)
             });
-
             const dbResult = await dbResponse.json();
-
             if (!dbResult.success) throw new Error(dbResult.error || "Failed to save to database");
 
             const blob = await pdf(<InvoicePDF data={invoicePayload} />).toBlob()
             const url = URL.createObjectURL(blob)
             window.open(url, '_blank')
-
+            console.log("Job Reference",invoicePayload.jobReference)
             toast.success("Transaction Recorded & PDF Generated!")
-            router.push("/dashboard")
-
-        } catch (error: any) {
-            console.error("Transaction failed:", error)
-            toast.error("Failed to generate invoice.")
-        } finally {
-            setIsSubmitting(false)
-        }
+            router.push("/dashboard/invoices") // Redirecting to invoices list instead of root dashboard
+        } catch (error: any) { toast.error("Failed to generate invoice.") } 
+        finally { setIsSubmitting(false) }
     }
-
+    
     return (
         <div className="bg-slate-50 text-slate-900 min-h-screen font-sans pb-12">
-            {/* STICKY ACTION BAR */}
             <div className="sticky px-6 py-2 top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-10 h-16 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
                     <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse"></div>
                     <span className="text-sm font-semibold tracking-tight uppercase text-slate-600">Smart Invoice Generator</span>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button onClick={() => router.back()} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors rounded-lg flex items-center gap-2">
-                        <X className="w-4 h-4" /> Discard
-                    </button>
-                    <button
-                        onClick={handleSubmit(onSubmit)}
-                        disabled={isSubmitting}
-                        className="px-6 py-2.5 text-sm font-bold bg-black text-white p-2 rounded-lg shadow-md hover:bg-slate-800 transition-all flex items-center gap-2"
-                    >
+                    <button onClick={() => router.back()} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors rounded-lg flex items-center gap-2"><X className="w-4 h-4" /> Discard</button>
+                    <button onClick={handleSubmit(onSubmit)} disabled={isSubmitting} className="px-6 py-2.5 text-sm font-bold bg-black text-white p-2 rounded-lg shadow-md hover:bg-slate-800 transition-all flex items-center gap-2">
                         <Save className="w-4 h-4" /> {isSubmitting ? "Saving..." : "Save Invoice"}
                     </button>
                 </div>
             </div>
 
             <Form {...form}>
-                <form className="max-w-6xl mx-auto p-8 space-y-10">
-
+                <form className="max-w-6xl mx-auto p-8 space-y-8">
                     {/* SECTION 1: INVOICE META */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Invoice Number</label>
                             <input {...register("invoiceNo")} className="bg-slate-100 border-none rounded-lg px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-slate-200 outline-none" />
                         </div>
-
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Issue Date</label>
                             <input type="date" {...register("issueDate")} className="bg-slate-100 border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
                         </div>
-
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Job ID Search</label>
                             <Select onValueChange={handleJobSelect}>
@@ -287,55 +260,50 @@ export default function SmartInvoiceGenerator() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {jobs.length === 0 && <SelectItem value="none" disabled>Loading jobs...</SelectItem>}
-                                    {jobs.map(job => (
-                                        <SelectItem key={job.jobId} value={job.jobId}>
-                                            {job.jobId} - {job.customerDetails?.companyId?.name || "Unknown"}
-                                        </SelectItem>
-                                    ))}
+                                    {jobs.map(job => (<SelectItem key={job.jobId} value={job.jobId}>{job.jobId} - {job.customerDetails?.companyId?.name || "Unknown"}</SelectItem>))}
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
 
-                    {/* SECTION 2: READ-ONLY CUSTOMER DATA */}
-                    <div className="bg-[#f2f4f6]/50 rounded-2xl overflow-hidden border border-[#c6c6cd]/30">
-                        <div className="px-8 py-4 bg-[#e6e8ea]/30 border-b border-[#c6c6cd]/10">
-                            <h2 className="text-xs font-black uppercase tracking-widest text-[#45464d]">Associated Shipment Data (Read-only)</h2>
+                    {/* SECTION 2: CUSTOMER & ADVANCED ROUTING */}
+                    <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                        <div className="px-8 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-slate-500" />
+                            <h2 className="text-xs font-black uppercase tracking-widest text-slate-700">Tax & Routing Details</h2>
                         </div>
-
-                        <div className="p-8 flex gap-12 items-start">
-                            <div className="flex-1 min-w-0">
-                                <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-2 block">
-                                    Consignee / Bill To
-                                </label>
-                                <p className="text-sm font-bold text-[#191c1e]">{watch("customerName") || "—"}</p>
-                                <p className="text-xs text-[#54647a] mt-1 leading-relaxed whitespace-pre-wrap">
-                                    {watch("billingAddress") || "Select a job to view details."}
-                                </p>
-                            </div>
-
-                            <div className="flex-1 flex gap-6">
-                                <div className="flex-1 bg-white p-5 rounded-xl border border-[#c6c6cd]/20 shadow-sm p-4">
-                                    <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-3 block">Origin</label>
-                                    <div className="flex items-center gap-3">
-                                        <MapPin className="w-5 h-5 text-[#111c2d]" />
-                                        <div>
-                                            <div className="text-xs font-bold text-[#191c1e]">{watch("origin") || "—"}</div>
-                                            <div className="text-[10px] text-[#45464d] mt-0.5">POL</div>
-                                        </div>
-                                    </div>
+                        <div className="p-8 grid grid-cols-3 gap-x-8 gap-y-6">
+                            <div className="col-span-3 grid grid-cols-2 gap-6 mb-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Consignee Name</label>
+                                    <input {...register("customerName")} className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
                                 </div>
-                                <div className="flex-1 bg-white p-5 rounded-xl border border-[#c6c6cd]/20 shadow-sm p-4">
-                                    <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-3 block">Destination</label>
-                                    <div className="flex items-center gap-3">
-                                        <Anchor className="w-5 h-5 text-[#188ace]" />
-                                        <div>
-                                            <div className="text-xs font-bold text-[#191c1e]">{watch("destination") || "—"}</div>
-                                            <div className="text-[10px] text-[#45464d] mt-0.5">POD</div>
-                                        </div>
-                                    </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Billing Address</label>
+                                    <input {...register("billingAddress")} className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Customer GSTIN/UIN</label>
+                                    <input {...register("gstin")} placeholder="e.g. 07AADC..." className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm font-mono focus:ring-2 focus:ring-slate-200 outline-none" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">State Code</label>
+                                    <input {...register("stateCode")} placeholder="e.g. 07" className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm font-mono focus:ring-2 focus:ring-slate-200 outline-none" />
                                 </div>
                             </div>
+                            
+                            {/* Advanced Routing Grid */}
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Origin / POL</label><input {...register("origin")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Destination / POD</label><input {...register("destination")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Vessel & Voyage / Flight</label><input {...register("vesselFlight")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
+                            
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">OBL / MAWB No</label><input {...register("oblMawb")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">HBL / HAWB No</label><input {...register("hblHawb")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Container No.</label><input {...register("containerNo")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">EGM No.</label><input {...register("egm")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">IGM No.</label><input {...register("igm")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Shipping Bill (SB) No.</label><input {...register("sbNo")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
                         </div>
                     </div>
 
@@ -343,26 +311,19 @@ export default function SmartInvoiceGenerator() {
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center">
                             <h2 className="text-sm font-extrabold text-slate-900">Billing Items</h2>
-                            <button
-                                type="button"
-                                onClick={() => append({ description: "", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 })}
-                                className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
-                            >
-                                <PlusCircle className="w-4 h-4" /> Add Charge Line
-                            </button>
+                            <button type="button" onClick={() => append({ description: "", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 })} className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"><PlusCircle className="w-4 h-4" /> Add Charge Line</button>
                         </div>
-
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-slate-50/80 border-b border-slate-100">
-                                        <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Description</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest w-[30%]">Description</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">SAC/HSN</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rate</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Cur</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 text-center uppercase tracking-widest">ROE</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">GST%</th>
-                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Amount</th>
+                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Amount (₹)</th>
                                         <th className="px-6 py-4 w-10"></th>
                                     </tr>
                                 </thead>
@@ -371,55 +332,16 @@ export default function SmartInvoiceGenerator() {
                                         const lineRate = watch(`lineItems.${index}.rate`) || 0;
                                         const lineRoe = watch(`lineItems.${index}.roe`) || 1;
                                         const lineTaxable = lineRate * lineRoe;
-
                                         return (
                                             <tr key={field.id} className="hover:bg-slate-50/50 transition-colors group">
-                                                <td className="px-8 py-4">
-                                                    <textarea
-                                                        {...register(`lineItems.${index}.description`)}
-                                                        className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none resize-none leading-relaxed"
-                                                        placeholder="Description..."
-                                                        rows={2}
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <input {...register(`lineItems.${index}.sacCode`)} className="w-full bg-transparent border-none text-xs text-slate-500 font-mono focus:ring-0 p-0 outline-none" placeholder="996511" />
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <input type="number" step="0.01" {...register(`lineItems.${index}.rate`)} className="w-full bg-transparent border-none text-sm font-semibold tabular-nums focus:ring-0 p-0 outline-none" />
-                                                </td>
-                                                <td className="px-4 py-4 text-center">
-                                                    <select
-                                                        {...register(`lineItems.${index}.currency`)}
-                                                        className="text-center text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-1 rounded-full outline-none uppercase cursor-pointer appearance-none"
-                                                    >
-                                                        <option value="USD">USD</option>
-                                                        <option value="EUR">EUR</option>
-                                                        <option value="INR">INR</option>
-                                                        <option value="GBP">GBP</option>
-                                                        <option value="AED">AED</option>
-                                                        <option value="SGD">SGD</option>
-                                                    </select>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <input type="number" step="0.01" {...register(`lineItems.${index}.roe`)} className="w-full bg-transparent border-none text-xs font-mono text-slate-500 text-center focus:ring-0 p-0 outline-none" />
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <select {...register(`lineItems.${index}.gstPercent`)} className="bg-transparent border-none text-xs font-medium focus:ring-0 p-0 outline-none cursor-pointer">
-                                                        <option value="18">18%</option>
-                                                        <option value="12">12%</option>
-                                                        <option value="5">5%</option>
-                                                        <option value="0">0%</option>
-                                                    </select>
-                                                </td>
-                                                <td className="px-4 py-4 text-right text-sm font-bold tabular-nums">
-                                                    {lineTaxable.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <button type="button" onClick={() => remove(index)} className="text-slate-300 hover:text-red-500 hover:scale-110 transition-colors">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </td>
+                                                <td className="px-6 py-4"><input {...register(`lineItems.${index}.description`)} className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none" placeholder="Description..." /></td>
+                                                <td className="px-4 py-4"><input {...register(`lineItems.${index}.sacCode`)} className="w-full bg-transparent border-none text-xs text-slate-500 font-mono focus:ring-0 p-0 outline-none" placeholder="996511" /></td>
+                                                <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.rate`)} className="w-full bg-transparent border-none text-sm font-semibold tabular-nums focus:ring-0 p-0 outline-none" /></td>
+                                                <td className="px-4 py-4 text-center"><select {...register(`lineItems.${index}.currency`)} className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-1 rounded-full outline-none uppercase cursor-pointer appearance-none"><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option></select></td>
+                                                <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.roe`)} className="w-full bg-transparent border-none text-xs font-mono text-slate-500 text-center focus:ring-0 p-0 outline-none" /></td>
+                                                <td className="px-4 py-4"><select {...register(`lineItems.${index}.gstPercent`)} className="bg-transparent border-none text-xs font-medium focus:ring-0 p-0 outline-none cursor-pointer"><option value="18">18%</option><option value="12">12%</option><option value="5">5%</option><option value="0">0%</option></select></td>
+                                                <td className="px-4 py-4 text-right text-sm font-bold tabular-nums">{lineTaxable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                                <td className="px-6 py-4 text-right"><button type="button" onClick={() => remove(index)} className="text-slate-300 hover:text-red-500 hover:scale-110 transition-colors"><Trash2 className="w-4 h-4" /></button></td>
                                             </tr>
                                         )
                                     })}
@@ -435,35 +357,21 @@ export default function SmartInvoiceGenerator() {
                                 <Info className="w-4 h-4 text-slate-400" />
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Taxation & Compliance Note</span>
                             </div>
-                            <p className="text-xs text-slate-500 leading-relaxed italic">
-                                All freight charges are subject to carrier-standard ROE. Tax calculated as per destination local authority. Please ensure the HSN codes are verified against current customs data.
-                            </p>
+                            <p className="text-xs text-slate-500 leading-relaxed italic">All freight charges are subject to carrier-standard ROE. Tax calculated as per destination local authority. Please ensure the HSN codes are verified against current customs data.</p>
                         </div>
-
                         <div className="w-full md:w-96 space-y-4">
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-slate-600 font-medium">Subtotal (Taxable)</span>
-                                <span className="font-bold tabular-nums">₹{totals.taxable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-slate-600 font-medium">Estimated GST</span>
-                                <span className="font-bold tabular-nums text-blue-600">+ ₹{totals.gst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                            </div>
+                            <div className="flex justify-between items-center text-sm"><span className="text-slate-600 font-medium">Subtotal (Taxable)</span><span className="font-bold tabular-nums">₹{totals.taxable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                            <div className="flex justify-between items-center text-sm"><span className="text-slate-600 font-medium">Estimated GST</span><span className="font-bold tabular-nums text-blue-600">+ ₹{totals.gst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                             <div className="h-px bg-slate-200 my-4"></div>
                             <div className="flex justify-between items-start">
                                 <span className="text-xs font-black uppercase tracking-widest text-slate-800 mt-2">Net Amount Due</span>
                                 <div className="text-right">
-                                    <div className="text-3xl font-black tabular-nums tracking-tighter text-slate-900">
-                                        ₹{totals.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 font-bold mt-1 max-w-[200px] leading-tight">
-                                        {numberToWords(totals.net)} Only
-                                    </div>
+                                    <div className="text-3xl font-black tabular-nums tracking-tighter text-slate-900">₹{totals.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                    <div className="text-[10px] text-slate-500 font-bold mt-1 max-w-[200px] leading-tight">{numberToWords(totals.net)}</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-
                 </form>
             </Form>
         </div>

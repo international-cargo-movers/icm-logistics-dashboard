@@ -28,7 +28,7 @@ export default function NewQuotePage() {
   const [countries, setCountries] = useState<{ name: string, code: string }[]>([])
 
   const [openCustomer, setOpenCustomer] = useState(false)
-  const [customerSearch, setCustomerSearch] = useState("") // NEW: Tracks the search input
+  const [customerSearch, setCustomerSearch] = useState("") 
 
   // Combobox States for Routing
   const [openOC, setOpenOC] = useState(false); const [searchOC, setSearchOC] = useState("")
@@ -52,9 +52,10 @@ export default function NewQuotePage() {
       equipment: "",
       estimatedWeight: ""
     },
+    // NEW: Updated default items to include 'roe' and 'notes'
     lineItems: [
-      { chargeName: "Ocean Freight - 40' HC", chargeType: "Freight", buyPrice: 2800, sellPrice: 3250, currency: "USD" },
-      { chargeName: "Terminal Handling", chargeType: "Origin", buyPrice: 120, sellPrice: 150, currency: "USD" }
+      { chargeName: "Ocean Freight", chargeType: "Freight", currency: "USD", roe: 83.5, buyPrice: 2800, sellPrice: 3250, notes: "PER CONTAINER" },
+      { chargeName: "Customs Clearance", chargeType: "Origin", currency: "INR", roe: 1, buyPrice: 3500, sellPrice: 5500, notes: "PER INVOICE" }
     ]
   })
 
@@ -81,7 +82,6 @@ export default function NewQuotePage() {
     fetchMasterData();
   }, [])
 
-  // --- NEW: QUICK ADD CUSTOMER ---
   const handleQuickAddCustomer = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!customerSearch.trim()) return;
@@ -92,14 +92,13 @@ export default function NewQuotePage() {
         body: JSON.stringify({
           name: customerSearch.trim(),
           type: ["Customer"],
-          email: quoteData.customerEmail // FIX: Changed to match your DB schema
+          email: quoteData.customerEmail 
         })
       });
       const json = await res.json();
       if (json.success) {
         const newCustomer = json.data;
         setCustomers([...customers, newCustomer]);
-        // FIX: Ensure the email populates instantly upon creation
         setQuoteData({ ...quoteData, customerId: newCustomer._id, customerName: newCustomer.name, customerEmail: newCustomer.email || "" });
         setOpenCustomer(false);
         setCustomerSearch("");
@@ -112,17 +111,14 @@ export default function NewQuotePage() {
     }
   }
 
-  // --- NEW: AUTO-SYNC EMAIL ON BLUR ---
   const handleEmailBlur = async () => {
     if (quoteData.customerId && quoteData.customerEmail) {
       const customer = customers.find(c => c._id === quoteData.customerId);
-      // FIX: Check against 'email' instead of 'contactEmail'
       if (customer && customer.email !== quoteData.customerEmail) {
         try {
           const res = await fetch(`/api/companies/${quoteData.customerId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            // FIX: Send 'email' to the backend
             body: JSON.stringify({ email: quoteData.customerEmail })
           });
           if (res.ok) {
@@ -136,7 +132,6 @@ export default function NewQuotePage() {
     }
   }
 
-  // Cascading Logic: Clear port if country changes
   useEffect(() => {
     setQuoteData(prev => ({ ...prev, originPort: "" }))
     setSearchOP("")
@@ -152,11 +147,13 @@ export default function NewQuotePage() {
   const availableOriginPorts = ports.filter(p => p.countryCode === quoteData.originCountry && p.type.includes(requiredType))
   const availableDestPorts = ports.filter(p => p.countryCode === quoteData.destinationCountry && p.type.includes(requiredType))
 
-  const totalBuy = quoteData.lineItems.reduce((acc, item) => acc + (Number(item.buyPrice) || 0), 0)
-  const totalSell = quoteData.lineItems.reduce((acc, item) => acc + (Number(item.sellPrice) || 0), 0)
+  // --- NEW: LIVE MATH ENGINE (WITH ROE) ---
+  const totalBuy = quoteData.lineItems.reduce((acc, item) => acc + ((Number(item.buyPrice) || 0) * (Number(item.roe) || 1)), 0)
+  const totalSell = quoteData.lineItems.reduce((acc, item) => acc + ((Number(item.sellPrice) || 0) * (Number(item.roe) || 1)), 0)
   const profitMargin = totalSell - totalBuy
 
-  const addLineItem = () => setQuoteData({ ...quoteData, lineItems: [...quoteData.lineItems, { chargeName: "", chargeType: "Freight", buyPrice: 0, sellPrice: 0, currency: "USD" }] })
+  // NEW: Updated Add Line Item template
+  const addLineItem = () => setQuoteData({ ...quoteData, lineItems: [...quoteData.lineItems, { chargeName: "", chargeType: "Freight", currency: "INR", roe: 1, buyPrice: 0, sellPrice: 0, notes: "" }] })
   const removeLineItem = (index: number) => setQuoteData({ ...quoteData, lineItems: quoteData.lineItems.filter((_, idx) => idx !== index) })
   const updateLineItem = (index: number, field: string, value: string | number) => {
     const newItems = [...quoteData.lineItems]
@@ -247,21 +244,13 @@ export default function NewQuotePage() {
     }
   }
 
-  // 4. --- THE CLIENT LOCK ---
-  // if (status === "loading" || isLoading) {
-  //   return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials & Hydrating Data...</div>
-  // }
-
   if (session && !["SuperAdmin", "Sales"].includes(session?.user?.role || "")) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
         <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
         <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to modify sales quotes.</p>
-        <button
-          onClick={() => router.back()}
-          className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
-        >
+        <button onClick={() => router.back()} className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors">
           Go Back
         </button>
       </div>
@@ -279,7 +268,7 @@ export default function NewQuotePage() {
         <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm border border-outline-variant/20">
           <div className="p-8 space-y-10">
 
-            {/* Top Row: Customer & Settings */}
+            {/* Top Row: Customer & Settings (Unchanged) */}
             <div className="grid grid-cols-2 gap-10">
               <section className="space-y-6">
                 <div className="flex items-center gap-2 border-l-4 border-primary pl-4">
@@ -297,15 +286,10 @@ export default function NewQuotePage() {
                       </PopoverTrigger>
                       <PopoverContent className="w-[400px] p-0" align="start">
                         <Command>
-                          <CommandInput
-                            placeholder="Search customers..."
-                            value={customerSearch}
-                            onValueChange={setCustomerSearch}
-                          />
+                          <CommandInput placeholder="Search customers..." value={customerSearch} onValueChange={setCustomerSearch} />
                           <CommandList>
                             <CommandEmpty className="py-6 text-center text-sm">
                               <p className="text-muted-foreground mb-3">No customer found.</p>
-                              {/* QUICK ADD BUTTON */}
                               <Button type="button" size="sm" onClick={handleQuickAddCustomer} className="bg-primary text-on-primary">
                                 + Quick Add "{customerSearch}"
                               </Button>
@@ -313,7 +297,6 @@ export default function NewQuotePage() {
                             <CommandGroup>
                               {customers.map((c) => (
                                 <CommandItem key={c._id} value={c.name} onSelect={() => {
-                                  // FIX: Pulls 'c.email' (with a fallback to contactEmail just in case you have legacy data)
                                   setQuoteData({ ...quoteData, customerId: c._id, customerName: c.name, customerEmail: c.email || c.contactEmail || "" });
                                   setOpenCustomer(false);
                                   setCustomerSearch("");
@@ -330,14 +313,7 @@ export default function NewQuotePage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-on-surface-variant block">Customer Email (Editable)</label>
-                    <input
-                      type="email"
-                      value={quoteData.customerEmail}
-                      onChange={(e) => setQuoteData({ ...quoteData, customerEmail: e.target.value })}
-                      onBlur={handleEmailBlur} // SYNC ON BLUR
-                      placeholder="manager@company.com"
-                      className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                    />
+                    <input type="email" value={quoteData.customerEmail} onChange={(e) => setQuoteData({ ...quoteData, customerEmail: e.target.value })} onBlur={handleEmailBlur} placeholder="manager@company.com" className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                   </div>
                 </div>
               </section>
@@ -359,7 +335,7 @@ export default function NewQuotePage() {
               </section>
             </div>
 
-            {/* Middle Row: Routing (UPDATED WITH CASCADING COUNTRIES) */}
+            {/* Middle Row: Routing (Unchanged) */}
             <section className="space-y-6 pt-6 border-t border-outline-variant/10">
               <div className="flex items-center justify-between border-l-4 border-primary pl-4">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Routing Data</h2>
@@ -381,8 +357,6 @@ export default function NewQuotePage() {
               </div>
 
               <div className="flex items-start gap-6 bg-surface-container-low p-6 rounded-xl border border-outline-variant/10">
-
-                {/* ORIGIN STACK */}
                 <div className="flex-1 space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block">POL Country</label>
@@ -439,10 +413,7 @@ export default function NewQuotePage() {
                     </Popover>
                   </div>
                 </div>
-
                 <div className="mt-12 text-on-surface-variant"><ArrowRight className="w-6 h-6" /></div>
-
-                {/* DESTINATION STACK */}
                 <div className="flex-1 space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block">POD Country</label>
@@ -499,11 +470,10 @@ export default function NewQuotePage() {
                     </Popover>
                   </div>
                 </div>
-
               </div>
             </section>
 
-            {/* Cargo Summary */}
+            {/* Cargo Summary (Unchanged) */}
             <section className="space-y-6 pt-6 border-t border-outline-variant/10">
               <div className="flex items-center gap-2 border-l-4 border-primary pl-4">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Cargo Summary</h2>
@@ -524,10 +494,10 @@ export default function NewQuotePage() {
               </div>
             </section>
 
-            {/* Bottom Row: Financial Line Items */}
+            {/* NEW: Financial Line Items (WITH CURRENCY & ROE & REMARKS) */}
             <section className="space-y-6 pt-6 border-t border-outline-variant/10">
               <div className="flex items-center justify-between border-l-4 border-primary pl-4">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Financial Builder</h2>
+                <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Financial Builder (Multi-Currency)</h2>
                 <button onClick={addLineItem} className="text-xs font-bold bg-primary/10 text-primary px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-primary/20 transition-colors">
                   <Plus className="w-3.5 h-3.5" /> Add Charge
                 </button>
@@ -537,31 +507,49 @@ export default function NewQuotePage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low">
-                      <th className="py-3 px-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[40%]">Charge Name</th>
-                      <th className="py-3 px-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Buy Rate</th>
-                      <th className="py-3 px-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Sell Rate</th>
-                      <th className="py-3 px-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Margin</th>
-                      <th className="py-3 px-4 text-right w-12"></th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[20%]">Charge Name</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[10%]">Curr</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[10%]">ROE</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[20%]">Remarks</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Buy Rate</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Sell Rate</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Base Margin</th>
+                      <th className="py-3 px-3 text-right w-10"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/10">
                     {quoteData.lineItems.map((item, index) => {
-                      const itemMargin = (Number(item.sellPrice) || 0) - (Number(item.buyPrice) || 0);
+                      // Calculate Base amounts instantly using ROE
+                      const baseBuy = (Number(item.buyPrice) || 0) * (Number(item.roe) || 1);
+                      const baseSell = (Number(item.sellPrice) || 0) * (Number(item.roe) || 1);
+                      const itemMargin = baseSell - baseBuy;
+
                       return (
                         <tr key={index} className="group hover:bg-surface-container-low/30 transition-colors">
-                          <td className="py-3 px-4">
+                          <td className="py-2 px-3">
                             <input type="text" value={item.chargeName} onChange={(e) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="e.g. Origin Handling" />
                           </td>
-                          <td className="py-3 px-4 text-right">
+                          <td className="py-2 px-3">
+                            <input type="text" value={item.currency} onChange={(e) => updateLineItem(index, 'currency', e.target.value.toUpperCase())} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none uppercase placeholder:text-gray-400" placeholder="USD" maxLength={3} />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input type="number" step="0.01" value={item.roe} onChange={(e) => updateLineItem(index, 'roe', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="1.00" />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input type="text" value={item.notes} onChange={(e) => updateLineItem(index, 'notes', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-gray-500 font-medium outline-none" placeholder="e.g. PER SET" />
+                          </td>
+                          <td className="py-2 px-3 text-right border-l border-outline-variant/10">
                             <input type="number" value={item.buyPrice} onChange={(e) => updateLineItem(index, 'buyPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right text-error font-medium outline-none" />
                           </td>
-                          <td className="py-3 px-4 text-right border-l border-outline-variant/10">
+                          <td className="py-2 px-3 text-right border-l border-outline-variant/10">
                             <input type="number" value={item.sellPrice} onChange={(e) => updateLineItem(index, 'sellPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right font-bold text-primary outline-none" />
                           </td>
-                          <td className="py-3 px-4 text-right">
-                            <span className={`text-sm font-bold ${itemMargin >= 0 ? 'text-emerald-600' : 'text-error'}`}>${itemMargin.toFixed(2)}</span>
+                          <td className="py-2 px-3 text-right border-l border-outline-variant/10">
+                            <span className={`text-sm font-bold ${itemMargin >= 0 ? 'text-emerald-600' : 'text-error'}`}>
+                              ₹{itemMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
                           </td>
-                          <td className="py-3 px-4 text-right">
+                          <td className="py-2 px-3 text-right">
                             <button onClick={() => removeLineItem(index)} className="p-1.5 text-on-surface-variant hover:bg-error-container hover:text-error rounded-md transition-colors"><Trash2 className="w-4 h-4" /></button>
                           </td>
                         </tr>
@@ -573,38 +561,30 @@ export default function NewQuotePage() {
             </section>
           </div>
 
-          {/* Footer Metrics & Actions */}
+          {/* Footer Metrics (UPDATED TO REFLECT BASE CURRENCY/ROE MATH) */}
           <div className="bg-surface-container-low p-8 flex items-center justify-between border-t border-outline-variant/20">
             <div className="flex gap-12">
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Total Buy Cost</span>
-                <div className="text-xl font-bold text-error tabular-nums">${totalBuy.toLocaleString()}</div>
+                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Total Buy Cost</span>
+                <div className="text-xl font-bold text-error tabular-nums">₹{totalBuy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Total Sell To Client</span>
-                <div className="text-xl font-bold text-primary tabular-nums">${totalSell.toLocaleString()}</div>
+                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Total Sell</span>
+                <div className="text-xl font-bold text-primary tabular-nums">₹{totalSell.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               </div>
-              <div className="space-y-1 border-l border-outline-variant/30 pl-12">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Net Profit Margin</span>
-                <div className="text-2xl font-black text-emerald-600 tabular-nums">${profitMargin.toLocaleString()}</div>
+              <div className="space-y-1 border-l border-outline-variant/30 pl-6 pr-6">
+                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Net Margin</span>
+                <div className="text-2xl font-black text-emerald-600 tabular-nums">₹{profitMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               </div>
             </div>
 
             <div className="flex gap-4">
-              <button
-                onClick={handleDownloadPDF}
-                disabled={isSavingPdf || isSendingEmail}
-                className="px-6 py-3 bg-white border border-outline-variant/30 text-on-surface-variant rounded-lg font-bold flex items-center gap-2 hover:bg-surface-container transition-colors disabled:opacity-50"
-              >
+              <button onClick={handleDownloadPDF} disabled={isSavingPdf || isSendingEmail} className="px-6 py-3 bg-white border border-outline-variant/30 text-on-surface-variant rounded-lg font-bold flex items-center gap-2 hover:bg-surface-container transition-colors disabled:opacity-50">
                 <Download className="w-4 h-4" />
                 {isSavingPdf ? "Processing..." : "Save & Download PDF"}
               </button>
 
-              <button
-                onClick={handleSendEmail}
-                disabled={isSavingPdf || isSendingEmail}
-                className="px-8 py-3 bg-primary text-on-primary rounded-lg font-bold shadow-lg shadow-primary/20 flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
-              >
+              <button onClick={handleSendEmail} disabled={isSavingPdf || isSendingEmail} className="px-8 py-3 bg-primary text-on-primary rounded-lg font-bold shadow-lg shadow-primary/20 flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50">
                 <Mail className="w-4 h-4" />
                 {isSendingEmail ? "Sending..." : "Save & Email Client"}
               </button>

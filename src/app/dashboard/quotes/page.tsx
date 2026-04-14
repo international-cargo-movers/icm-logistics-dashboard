@@ -3,16 +3,23 @@
 import * as React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Edit2 } from "lucide-react"
-import {
-    Plus,
-    Search,
-    FileText,
-    CheckCircle2,
-    XCircle,
-    Clock,
-    ArrowRight,
-    MoreHorizontal
+import { pdf } from '@react-pdf/renderer'
+import QuotePDF from '@/components/dashboard/quotes/QuotePDF'
+import { toast } from "sonner"
+import { 
+    Plus, 
+    Search, 
+    FileText, 
+    CheckCircle2, 
+    XCircle, 
+    Clock, 
+    ArrowRight, 
+    MoreHorizontal,
+    Edit2,
+    Eye,
+    Download,
+    ChevronLeft,
+    ChevronRight
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -31,9 +38,18 @@ export default function QuotesDashboard() {
     const [searchQuery, setSearchQuery] = useState("")
     const [isLoading, setIsLoading] = useState(true)
 
+    // Pagination States
+    const [currentPage, setCurrentPage] = useState(1)
+    const itemsPerPage = 4
+
     useEffect(() => {
         fetchQuotes()
     }, [])
+
+    // Reset to page 1 whenever the user types in the search box
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [searchQuery])
 
     const fetchQuotes = async () => {
         try {
@@ -42,6 +58,7 @@ export default function QuotesDashboard() {
             if (json.success) setQuotes(json.data)
         } catch (error) {
             console.error("Failed to fetch quotes:", error)
+            toast.error("Failed to load quotes.")
         } finally {
             setIsLoading(false)
         }
@@ -57,20 +74,68 @@ export default function QuotesDashboard() {
             const json = await res.json()
 
             if (json.success) {
-                // Optimistically update the UI to instantly reflect the new lock
                 setQuotes(quotes.map(q => q.quoteId === quoteId ? { ...q, status: newStatus } : q))
+                toast.success(`Quote ${quoteId} marked as ${newStatus}`)
             }
         } catch (error) {
             console.error("Failed to update status:", error)
+            toast.error("Failed to update status.")
         }
     }
 
+    // --- PDF GENERATION HELPERS ---
+    const formatQuoteForPDF = (q: any) => {
+        return {
+            quoteRef: q.quoteId,
+            date: new Date(q.validity?.issueDate).toLocaleDateString(),
+            validUntil: new Date(q.validity?.expiryDate).toLocaleDateString(),
+            customerName: q.customerDetails?.contactPerson || q.customerDetails?.companyId?.name,
+            customerEmail: q.customerDetails?.companyId?.email || "",
+            mode: q.routingDetails?.mode,
+            originPort: q.routingDetails?.originPort,
+            originCountry: q.routingDetails?.originCountry,
+            destinationPort: q.routingDetails?.destinationPort,
+            destinationCountry: q.routingDetails?.destinationCountry,
+            cargoSummary: q.cargoSummary || {},
+            lineItems: q.financials?.lineItems || [],
+            totalSell: q.financials?.totalSell || 0
+        }
+    }
+
+    const handleViewPDF = async (quote: any) => {
+        toast.info("Generating PDF preview...")
+        const data = formatQuoteForPDF(quote)
+        const blob = await pdf(<QuotePDF data={data} />).toBlob()
+        const url = URL.createObjectURL(blob)
+        window.open(url, '_blank')
+    }
+
+    const handleDownloadPDF = async (quote: any) => {
+        toast.info("Generating PDF for download...")
+        const data = formatQuoteForPDF(quote)
+        const blob = await pdf(<QuotePDF data={data} />).toBlob()
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `Quotation_${data.quoteRef}.pdf`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+    }
+
+    // --- SEARCH & PAGINATION LOGIC ---
     const filteredQuotes = quotes.filter(quote => {
         const query = searchQuery.toLowerCase()
         return quote.quoteId.toLowerCase().includes(query) ||
             (quote.customerDetails?.companyId?.name || "").toLowerCase().includes(query) ||
-            quote.routingDetails?.destinationPort.toLowerCase().includes(query)
+            (quote.routingDetails?.destinationPort || "").toLowerCase().includes(query) ||
+            (quote.routingDetails?.originPort || "").toLowerCase().includes(query)
     })
+
+    const totalPages = Math.ceil(filteredQuotes.length / itemsPerPage)
+    const indexOfLastItem = currentPage * itemsPerPage
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage
+    const currentItems = filteredQuotes.slice(indexOfFirstItem, indexOfLastItem)
 
     // Helper to style badges based on the strict Enum status
     const getStatusBadge = (status: string) => {
@@ -106,14 +171,14 @@ export default function QuotesDashboard() {
                         <input
                             value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pl-12 pr-4 py-3.5 bg-surface-container-lowest rounded-xl border border-outline-variant/20 shadow-sm focus:ring-2 focus:ring-primary/20 text-sm outline-none transition-all"
-                            placeholder="Search by Quote ID, Client, or Destination..."
+                            placeholder="Search by Quote ID, Client, or Port..."
                             type="text"
                         />
                     </div>
                 </div>
 
                 {/* Data Table */}
-                <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/20 shadow-sm overflow-hidden">
+                <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/20 shadow-sm overflow-hidden flex flex-col">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -129,11 +194,11 @@ export default function QuotesDashboard() {
                             </thead>
                             <tbody className="divide-y divide-outline-variant/10">
                                 {isLoading && <tr><td colSpan={7} className="px-6 py-12 text-center text-on-surface-variant">Loading pipeline...</td></tr>}
-                                {!isLoading && filteredQuotes.length === 0 && (
+                                {!isLoading && currentItems.length === 0 && (
                                     <tr><td colSpan={7} className="px-6 py-12 text-center text-on-surface-variant">No quotes found.</td></tr>
                                 )}
 
-                                {filteredQuotes.map((quote) => (
+                                {currentItems.map((quote) => (
                                     <tr key={quote._id} className="group hover:bg-surface-container-low/30 transition-colors">
                                         <td className="px-6 py-5">
                                             <span className="font-mono font-bold text-primary bg-primary/5 px-2.5 py-1 rounded-md text-sm">
@@ -157,7 +222,7 @@ export default function QuotesDashboard() {
                                         </td>
                                         <td className="px-6 py-5 text-right">
                                             <span className="font-black text-on-surface">
-                                                ${quote.financials?.totalSell?.toLocaleString()}
+                                                ₹{quote.financials?.totalSell?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </span>
                                         </td>
                                         <td className="px-6 py-5">
@@ -171,8 +236,16 @@ export default function QuotesDashboard() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48">
-                                                    <DropdownMenuLabel>Pipeline Actions</DropdownMenuLabel>
+                                                    <DropdownMenuLabel>Document Options</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => handleViewPDF(quote)} className="cursor-pointer font-medium">
+                                                        <Eye className="w-4 h-4 mr-2 text-blue-600" /> View PDF
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleDownloadPDF(quote)} className="cursor-pointer font-medium">
+                                                        <Download className="w-4 h-4 mr-2 text-blue-600" /> Download PDF
+                                                    </DropdownMenuItem>
+                                                    
                                                     <DropdownMenuSeparator />
+                                                    <DropdownMenuLabel>Pipeline Actions</DropdownMenuLabel>
                                                     {quote.status !== "Approved" && (
                                                         <DropdownMenuItem asChild>
                                                             <Link href={`/dashboard/quotes/${quote.quoteId}/edit`} className="cursor-pointer font-medium mb-1">
@@ -181,18 +254,12 @@ export default function QuotesDashboard() {
                                                         </DropdownMenuItem>
                                                     )}
                                                     {quote.status !== "Approved" && (
-                                                        <DropdownMenuItem
-                                                            onClick={() => updateStatus(quote.quoteId, "Approved")}
-                                                            className="text-emerald-600 font-bold focus:text-emerald-700 cursor-pointer"
-                                                        >
+                                                        <DropdownMenuItem onClick={() => updateStatus(quote.quoteId, "Approved")} className="text-emerald-600 font-bold focus:text-emerald-700 cursor-pointer">
                                                             <CheckCircle2 className="w-4 h-4 mr-2" /> Mark as Approved
                                                         </DropdownMenuItem>
                                                     )}
                                                     {quote.status !== "Approved" && quote.status !== "Rejected" && (
-                                                        <DropdownMenuItem
-                                                            onClick={() => updateStatus(quote.quoteId, "Rejected")}
-                                                            className="text-error font-bold focus:text-error cursor-pointer"
-                                                        >
+                                                        <DropdownMenuItem onClick={() => updateStatus(quote.quoteId, "Rejected")} className="text-error font-bold focus:text-error cursor-pointer">
                                                             <XCircle className="w-4 h-4 mr-2" /> Mark as Rejected
                                                         </DropdownMenuItem>
                                                     )}
@@ -209,7 +276,37 @@ export default function QuotesDashboard() {
                             </tbody>
                         </table>
                     </div>
+                    
+                    {/* Pagination Controls */}
+                    {!isLoading && filteredQuotes.length > itemsPerPage && (
+                        <div className="bg-surface-container-low border-t border-outline-variant/20 px-6 py-4 flex items-center justify-between">
+                            <span className="text-sm text-on-surface-variant font-medium">
+                                Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredQuotes.length)} of {filteredQuotes.length} quotes
+                            </span>
+                            <div className="flex gap-2">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="h-8"
+                                >
+                                    <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+                                </Button>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                    className="h-8"
+                                >
+                                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
+
             </div>
         </div>
     )

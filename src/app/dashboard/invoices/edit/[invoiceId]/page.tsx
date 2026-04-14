@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield } from "lucide-react"
+import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield, FileText } from "lucide-react"
 import { pdf } from '@react-pdf/renderer'
 import InvoicePDF from '@/components/dashboard/invoices/InvoicePDF'
 
@@ -24,21 +24,41 @@ function numberToWords(num: number): string {
         if (n < 100) return b[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + a[n % 10] : "");
         if (n < 1000) return a[Math.floor(n / 100)] + " Hundred" + (n % 100 !== 0 ? " and " + convert(n % 100) : "");
         if (n < 100000) return convert(Math.floor(n / 1000)) + " Thousand" + (n % 1000 !== 0 ? " " + convert(n % 1000) : "");
-        return num.toString();
+        if (n < 10000000) return convert(Math.floor(n / 100000)) + " Lakh" + (n % 100000 !== 0 ? " " + convert(n % 100000) : "");
+        return convert(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 !== 0 ? " " + convert(n % 10000000) : "");
     };
     const wholeNumber = Math.floor(num);
     const decimal = Math.round((num - wholeNumber) * 100);
-    return `${convert(wholeNumber)} & ${decimal}/100`;
+    return `INR ${convert(wholeNumber)} ${decimal > 0 ? ` & ${decimal}/100` : ""} Only`;
 }
 
+// --- SCHEMA (Synced with Advanced Routing & Tax fields) ---
 const invoiceSchema = z.object({
     invoiceNo: z.string().min(1, "Required"),
     issueDate: z.string(),
     jobId: z.string().min(1, "Required"),
+    jobReference: z.string().optional(),
     customerName: z.string(),
     billingAddress: z.string(),
+    gstin: z.string().optional(),
+    stateCode: z.string().optional(),
     origin: z.string(),
     destination: z.string(),
+    
+    // Advanced Routing Details
+    oblMawb: z.string().optional(),
+    hblHawb: z.string().optional(),
+    containerNo: z.string().optional(),
+    vesselFlight: z.string().optional(),
+    commodity: z.string().optional(),
+    egm: z.string().optional(),
+    igm: z.string().optional(),
+    sbNo: z.string().optional(),
+    noOfPackages: z.coerce.number().optional(),
+    grossWeight: z.coerce.number().optional(),
+    volumetricWeight: z.coerce.number().optional(),
+    chargeableWeight: z.coerce.number().optional(),
+
     lineItems: z.array(z.object({
         description: z.string().min(1),
         sacCode: z.string(),
@@ -64,11 +84,17 @@ export default function EditInvoicePage() {
 
     const form = useForm<InvoiceFormValues>({
         resolver: zodResolver(invoiceSchema) as any,
-        defaultValues: { invoiceNo: "", issueDate: "", jobId: "", customerName: "", billingAddress: "", origin: "", destination: "", lineItems: [] }
+        defaultValues: { 
+            invoiceNo: "", issueDate: "", jobId: "", jobReference: "", customerName: "", billingAddress: "", 
+            gstin: "", stateCode: "07", origin: "", destination: "",
+            oblMawb: "", hblHawb: "", containerNo: "", vesselFlight: "", commodity: "General Cargo",
+            egm: "", igm: "", sbNo: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0, chargeableWeight: 0,
+            lineItems: [] 
+        }
     })
 
     const { control, watch, setValue, register, handleSubmit, reset } = form
-    const { fields, append, remove, replace } = useFieldArray({ control, name: "lineItems" })
+    const { fields, append, remove } = useFieldArray({ control, name: "lineItems" })
 
     // --- 1. HYDRATION ENGINE: Fetch Master Data & Invoice Data ---
     React.useEffect(() => {
@@ -91,10 +117,25 @@ export default function EditInvoicePage() {
                         invoiceNo: inv.invoiceNo,
                         issueDate: new Date(inv.invoiceDate).toISOString().split('T')[0],
                         jobId: inv.jobId,
+                        jobReference: inv.jobReference || "",
                         customerName: inv.customerDetails?.name || "",
                         billingAddress: inv.customerDetails?.billingAddress || "",
+                        gstin: inv.customerDetails?.gstin || "",
+                        stateCode: inv.customerDetails?.stateCode || "07",
                         origin: inv.shipmentSnapshot?.origin || "",
                         destination: inv.shipmentSnapshot?.destination || "",
+                        oblMawb: inv.shipmentSnapshot?.oblMawb || "",
+                        hblHawb: inv.shipmentSnapshot?.hblHawb || "",
+                        containerNo: inv.shipmentSnapshot?.containerNo || "",
+                        vesselFlight: inv.shipmentSnapshot?.vesselFlight || "",
+                        commodity: inv.shipmentSnapshot?.commodity || "General Cargo",
+                        egm: inv.shipmentSnapshot?.egm || "",
+                        igm: inv.shipmentSnapshot?.igm || "",
+                        sbNo: inv.shipmentSnapshot?.sbNo || "",
+                        noOfPackages: inv.shipmentSnapshot?.noOfPackages || 0,
+                        grossWeight: inv.shipmentSnapshot?.grossWeight || 0,
+                        volumetricWeight: inv.shipmentSnapshot?.volumetricWeight || 0,
+                        chargeableWeight: inv.shipmentSnapshot?.chargeableWeight || 0,
                         lineItems: inv.lineItems || []
                     })
                 } else {
@@ -138,23 +179,27 @@ export default function EditInvoicePage() {
                 invoiceNo: data.invoiceNo,
                 invoiceDate: data.issueDate,
                 jobId: data.jobId,
+                jobReference: data.jobReference || linkedJob?.jobId, // The critical fix
                 customerDetails: {
                     companyId: companyId,
                     name: data.customerName,
-                    billingAddress: data.billingAddress
+                    billingAddress: data.billingAddress,
+                    gstin: data.gstin,
+                    stateCode: data.stateCode
                 },
                 shipmentSnapshot: {
-                    origin: data.origin,
-                    destination: data.destination,
-                    pol: data.origin,
-                    pod: data.destination
+                    origin: data.origin, destination: data.destination, pol: data.origin, pod: data.destination,
+                    oblMawb: data.oblMawb, hblHawb: data.hblHawb, containerNo: data.containerNo, vesselFlight: data.vesselFlight,
+                    commodity: data.commodity, egm: data.egm, igm: data.igm, sbNo: data.sbNo,
+                    noOfPackages: data.noOfPackages, grossWeight: data.grossWeight, volumetricWeight: data.volumetricWeight, chargeableWeight: data.chargeableWeight
                 },
                 lineItems: processedLineItems,
                 totals: {
                     totalTaxable: totals.taxable,
                     totalGst: totals.gst,
                     roundOff: 0,
-                    netAmount: totals.net
+                    netAmount: totals.net,
+                    amountInWords: numberToWords(totals.net)
                 }
             }
 
@@ -181,13 +226,12 @@ export default function EditInvoicePage() {
             setIsSubmitting(false)
         }
     }
-    // 4. --- THE CLIENT LOCK ---
-    // Show a loading state while NextAuth verifies the token
+    
+    // --- THE CLIENT LOCK ---
     if (status === "loading" || isLoading) {
         return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials & Hydrating Data...</div>
     }
 
-    // If the user's role is not authorized for Invoices, throw the shield!
     if (session && !["SuperAdmin", "Finance"].includes(session.user.role)) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
@@ -203,7 +247,6 @@ export default function EditInvoicePage() {
             </div>
         )
     }
-    if (isLoading) return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Hydrating Invoice Data...</div>
 
     return (
         <div className="bg-slate-50 text-slate-900 min-h-screen font-sans pb-12">
@@ -227,7 +270,7 @@ export default function EditInvoicePage() {
             </div>
 
             <Form {...form}>
-                <form className="max-w-6xl mx-auto p-8 space-y-10">
+                <form className="max-w-6xl mx-auto p-8 space-y-8">
 
                     {/* SECTION 1: INVOICE META */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -243,37 +286,48 @@ export default function EditInvoicePage() {
 
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Linked Job ID (Read-only)</label>
-                            <input readOnly value={watch("jobId")} className="bg-slate-100/50 text-slate-500 border-none rounded-lg px-4 py-3 text-sm font-mono cursor-not-allowed outline-none" />
+                            <input readOnly value={watch("jobReference") || watch("jobId")} className="bg-slate-100/50 text-slate-500 border-none rounded-lg px-4 py-3 text-sm font-mono cursor-not-allowed outline-none" />
                         </div>
                     </div>
 
-                    {/* SECTION 2: READ-ONLY CUSTOMER DATA */}
-                    <div className="bg-[#f2f4f6]/50 rounded-2xl overflow-hidden border border-[#c6c6cd]/30">
-                        <div className="px-8 py-4 bg-[#e6e8ea]/30 border-b border-[#c6c6cd]/10">
-                            <h2 className="text-xs font-black uppercase tracking-widest text-[#45464d]">Associated Shipment Data</h2>
+                    {/* SECTION 2: CUSTOMER & ADVANCED ROUTING */}
+                    <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                        <div className="px-8 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-slate-500" />
+                            <h2 className="text-xs font-black uppercase tracking-widest text-slate-700">Tax & Routing Details</h2>
                         </div>
-                        <div className="p-8 flex gap-12 items-start">
-                            <div className="flex-1 min-w-0">
-                                <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-2 block">Consignee / Bill To</label>
-                                <p className="text-sm font-bold text-[#191c1e]">{watch("customerName") || "—"}</p>
-                                <p className="text-xs text-[#54647a] mt-1 leading-relaxed whitespace-pre-wrap">{watch("billingAddress") || "—"}</p>
-                            </div>
-                            <div className="flex-1 flex gap-6">
-                                <div className="flex-1 bg-white p-5 rounded-xl border border-[#c6c6cd]/20 shadow-sm p-4">
-                                    <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-3 block">Origin</label>
-                                    <div className="flex items-center gap-3">
-                                        <MapPin className="w-5 h-5 text-[#111c2d]" />
-                                        <div><div className="text-xs font-bold text-[#191c1e]">{watch("origin") || "—"}</div><div className="text-[10px] text-[#45464d] mt-0.5">POL</div></div>
-                                    </div>
+                        <div className="p-8 grid grid-cols-3 gap-x-8 gap-y-6">
+                            <div className="col-span-3 grid grid-cols-2 gap-6 mb-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Consignee Name</label>
+                                    <input {...register("customerName")} className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
                                 </div>
-                                <div className="flex-1 bg-white p-5 rounded-xl border border-[#c6c6cd]/20 shadow-sm p-4">
-                                    <label className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest mb-3 block">Destination</label>
-                                    <div className="flex items-center gap-3">
-                                        <Anchor className="w-5 h-5 text-[#188ace]" />
-                                        <div><div className="text-xs font-bold text-[#191c1e]">{watch("destination") || "—"}</div><div className="text-[10px] text-[#45464d] mt-0.5">POD</div></div>
-                                    </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Billing Address</label>
+                                    <input {...register("billingAddress")} className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Customer GSTIN/UIN</label>
+                                    <input {...register("gstin")} placeholder="e.g. 07AADC..." className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm font-mono focus:ring-2 focus:ring-slate-200 outline-none" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">State Code</label>
+                                    <input {...register("stateCode")} placeholder="e.g. 07" className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm font-mono focus:ring-2 focus:ring-slate-200 outline-none" />
                                 </div>
                             </div>
+                            
+                            {/* Advanced Routing Grid */}
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Origin / POL</label><input {...register("origin")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Destination / POD</label><input {...register("destination")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Vessel & Voyage / Flight</label><input {...register("vesselFlight")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
+                            
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">OBL / MAWB No</label><input {...register("oblMawb")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">HBL / HAWB No</label><input {...register("hblHawb")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Container No.</label><input {...register("containerNo")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">EGM No.</label><input {...register("egm")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">IGM No.</label><input {...register("igm")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Shipping Bill (SB) No.</label><input {...register("sbNo")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
                         </div>
                     </div>
 
@@ -289,13 +343,13 @@ export default function EditInvoicePage() {
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-slate-50/80 border-b border-slate-100">
-                                        <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Description</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest w-[30%]">Description</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">SAC/HSN</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rate</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Cur</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 text-center uppercase tracking-widest">ROE</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">GST%</th>
-                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Amount</th>
+                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Amount (₹)</th>
                                         <th className="px-6 py-4 w-10"></th>
                                     </tr>
                                 </thead>
@@ -306,11 +360,11 @@ export default function EditInvoicePage() {
                                         const lineTaxable = lineRate * lineRoe;
                                         return (
                                             <tr key={field.id} className="hover:bg-slate-50/50 transition-colors group">
-                                                <td className="px-8 py-4"><textarea {...register(`lineItems.${index}.description`)} className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none resize-none" rows={2} /></td>
-                                                <td className="px-4 py-4"><input {...register(`lineItems.${index}.sacCode`)} className="w-full bg-transparent border-none text-xs text-slate-500 font-mono focus:ring-0 p-0 outline-none" /></td>
+                                                <td className="px-6 py-4"><input {...register(`lineItems.${index}.description`)} className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none" placeholder="Description..." /></td>
+                                                <td className="px-4 py-4"><input {...register(`lineItems.${index}.sacCode`)} className="w-full bg-transparent border-none text-xs text-slate-500 font-mono focus:ring-0 p-0 outline-none" placeholder="996511" /></td>
                                                 <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.rate`)} className="w-full bg-transparent border-none text-sm font-semibold tabular-nums focus:ring-0 p-0 outline-none" /></td>
                                                 <td className="px-4 py-4 text-center">
-                                                    <select {...register(`lineItems.${index}.currency`)} className="text-center text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-1 rounded-full outline-none uppercase cursor-pointer appearance-none">
+                                                    <select {...register(`lineItems.${index}.currency`)} className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-1 rounded-full outline-none uppercase cursor-pointer appearance-none">
                                                         <option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option>
                                                         <option value="GBP">GBP</option><option value="AED">AED</option><option value="SGD">SGD</option>
                                                     </select>
@@ -347,7 +401,7 @@ export default function EditInvoicePage() {
                                 <span className="text-xs font-black uppercase tracking-widest text-slate-800 mt-2">Net Amount Due</span>
                                 <div className="text-right">
                                     <div className="text-3xl font-black tabular-nums tracking-tighter text-slate-900">₹{totals.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                                    <div className="text-[10px] text-slate-500 font-bold mt-1 max-w-[200px] leading-tight">{numberToWords(totals.net)} Only</div>
+                                    <div className="text-[10px] text-slate-500 font-bold mt-1 max-w-[200px] leading-tight">{numberToWords(totals.net)}</div>
                                 </div>
                             </div>
                         </div>
