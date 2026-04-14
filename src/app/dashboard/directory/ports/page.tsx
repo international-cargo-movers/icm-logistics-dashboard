@@ -209,9 +209,9 @@ export default function MasterPortsPage() {
       {/* Header */}
       <header className="fixed top-0 w-full z-50 bg-slate-50/80 backdrop-blur-xl shadow-sm flex justify-between items-center px-6 h-16">
         <div className="flex items-center gap-8">
-          <span className="text-xl font-bold tracking-tight text-slate-900">Architectural Logistician</span>
+          <span className="text-xl font-bold tracking-tight text-slate-900">International Cargo Movers</span>
           <div className="hidden md:flex gap-6">
-            <a className="text-slate-500 hover:text-slate-900 transition-colors" href="/dashboard/new-job">Shipments</a>
+            <a className="text-slate-500 hover:text-slate-900 transition-colors" href="/dashboard/jobs">Shipments</a>
             <a className="text-slate-500 hover:text-slate-900 transition-colors" href="/dashboard/directory/companies">Companies</a>
             <a className="text-blue-700 border-b-2 border-blue-700 transition-colors" href="/dashboard/directory/ports">Ports Hub</a>
           </div>

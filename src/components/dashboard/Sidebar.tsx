@@ -20,7 +20,7 @@ export default function Sidebar() {
   return (
     <aside className="h-screen w-64 fixed left-0 top-0 bg-slate-50 dark:bg-slate-900 flex flex-col py-8 px-6">
       <div className="mb-10">
-        <h1 className="text-lg font-bold">Architect Logistician</h1>
+        <h1 className="text-lg font-bold">International Cargo Movers</h1>
         <p className="text-[10px] uppercase text-slate-500 mt-1">
           Global Command
         </p>

@@ -47,7 +47,7 @@ export default function LoginPage() {
           <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-slate-900/20">
             <Anchor className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-900">FreightOS</h1>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900">International Cargo Movers</h1>
           <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">Global Logistics Interface</p>
         </div>
 

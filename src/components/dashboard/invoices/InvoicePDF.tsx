@@ -30,8 +30,8 @@ export default function InvoicePDF({ data }: { data: any }) {
             <Text style={styles.metaText}>Date: {data.issueDate}</Text>
           </View>
           <View style={{ textAlign: 'right' }}>
-            <Text style={styles.bold}>Architect Logistician</Text>
-            <Text style={styles.metaText}>Global Logistics Dept.</Text>
+            <Text style={styles.bold}>International Cargo Movers</Text>
+            <Text style={styles.metaText}>International Forwarders, Consolidators & Shipping Agent</Text>
           </View>
         </View>
 

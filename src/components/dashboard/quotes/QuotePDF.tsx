@@ -47,9 +47,9 @@ export default function QuotePDF({ data }: { data: any }) {
         {/* HEADER */}
         <View style={styles.headerContainer}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.companyName}>ARCHITECT LOGISTICIAN</Text>
-            <Text style={styles.companyDetails}>Global Command Center</Text>
-            <Text style={styles.companyDetails}>quotes@architectlogistician.com</Text>
+            <Text style={styles.companyName}>INTERNATIONAL CARGO MOVERS</Text>
+            <Text style={styles.companyDetails}>International Forwarders, Consolidators & Shipping Agent</Text>
+            <Text style={styles.companyDetails}>{process.env.EMAIL_USER}</Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>OFFICIAL QUOTATION</Text>
