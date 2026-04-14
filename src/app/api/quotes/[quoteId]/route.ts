@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Ensure this path matches
 
 // GET: Fetch a single quote to populate the Edit Form
-export async function GET(request: Request, { params }: { params: { quoteId: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
     try {
         await dbConnect();
         const { quoteId } = await params;
@@ -23,7 +23,7 @@ export async function GET(request: Request, { params }: { params: { quoteId: str
 }
 
 // PUT: Update an existing quote
-export async function PUT(request: Request, { params }: { params: { quoteId: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
     try {
         await dbConnect();
 

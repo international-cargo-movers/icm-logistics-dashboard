@@ -4,7 +4,7 @@ import InvoiceModel from '@/model/InvoiceModel';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Check this path matches your nextauth file!
 
-export async function GET(request: Request, { params }: { params: { invoiceId: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ invoiceId: string }> }) {
     try {
         await dbConnect();
         
@@ -22,7 +22,7 @@ export async function GET(request: Request, { params }: { params: { invoiceId: s
     }
 }
 
-export async function PUT(request: Request, { params }: { params: { invoiceId: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ invoiceId: string }> }) {
     try {
         await dbConnect();
         
