@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import QuoteModel from '@/model/QuoteModel';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Ensure this path matches
 
 // GET: Fetch a single quote to populate the Edit Form
 export async function GET(request: Request, { params }: { params: { quoteId: string } }) {
@@ -24,6 +26,19 @@ export async function GET(request: Request, { params }: { params: { quoteId: str
 export async function PUT(request: Request, { params }: { params: { quoteId: string } }) {
     try {
         await dbConnect();
+
+        // --- THE SERVER LOCK ---
+        const session = await getServerSession(authOptions);
+        
+        // Block if not logged in, or if role is NOT SuperAdmin or Sales
+        if (!session?.user?.role || !["SuperAdmin", "Sales"].includes(session.user.role)) {
+            return NextResponse.json({ 
+                success: false, 
+                error: "Security Violation: You do not have clearance to modify quotes." 
+            }, { status: 403 });
+        }
+        // -----------------------
+
         const { quoteId } = await params;
         const body = await request.json();
         const { quoteData } = body;

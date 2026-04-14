@@ -2,10 +2,24 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import QuoteModel from '@/model/QuoteModel';
 import nodemailer from "nodemailer";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Ensure this matches your path!
 
 export async function POST(request: Request) {
     try {
         await dbConnect();
+
+        // --- THE SERVER LOCK ---
+        const session = await getServerSession(authOptions);
+        
+        // Block if not logged in, or if role is NOT SuperAdmin or Sales
+        if (!session?.user?.role || !["SuperAdmin", "Sales"].includes(session.user.role)) {
+            return NextResponse.json({ 
+                success: false, 
+                error: "Security Violation: You do not have clearance to create sales quotes." 
+            }, { status: 403 });
+        }
+        // -----------------------
         
         const body = await request.json();
         const { quoteData, pdfBase64 } = body;

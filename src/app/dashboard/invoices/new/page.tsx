@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X } from "lucide-react"
+import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield } from "lucide-react"
 import { pdf } from '@react-pdf/renderer'
 import InvoicePDF from '@/components/dashboard/invoices/InvoicePDF'
 
 import { Form, FormField, FormItem, FormControl } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
+import { useSession } from "next-auth/react"
 
 // --- UTILITY: Number to Words ---
 function numberToWords(num: number): string {
@@ -53,6 +54,7 @@ type InvoiceFormValues = z.infer<typeof invoiceSchema>
 
 export default function SmartInvoiceGenerator() {
     const router = useRouter()
+    const { data: session, status } = useSession()
     // const { toast } = useToast()
     const [jobs, setJobs] = React.useState<any[]>([])
     const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -146,7 +148,26 @@ export default function SmartInvoiceGenerator() {
             replace([{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
         }
     }
+    // 4. --- THE CLIENT LOCK ---
+    if (status === "loading") {
+        return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials...</div>
+    }
 
+    if (session && !["SuperAdmin", "Finance"].includes(session?.user?.role || "")) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
+                <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
+                <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to generate financial documents.</p>
+                <button
+                    onClick={() => router.back()}
+                    className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
+                >
+                    Go Back
+                </button>
+            </div>
+        )
+    }
     // --- LIVE MATH ENGINE ---
     const lineItems = watch("lineItems") || []
     const totals = lineItems.reduce((acc, item) => {

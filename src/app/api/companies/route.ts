@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import CompanyModel from "@/model/CompanyModel";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function GET(){
     try{
         await dbConnect();
-
         const companies = await CompanyModel.find({}).sort({name:1});
         return NextResponse.json({success:true,data:companies},{status:200});
     }catch(error:any){
@@ -18,12 +19,24 @@ export async function POST(request:Request){
     try{
         await dbConnect();
 
+        // --- THE SERVER LOCK ---
+        const session = await getServerSession(authOptions);
+        
+        // Block if not logged in, or if role is NOT SuperAdmin or Finance
+        if (!session?.user?.role || !["SuperAdmin", "Finance"].includes(session.user.role)) {
+            return NextResponse.json({ 
+                success: false, 
+                error: "Security Violation: You do not have clearance to modify the Master Directory." 
+            }, { status: 403 });
+        }
+        // -----------------------
+
         const body = await request.json();
 
         const newCompany = await CompanyModel.create({
             name: body.name,
             type: body.type || ["Customer"],
-            defaultSalesPerson: body.defaultSalesPerson || body.salesPerson, // fallback just in case
+            defaultSalesPerson: body.defaultSalesPerson || body.salesPerson, 
             taxId: body.taxId,
             streetAddress: body.streetAddress,
             city: body.city,

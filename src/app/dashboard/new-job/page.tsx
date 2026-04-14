@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from 'react-hook-form'
 import * as z from "zod"
 import { useRouter } from "next/navigation"
-import { Check, ChevronsUpDown, Link as LinkIcon, XCircle } from "lucide-react"
+import { Check, ChevronsUpDown, Link as LinkIcon, Shield, XCircle } from "lucide-react"
 
 import { Form } from "@/components/ui/form"
 import { cn } from "@/lib/utils"
@@ -21,6 +21,7 @@ import RoutingSection from "@/components/dashboard/new-job/routing-section"
 import CargoSection from "@/components/dashboard/new-job/cargo-section"
 import VendorSection from "@/components/dashboard/new-job/vendor-section"
 import DocumentsSection from "@/components/dashboard/new-job/document-section"
+import { useSession } from "next-auth/react"
 
 export const jobFormSchema = z.object({
   quoteReference: z.string().optional(),
@@ -74,6 +75,7 @@ const defaultFormValues = {
 };
 
 export default function NewJobPage() {
+  const { data: session, status } = useSession()
   const router = useRouter();
   const [approvedQuotes, setApprovedQuotes] = useState<any[]>([]);
   const [openQuoteBox, setOpenQuoteBox] = useState(false);
@@ -227,7 +229,25 @@ export default function NewJobPage() {
       }
     } catch (error: any) { console.error("Network error submitting form:", error); }
   }
+  // if (status === "loading") {
+  //       return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials...</div>
+  //   }
 
+    if (session && !["SuperAdmin", "Operations"].includes(session?.user?.role || "")) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
+                <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
+                <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to generate financial documents.</p>
+                <button 
+                    onClick={() => router.back()} 
+                    className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
+                >
+                    Go Back
+                </button>
+            </div>
+        )
+    }
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit, (errors) => console.error("ZOD BLOCKED", errors))} className="flex flex-col h-screen bg-surface text-on-surface">

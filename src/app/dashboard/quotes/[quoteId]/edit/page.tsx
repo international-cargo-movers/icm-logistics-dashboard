@@ -3,9 +3,11 @@
 import * as React from "react"
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { useSession } from "next-auth/react" // 1. IMPORT SESSION
 import { pdf } from '@react-pdf/renderer'
 import QuotePDF from '@/components/dashboard/quotes/QuotePDF'
-import { Plus, Trash2, ArrowRight, Check, ChevronsUpDown, Save, Mail, Download } from "lucide-react"
+// 2. IMPORT SHIELD ICON
+import { Plus, Trash2, ArrowRight, Check, ChevronsUpDown, Save, Mail, Download, Shield } from "lucide-react"
 
 // Shadcn UI Imports
 import { cn } from "@/lib/utils"
@@ -19,6 +21,8 @@ export default function EditQuotePage() {
   const params = useParams()
   const router = useRouter()
   const quoteId = params.quoteId as string
+
+  const { data: session, status } = useSession() // 3. GET SESSION
 
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -84,7 +88,6 @@ export default function EditQuotePage() {
           setCountries(Array.from(uniqueCountriesMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
         }
 
-        // Map DB data back to the UI State
         if (quoteJson.success) {
           const q = quoteJson.data;
           
@@ -92,7 +95,6 @@ export default function EditQuotePage() {
           const expiry = new Date(q.validity.expiryDate).getTime();
           const diffDays = Math.ceil((expiry - issue) / (1000 * 60 * 60 * 24));
 
-          // Cross-reference with Master Directory to get the most up-to-date email
           const linkedCustomer = loadedCustomers.find(c => c._id === q.customerDetails.companyId);
           const activeEmail = linkedCustomer?.email || linkedCustomer?.contactEmail || q.customerDetails.email || "";
 
@@ -127,7 +129,6 @@ export default function EditQuotePage() {
     loadData();
   }, [quoteId, router])
 
-  // --- AUTO-SYNC EMAIL ON BLUR ---
   const handleEmailBlur = async () => {
     if (quoteData.customerId && quoteData.customerEmail) {
       const customer = customers.find(c => c._id === quoteData.customerId);
@@ -149,7 +150,6 @@ export default function EditQuotePage() {
     }
   }
 
-  // Cascading Logic: Clear port if country changes
   useEffect(() => {
     if (!isLoading) {
       setQuoteData(prev => ({ ...prev, originPort: "" }))
@@ -242,7 +242,6 @@ export default function EditQuotePage() {
 
     setIsSendingEmail(true);
     try {
-      // 1. Generate the PDF payload
       const blob = await pdf(<QuotePDF data={finalData} />).toBlob();
       const base64String = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -251,7 +250,6 @@ export default function EditQuotePage() {
         reader.onerror = (error) => reject(error);
       });
 
-      // 2. Save the revision first
       const updateResponse = await fetch(`/api/quotes/${quoteId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -259,11 +257,9 @@ export default function EditQuotePage() {
       });
       if (!updateResponse.ok) throw new Error("Failed to save revision before emailing.");
 
-      // 3. Dispatch the email via your API
       const emailResponse = await fetch('/api/quotes/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Passing isRevision flag in case your backend needs to know it's not a brand new creation
         body: JSON.stringify({ quoteData: finalData, pdfBase64: base64String, isRevision: true }) 
       });
 
@@ -279,7 +275,27 @@ export default function EditQuotePage() {
     }
   }
 
-  if (isLoading) return <div className="p-12 text-center font-bold">Loading Quote Data...</div>
+  // 4. --- THE CLIENT LOCK ---
+  if (status === "loading" || isLoading) {
+    return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials & Hydrating Data...</div>
+  }
+
+  if (session && !["SuperAdmin", "Sales"].includes(session?.user?.role || "")) {
+    return (
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
+            <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
+            <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to modify sales quotes.</p>
+            <button 
+                onClick={() => router.back()} 
+                className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
+            >
+                Go Back
+            </button>
+        </div>
+    )
+  }
+  // ---------------------------
 
   return (
     <div className="flex-1 overflow-y-auto px-16 py-12 bg-surface text-on-surface font-sans min-h-screen">
@@ -290,6 +306,7 @@ export default function EditQuotePage() {
           <p className="text-on-surface-variant text-lg">Revise pricing and routing for this active negotiation.</p>
         </div>
 
+        {/* ... (Keep the rest of the form UI exactly as it was) ... */}
         <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm border border-outline-variant/20">
           <div className="p-8 space-y-10">
             

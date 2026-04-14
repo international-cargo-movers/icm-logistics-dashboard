@@ -12,6 +12,7 @@ import {
   X,
   Building2
 } from "lucide-react"
+import { useSession } from "next-auth/react";
 
 // 1. Updated Interface to match our new MongoDB Schema
 interface ICompany {
@@ -29,6 +30,7 @@ interface ICompany {
 }
 
 export default function MasterDirectoryPage() {
+  const { data: session } = useSession()
   const [companies, setCompanies] = React.useState<ICompany[]>([])
   const [activeTab, setActiveTab] = React.useState("Customers")
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -36,7 +38,7 @@ export default function MasterDirectoryPage() {
   const [isEditOpen, setIsEditOpen] = React.useState(false)
   const [selectedCompany, setSelectedCompany] = React.useState<ICompany | null>(null)
   const [editForm, setEditForm] = React.useState<Partial<ICompany>>({})
-
+  const canEditMasterData = session && ["SuperAdmin", "Finance","Sales"].includes(session?.user?.role || "")
   React.useEffect(() => {
     async function fetchCompanies() {
       try {
@@ -140,10 +142,13 @@ export default function MasterDirectoryPage() {
               <p className="text-on-surface-variant text-lg">Manage global entities, partners, and routing locations.</p>
             </div>
             {/* Hooked up the openAddPanel here */}
-            <button onClick={openAddPanel} className="bg-primary text-on-primary px-6 py-3 rounded-lg font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity">
-              <Plus className="w-4 h-4" />
-              + Add New Record
-            </button>
+            {/* 4. HIDE THE ADD BUTTON IF NOT AUTHORIZED */}
+            {canEditMasterData && (
+              <button onClick={openAddPanel} className="bg-primary text-on-primary px-6 py-3 rounded-lg font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity">
+                <Plus className="w-4 h-4" />
+                + Add New Record
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-12 gap-8">
@@ -251,12 +256,12 @@ export default function MasterDirectoryPage() {
                               </div>
                             </td>
                             <td className="px-6 py-5 text-right">
-                              <button
+                              {canEditMasterData && (<button
                                 onClick={() => openEditPanel(company)}
                                 className={`p-2 rounded-lg transition-colors ${isStub ? 'bg-primary-container text-white' : 'hover:bg-surface-container text-on-surface-variant'}`}
                               >
                                 {isStub ? <FileEdit className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
-                              </button>
+                              </button>)}
                             </td>
                           </tr>
                         )

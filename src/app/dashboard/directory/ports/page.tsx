@@ -1,10 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { 
-  Bell, 
-  Plus, 
-  Search, 
+import {
+  Bell,
+  Plus,
+  Search,
   Anchor,
   Plane,
   X,
@@ -15,6 +15,7 @@ import {
   Download,
   CheckCircle2
 } from "lucide-react"
+import { useSession } from "next-auth/react";
 
 interface IPort {
   _id?: string;
@@ -27,9 +28,11 @@ interface IPort {
 }
 
 export default function MasterPortsPage() {
+  const { data: session } = useSession()
   const [ports, setPorts] = React.useState<IPort[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
-  
+  const canEditMasterData = session && ["SuperAdmin", "Finance","Sales"].includes(session?.user?.role || "")
+
   // Single Add State
   const [isAddOpen, setIsAddOpen] = React.useState(false)
   const [newPort, setNewPort] = React.useState<IPort>({
@@ -57,9 +60,9 @@ export default function MasterPortsPage() {
 
   const filteredPorts = ports.filter(port => {
     const query = searchQuery.toLowerCase()
-    return port.name.toLowerCase().includes(query) || 
-           port.locode.toLowerCase().includes(query) || 
-           port.country.toLowerCase().includes(query)
+    return port.name.toLowerCase().includes(query) ||
+      port.locode.toLowerCase().includes(query) ||
+      port.country.toLowerCase().includes(query)
   })
 
   // --- SINGLE SAVE HANDLER ---
@@ -74,7 +77,7 @@ export default function MasterPortsPage() {
         body: JSON.stringify(newPort)
       });
       const json = await res.json();
-      
+
       if (json.success) {
         setPorts([json.data, ...ports].sort((a, b) => a.name.localeCompare(b.name)));
         setIsAddOpen(false);
@@ -94,8 +97,8 @@ export default function MasterPortsPage() {
 
     // Check if it's a CSV
     if (file.type !== "text/csv" && !file.name.endsWith('.csv')) {
-        setBulkError("Please upload a valid .csv file.");
-        return;
+      setBulkError("Please upload a valid .csv file.");
+      return;
     }
 
     const reader = new FileReader();
@@ -104,10 +107,10 @@ export default function MasterPortsPage() {
       try {
         // Split by lines and remove completely empty ones
         const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
-        
+
         if (lines.length <= 1) {
-            setBulkError("File appears to be empty or missing data rows.");
-            return;
+          setBulkError("File appears to be empty or missing data rows.");
+          return;
         }
 
         const newPorts: IPort[] = [];
@@ -115,7 +118,7 @@ export default function MasterPortsPage() {
         // Start at index 1 to skip the header row
         for (let i = 1; i < lines.length; i++) {
           const cols = lines[i].split(",");
-          
+
           if (cols.length >= 4) {
             // Determine type. Accept "Sea", "Air", or "Sea|Air" for both.
             let typeInput = cols[4] ? cols[4].trim() : "Sea";
@@ -147,10 +150,10 @@ export default function MasterPortsPage() {
   // --- BULK SAVE HANDLER ---
   const handleBulkSave = async () => {
     if (!parsedData || parsedData.length === 0) return;
-    
+
     setBulkError("");
     setIsSubmitting(true);
-    
+
     try {
       const res = await fetch("/api/ports", {
         method: "POST",
@@ -177,19 +180,19 @@ export default function MasterPortsPage() {
 
   // --- TEMPLATE DOWNLOADER ---
   const downloadTemplate = () => {
-      const csvContent = "data:text/csv;charset=utf-8," 
-          + "Port Name,UN/LOCODE,Country Name,Country Code,Type (Sea/Air/Sea|Air)\n"
-          + "Port of Antwerp,BEANR,Belgium,BE,Sea\n"
-          + "Heathrow Airport,GBLHR,United Kingdom,GB,Air\n"
-          + "Port of Hamburg,DEHAM,Germany,DE,Sea|Air";
-      
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "port_import_template.csv");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + "Port Name,UN/LOCODE,Country Name,Country Code,Type (Sea/Air/Sea|Air)\n"
+      + "Port of Antwerp,BEANR,Belgium,BE,Sea\n"
+      + "Heathrow Airport,GBLHR,United Kingdom,GB,Air\n"
+      + "Port of Hamburg,DEHAM,Germany,DE,Sea|Air";
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "port_import_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   const toggleType = (typeValue: string) => {
@@ -202,7 +205,7 @@ export default function MasterPortsPage() {
 
   return (
     <div className="bg-surface text-on-surface antialiased overflow-hidden min-h-screen">
-      
+
       {/* Header */}
       <header className="fixed top-0 w-full z-50 bg-slate-50/80 backdrop-blur-xl shadow-sm flex justify-between items-center px-6 h-16">
         <div className="flex items-center gap-8">
@@ -223,26 +226,26 @@ export default function MasterPortsPage() {
 
       <main className="pt-16 min-h-screen bg-surface flex transition-all duration-300">
         <div className="flex-1 px-10 py-12">
-          
+
           <div className="flex justify-between items-end mb-12">
             <div>
               <h1 className="text-4xl font-extrabold tracking-tight text-on-surface mb-2">Ports & Locations</h1>
               <p className="text-on-surface-variant text-lg">Manage global UN/LOCODEs for routing validation.</p>
             </div>
             <div className="flex gap-4">
-              <button 
-                onClick={() => setIsBulkOpen(true)} 
+              {canEditMasterData && <button
+                onClick={() => setIsBulkOpen(true)}
                 className="bg-surface-container-low border border-outline-variant/20 text-on-surface font-semibold px-5 py-3 rounded-lg flex items-center gap-2 hover:bg-surface-container transition-colors"
               >
                 <Upload className="w-4 h-4" /> Bulk Import (CSV)
-              </button>
-              
-              <button 
-                onClick={() => setIsAddOpen(true)} 
+              </button>}
+
+              {canEditMasterData && <button
+                onClick={() => setIsAddOpen(true)}
                 className="bg-primary text-on-primary px-6 py-3 rounded-lg font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity"
               >
                 <Plus className="w-4 h-4" /> Add Port
-              </button>
+              </button>}
             </div>
           </div>
 
@@ -253,9 +256,9 @@ export default function MasterPortsPage() {
                 <div className="flex items-center justify-between">
                   <div className="w-[40%] relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
-                    <input 
+                    <input
                       value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-highest rounded-lg border-none focus:ring-2 focus:ring-primary/20 text-sm outline-none" 
+                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-highest rounded-lg border-none focus:ring-2 focus:ring-primary/20 text-sm outline-none"
                       placeholder="Search by name, LOCODE, or country..." type="text"
                     />
                   </div>
@@ -298,9 +301,9 @@ export default function MasterPortsPage() {
                             </div>
                           </td>
                           <td className="px-6 py-5 text-right">
-                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${port.isActive ? 'bg-tertiary-fixed text-on-tertiary-fixed-variant' : 'bg-error-container text-on-error-container'}`}>
-                               {port.isActive ? "Active" : "Inactive"}
-                             </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${port.isActive ? 'bg-tertiary-fixed text-on-tertiary-fixed-variant' : 'bg-error-container text-on-error-container'}`}>
+                              {port.isActive ? "Active" : "Inactive"}
+                            </span>
                           </td>
                         </tr>
                       ))}
@@ -324,70 +327,70 @@ export default function MasterPortsPage() {
               </div>
               <div className="flex items-center justify-between p-4 bg-primary/10 rounded-xl border border-primary/20">
                 <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 bg-primary text-white flex items-center justify-center rounded-lg shrink-0">
+                  <div className="h-10 w-10 bg-primary text-white flex items-center justify-center rounded-lg shrink-0">
                     <FileSpreadsheet className="w-5 h-5" />
-                    </div>
-                    <div>
+                  </div>
+                  <div>
                     <p className="font-bold text-primary">Excel / CSV Upload</p>
                     <p className="text-xs text-primary/70">Upload your master data sheet.</p>
-                    </div>
+                  </div>
                 </div>
-                <button 
-                    onClick={downloadTemplate}
-                    className="flex items-center gap-1.5 text-xs font-bold bg-white text-primary px-3 py-2 rounded-lg shadow-sm hover:shadow transition-all border border-primary/10"
+                <button
+                  onClick={downloadTemplate}
+                  className="flex items-center gap-1.5 text-xs font-bold bg-white text-primary px-3 py-2 rounded-lg shadow-sm hover:shadow transition-all border border-primary/10"
                 >
-                    <Download className="w-3.5 h-3.5" /> Template
+                  <Download className="w-3.5 h-3.5" /> Template
                 </button>
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 no-scrollbar flex flex-col gap-6">
-              
+
               {bulkError && (
                 <div className="p-4 bg-error-container text-on-error-container rounded-xl text-sm flex gap-3 items-start border border-error/20">
-                   <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                   <p className="font-medium">{bulkError}</p>
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <p className="font-medium">{bulkError}</p>
                 </div>
               )}
 
               <div className="flex flex-col flex-1 h-full">
                 <label className="block text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Upload File</label>
-                
+
                 <div className="flex-1 border-2 border-dashed border-outline-variant/50 rounded-xl bg-surface-container-lowest flex flex-col items-center justify-center p-8 text-center relative group hover:border-primary/50 transition-colors">
-                    <input 
-                        type="file" 
-                        accept=".csv"
-                        onChange={handleFileUpload}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    />
-                    
-                    {!parsedData ? (
-                        <>
-                            <div className="h-12 w-12 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant mb-4 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                                <Upload className="w-6 h-6" />
-                            </div>
-                            <p className="text-sm font-bold text-on-surface">Click or drag CSV file to upload</p>
-                            <p className="text-xs text-on-surface-variant mt-2">Maximum file size: 5MB</p>
-                        </>
-                    ) : (
-                        <div className="flex flex-col items-center">
-                            <div className="h-12 w-12 rounded-full bg-tertiary-fixed flex items-center justify-center text-on-tertiary-fixed-variant mb-4">
-                                <CheckCircle2 className="w-6 h-6" />
-                            </div>
-                            <p className="text-sm font-bold text-on-surface">File parsed successfully!</p>
-                            <span className="mt-3 px-3 py-1 bg-surface-container-highest text-primary font-bold text-xs rounded-full">
-                                {parsedData.length} valid records found
-                            </span>
-                        </div>
-                    )}
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  />
+
+                  {!parsedData ? (
+                    <>
+                      <div className="h-12 w-12 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant mb-4 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <p className="text-sm font-bold text-on-surface">Click or drag CSV file to upload</p>
+                      <p className="text-xs text-on-surface-variant mt-2">Maximum file size: 5MB</p>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center">
+                      <div className="h-12 w-12 rounded-full bg-tertiary-fixed flex items-center justify-center text-on-tertiary-fixed-variant mb-4">
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                      <p className="text-sm font-bold text-on-surface">File parsed successfully!</p>
+                      <span className="mt-3 px-3 py-1 bg-surface-container-highest text-primary font-bold text-xs rounded-full">
+                        {parsedData.length} valid records found
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
             <div className="p-8 bg-surface-container-low border-t border-outline-variant/10 flex gap-4">
               <button onClick={() => { setIsBulkOpen(false); setBulkError(""); setParsedData(null); }} className="flex-1 px-6 py-3 border border-outline-variant text-on-surface-variant font-semibold rounded-lg hover:bg-white transition-colors">Cancel</button>
-              <button 
-                onClick={handleBulkSave} 
+              <button
+                onClick={handleBulkSave}
                 disabled={!parsedData || parsedData.length === 0 || isSubmitting}
                 className="flex-1 px-6 py-3 bg-primary text-on-primary font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
               >

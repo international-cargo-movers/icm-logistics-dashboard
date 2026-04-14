@@ -4,7 +4,7 @@ import * as React from "react"
 import { useState, useEffect } from "react"
 import { pdf } from '@react-pdf/renderer'
 import QuotePDF from '@/components/dashboard/quotes/QuotePDF'
-import { Plus, Trash2, ArrowRight, Check, ChevronsUpDown, Download, Mail } from "lucide-react"
+import { Plus, Trash2, ArrowRight, Check, ChevronsUpDown, Download, Mail, Shield } from "lucide-react"
 
 // Shadcn UI Imports
 import { cn } from "@/lib/utils"
@@ -13,8 +13,13 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 
 export default function NewQuotePage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
   const [isSavingPdf, setIsSavingPdf] = useState(false)
   const [isSendingEmail, setIsSendingEmail] = useState(false)
 
@@ -242,6 +247,26 @@ export default function NewQuotePage() {
     }
   }
 
+  // 4. --- THE CLIENT LOCK ---
+  // if (status === "loading" || isLoading) {
+  //   return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials & Hydrating Data...</div>
+  // }
+
+  if (session && !["SuperAdmin", "Sales"].includes(session?.user?.role || "")) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
+        <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
+        <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to modify sales quotes.</p>
+        <button
+          onClick={() => router.back()}
+          className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
+        >
+          Go Back
+        </button>
+      </div>
+    )
+  }
   return (
     <div className="flex-1 overflow-y-auto px-16 py-12 bg-surface text-on-surface font-sans min-h-screen">
       <div className="max-w-5xl mx-auto space-y-8">

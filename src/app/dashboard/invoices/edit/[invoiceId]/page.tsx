@@ -5,13 +5,14 @@ import { useParams, useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X } from "lucide-react"
+import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield } from "lucide-react"
 import { pdf } from '@react-pdf/renderer'
 import InvoicePDF from '@/components/dashboard/invoices/InvoicePDF'
 
 import { Form, FormField, FormItem, FormControl } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
+import { useSession } from "next-auth/react"
 
 // --- UTILITY: Number to Words ---
 function numberToWords(num: number): string {
@@ -54,6 +55,8 @@ export default function EditInvoicePage() {
     const params = useParams()
     const router = useRouter()
     const invoiceId = params.invoiceId as string
+
+    const { data: session, status } = useSession()
 
     const [jobs, setJobs] = React.useState<any[]>([])
     const [isLoading, setIsLoading] = React.useState(true)
@@ -178,7 +181,28 @@ export default function EditInvoicePage() {
             setIsSubmitting(false)
         }
     }
+    // 4. --- THE CLIENT LOCK ---
+    // Show a loading state while NextAuth verifies the token
+    if (status === "loading" || isLoading) {
+        return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials & Hydrating Data...</div>
+    }
 
+    // If the user's role is not authorized for Invoices, throw the shield!
+    if (session && !["SuperAdmin", "Finance"].includes(session.user.role)) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
+                <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
+                <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to modify financial documents.</p>
+                <button 
+                    onClick={() => router.back()} 
+                    className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
+                >
+                    Go Back
+                </button>
+            </div>
+        )
+    }
     if (isLoading) return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Hydrating Invoice Data...</div>
 
     return (
