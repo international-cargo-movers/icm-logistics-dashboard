@@ -88,7 +88,7 @@ export default function NewJobPage() {
   const [isLinked, setIsLinked] = useState(false);
 
   const form = useForm<z.infer<typeof jobFormSchema>>({
-    resolver: zodResolver(jobFormSchema),
+    resolver: zodResolver(jobFormSchema) as any,
     defaultValues: defaultFormValues,
   })
 
