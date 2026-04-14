@@ -38,8 +38,8 @@ export const jobFormSchema = z.object({
   partyDetails: z.object({
     shipperId: z.string().optional(),
     consigneeId: z.string().optional(),
-    notifyPartyId: z.string().optional(),   
-    overseasAgentId: z.string().optional()  
+    notifyPartyId: z.string().optional(),
+    overseasAgentId: z.string().optional()
   }).optional(),
   shipmentDetails: z.object({
     mode: z.string({ error: "Transport mode is required" }),
@@ -52,14 +52,19 @@ export const jobFormSchema = z.object({
     commodity: z.string().optional(),
     packageCount: z.coerce.number().optional(),
     grossWeight: z.string().optional(),
-    netWeight: z.string().optional(),       
-    dimensions: z.string().optional(),      
+    netWeight: z.string().optional(),
+    dimensions: z.string().optional(),
     etd: z.date().optional(),
     eta: z.date().optional(),
   }),
   vendorDetails: z.array(
     z.object({ vendorId: z.string(), vendorType: z.string() })
   ).optional(),
+  documents: z.array(z.object({
+    fileName: z.string(),
+    fileUrl: z.string(),
+    format: z.string().optional(),
+  })).default([]),
 })
 
 export type JobFormValues = z.infer<typeof jobFormSchema>
@@ -72,6 +77,7 @@ const defaultFormValues = {
   shipmentDetails: { mode: "", originCountry: "", originPort: "", destinationCountry: "", destinationPort: "" },
   cargoDetails: { commodity: "", packageCount: 0, grossWeight: "", netWeight: "", dimensions: "", etd: undefined, eta: undefined },
   vendorDetails: [],
+  documents: [],
 };
 
 export default function NewJobPage() {
@@ -79,7 +85,7 @@ export default function NewJobPage() {
   const router = useRouter();
   const [approvedQuotes, setApprovedQuotes] = useState<any[]>([]);
   const [openQuoteBox, setOpenQuoteBox] = useState(false);
-  const [isLinked, setIsLinked] = useState(false); 
+  const [isLinked, setIsLinked] = useState(false);
 
   const form = useForm<z.infer<typeof jobFormSchema>>({
     resolver: zodResolver(jobFormSchema),
@@ -150,7 +156,7 @@ export default function NewJobPage() {
       }
     });
 
-    setIsLinked(true); 
+    setIsLinked(true);
     setOpenQuoteBox(false);
   }
 
@@ -179,8 +185,8 @@ export default function NewJobPage() {
       const finalCompanyId = await resolveCompanyId(values.customerDetails.companyId, "Customer");
       const finalShipperId = await resolveCompanyId(values.partyDetails?.shipperId, "Shipper");
       const finalConsigneeId = await resolveCompanyId(values.partyDetails?.consigneeId, "Consignee");
-      const finalNotifyPartyId = await resolveCompanyId(values.partyDetails?.notifyPartyId, "Notify Party"); 
-      const finalOverseasAgentId = await resolveCompanyId(values.partyDetails?.overseasAgentId, "Overseas Agent"); 
+      const finalNotifyPartyId = await resolveCompanyId(values.partyDetails?.notifyPartyId, "Notify Party");
+      const finalOverseasAgentId = await resolveCompanyId(values.partyDetails?.overseasAgentId, "Overseas Agent");
 
       const finalVendorDetails = await Promise.all(
         (values.vendorDetails || []).map(async (vendor) => {
@@ -195,8 +201,8 @@ export default function NewJobPage() {
         partyDetails: {
           shipperId: finalShipperId || undefined,
           consigneeId: finalConsigneeId || undefined,
-          notifyPartyId: finalNotifyPartyId || undefined,     
-          overseasAgentId: finalOverseasAgentId || undefined  
+          notifyPartyId: finalNotifyPartyId || undefined,
+          overseasAgentId: finalOverseasAgentId || undefined
         },
         shipmentDetails: {
           mode: values.shipmentDetails.mode,
@@ -209,12 +215,16 @@ export default function NewJobPage() {
           commodity: values.cargoDetails.commodity,
           noOfPackages: values.cargoDetails.packageCount,
           grossWeight: values.cargoDetails.grossWeight,
-          netWeight: values.cargoDetails.netWeight,  
-          dimensions: values.cargoDetails.dimensions, 
+          netWeight: values.cargoDetails.netWeight,
+          dimensions: values.cargoDetails.dimensions,
           etd: values.cargoDetails.etd,
           eta: values.cargoDetails.eta
         },
-        vendorDetails: finalVendorDetails
+        vendorDetails: finalVendorDetails,
+        documents: values.documents.map(doc => ({
+          ...doc,
+          uploadedBy: session?.user?.name || session?.user?.email || "System User"
+        })),
       };
 
       const response = await fetch('/api/jobs', {
@@ -233,21 +243,21 @@ export default function NewJobPage() {
   //       return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials...</div>
   //   }
 
-    if (session && !["SuperAdmin", "Operations"].includes(session?.user?.role || "")) {
-        return (
-            <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
-                <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
-                <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
-                <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to generate financial documents.</p>
-                <button 
-                    onClick={() => router.back()} 
-                    className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
-                >
-                    Go Back
-                </button>
-            </div>
-        )
-    }
+  if (session && !["SuperAdmin", "Operations"].includes(session?.user?.role || "")) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
+        <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
+        <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to generate financial documents.</p>
+        <button
+          onClick={() => router.back()}
+          className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
+        >
+          Go Back
+        </button>
+      </div>
+    )
+  }
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit, (errors) => console.error("ZOD BLOCKED", errors))} className="flex flex-col h-screen bg-surface text-on-surface">
@@ -277,7 +287,7 @@ export default function NewJobPage() {
                       <CommandInput placeholder="Search by Quote ID..." />
                       <CommandList>
                         <CommandEmpty>No approved quotes found.</CommandEmpty>
-                        
+
                         {/* THE NEW RESET BUTTON */}
                         <CommandGroup>
                           <CommandItem onSelect={handleClearQuote} className="text-error font-bold cursor-pointer">
@@ -285,7 +295,7 @@ export default function NewJobPage() {
                           </CommandItem>
                         </CommandGroup>
                         <CommandSeparator />
-                        
+
                         <CommandGroup>
                           {approvedQuotes.map((q) => (
                             <CommandItem key={q.quoteId} value={q.quoteId} onSelect={() => handleLinkQuote(q)} className="cursor-pointer">
