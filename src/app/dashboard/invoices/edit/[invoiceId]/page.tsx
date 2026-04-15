@@ -32,7 +32,7 @@ function numberToWords(num: number): string {
     return `INR ${convert(wholeNumber)} ${decimal > 0 ? ` & ${decimal}/100` : ""} Only`;
 }
 
-// --- SCHEMA (Synced with Advanced Routing & Tax fields) ---
+// --- SCHEMA ---
 const invoiceSchema = z.object({
     invoiceNo: z.string().min(1, "Required"),
     issueDate: z.string(),
@@ -94,7 +94,7 @@ export default function EditInvoicePage() {
     })
 
     const { control, watch, setValue, register, handleSubmit, reset } = form
-    const { fields, append, remove } = useFieldArray({ control, name: "lineItems" })
+    const { fields, append, remove, replace } = useFieldArray({ control, name: "lineItems" })
 
     // --- 1. HYDRATION ENGINE: Fetch Master Data & Invoice Data ---
     React.useEffect(() => {
@@ -112,7 +112,6 @@ export default function EditInvoicePage() {
 
                 if (invJson.success && invJson.data) {
                     const inv = invJson.data;
-                    // Hydrate the form with the database data!
                     reset({
                         invoiceNo: inv.invoiceNo,
                         issueDate: new Date(inv.invoiceDate).toISOString().split('T')[0],
@@ -151,7 +150,59 @@ export default function EditInvoicePage() {
         loadData()
     }, [invoiceId, reset, router])
 
-    // --- 2. LIVE MATH ENGINE ---
+    // --- 2. AUTOFILL ENGINE: Update fields from Job/CRM ---
+    const handleJobSelect = async (selectedJobId: string) => {
+        const job = jobs.find(j => j.jobId === selectedJobId || j._id === selectedJobId)
+        if (!job) return
+
+        setValue("jobId", job._id)
+        setValue("jobReference", job.jobId)
+
+        // Pull data from the dynamically populated company object!
+        const company = job.customerDetails?.companyId || {};
+
+        setValue("customerName", company.name || "Unknown Customer")
+        
+        const addressParts = [
+            company.streetAddress, 
+            company.city, 
+            company.state, 
+            company.zipCode,
+            company.country
+        ].filter(Boolean)
+        
+        setValue("billingAddress", addressParts.join(", ") || "No Address Provided")
+        setValue("gstin", company.taxId || "")
+
+        setValue("origin", job.shipmentDetails?.portOfLoading || "TBD")
+        setValue("destination", job.shipmentDetails?.portOfDischarge || "TBD")
+        setValue("commodity", job.cargoDetails?.commodity || "General Cargo")
+        setValue("grossWeight", job.cargoDetails?.grossWeight || 0)
+        setValue("noOfPackages", job.cargoDetails?.noOfPackages || 0)
+
+        // Give the user the option to replace line items or keep existing ones
+        if (job.quoteReference && watch("lineItems").length === 0) {
+            toast.message(`Fetching Financials from Quote: ${job.quoteReference}`)
+            try {
+                const quoteRes = await fetch(`/api/quotes/${job.quoteReference}`)
+                const quoteJson = await quoteRes.json()
+
+                if (quoteJson.success && quoteJson.data) {
+                    const invoiceReadyLines = (quoteJson.data.financials?.lineItems || []).map((item: any) => ({
+                        description: item.chargeName || "Freight Charge",
+                        sacCode: "996511",
+                        rate: Number(item.sellPrice) || 0,
+                        currency: item.currency || "USD",
+                        roe: item.roe || 1,
+                        gstPercent: 18 
+                    }))
+                    replace(invoiceReadyLines.length > 0 ? invoiceReadyLines : [{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
+                }
+            } catch (error) { toast.error("Failed to fetch linked quote financials.") }
+        }
+    }
+
+    // --- 3. LIVE MATH ENGINE ---
     const lineItems = watch("lineItems") || []
     const totals = lineItems.reduce((acc, item) => {
         const taxableValue = (item.rate || 0) * (item.roe || 1)
@@ -179,7 +230,7 @@ export default function EditInvoicePage() {
                 invoiceNo: data.invoiceNo,
                 invoiceDate: data.issueDate,
                 jobId: data.jobId,
-                jobReference: data.jobReference || linkedJob?.jobId, // The critical fix
+                jobReference: data.jobReference || linkedJob?.jobId, 
                 customerDetails: {
                     companyId: companyId,
                     name: data.customerName,
@@ -203,7 +254,6 @@ export default function EditInvoicePage() {
                 }
             }
 
-            // Notice this is a PUT request!
             const dbResponse = await fetch(`/api/invoices/${invoiceId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
@@ -238,10 +288,7 @@ export default function EditInvoicePage() {
                 <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
                 <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
                 <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to modify financial documents.</p>
-                <button 
-                    onClick={() => router.back()} 
-                    className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
-                >
+                <button onClick={() => router.back()} className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors">
                     Go Back
                 </button>
             </div>
@@ -259,11 +306,7 @@ export default function EditInvoicePage() {
                     <button type="button" onClick={() => router.back()} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors rounded-lg flex items-center gap-2">
                         <X className="w-4 h-4" /> Discard
                     </button>
-                    <button
-                        onClick={handleSubmit(onSubmit)}
-                        disabled={isSubmitting}
-                        className="px-6 py-2.5 text-sm font-bold bg-black text-white p-2 rounded-lg shadow-md hover:bg-slate-800 transition-all flex items-center gap-2"
-                    >
+                    <button onClick={handleSubmit(onSubmit)} disabled={isSubmitting} className="px-6 py-2.5 text-sm font-bold bg-black text-white p-2 rounded-lg shadow-md hover:bg-slate-800 transition-all flex items-center gap-2">
                         <Save className="w-4 h-4" /> {isSubmitting ? "Saving..." : "Save Revisions"}
                     </button>
                 </div>
@@ -285,8 +328,16 @@ export default function EditInvoicePage() {
                         </div>
 
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Linked Job ID (Read-only)</label>
-                            <input readOnly value={watch("jobReference") || watch("jobId")} className="bg-slate-100/50 text-slate-500 border-none rounded-lg px-4 py-3 text-sm font-mono cursor-not-allowed outline-none" />
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-blue-600">Linked Job ID (Select to Auto-Fill Data)</label>
+                            <Select onValueChange={handleJobSelect} value={watch("jobReference") || ""}>
+                                <SelectTrigger className="w-full bg-slate-100 border-none rounded-lg h-[44px] px-4 shadow-none focus:ring-2 focus:ring-slate-200">
+                                    <SelectValue placeholder="Select Freight Job..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {jobs.length === 0 && <SelectItem value="none" disabled>Loading jobs...</SelectItem>}
+                                    {jobs.map(job => (<SelectItem key={job._id} value={job.jobId}>{job.jobId} - {job.customerDetails?.companyId?.name || "Unknown"}</SelectItem>))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 
@@ -316,7 +367,6 @@ export default function EditInvoicePage() {
                                 </div>
                             </div>
                             
-                            {/* Advanced Routing Grid */}
                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Origin / POL</label><input {...register("origin")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Destination / POD</label><input {...register("destination")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Vessel & Voyage / Flight</label><input {...register("vesselFlight")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>

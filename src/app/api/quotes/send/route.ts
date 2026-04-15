@@ -62,6 +62,8 @@ export async function POST(request: Request) {
                     buyPrice: Number(item.buyPrice),
                     sellPrice: Number(item.sellPrice),
                     currency: item.currency || "USD",
+                    roe: Number(item.roe) || 1,
+                    notes: item.notes || ""
                 }))
             },
             status: "Sent"

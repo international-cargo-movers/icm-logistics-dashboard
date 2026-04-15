@@ -14,17 +14,10 @@ export interface IJob extends Document {
     jobId: string;
     quoteReference?: string; 
     customerDetails: {
-        companyId: mongoose.Types.ObjectId; 
-        enquiryDate?: Date;
-        customerInvoiceNo?: string;
-        customerInvoiceDate?: Date;
-        salesPerson?: string;
-        taxId?: string;
-        streetAddress?: string;
-        city?: string;
-        state?: string;
-        zipCode?: string;
-        country?: string;
+        companyId: mongoose.Types.ObjectId; // Just the ID! The single source of truth.
+        enquiryDate?: Date;                 // Job-specific
+        customerInvoiceNo?: string;         // Job-specific
+        customerInvoiceDate?: Date;         // Job-specific
     };
     partyDetails: {
         shipperId?: mongoose.Types.ObjectId; 
@@ -58,7 +51,6 @@ export interface IJob extends Document {
         vendorId: mongoose.Types.ObjectId; 
         assignedTask?: string;
     }];
-    // 2. Add the documents array to the main interface
     documents: IJobDocument[];
 }
 
@@ -69,7 +61,7 @@ const DocumentSchema = new Schema({
     format: { type: String },
     uploadedBy: { type: String, required: true },
     uploadedAt: { type: Date, default: Date.now }
-}, { _id: true }); // Keep _id true so we can target and delete specific files later
+}, { _id: true }); 
 
 const JobSchema = new Schema<IJob>({
     jobId: { type: String, required: true, unique: true },
@@ -79,13 +71,6 @@ const JobSchema = new Schema<IJob>({
         enquiryDate: { type: Date },
         customerInvoiceNo: { type: String },
         customerInvoiceDate: { type: Date },
-        salesPerson: { type: String },
-        taxId: { type: String },
-        streetAddress: { type: String },
-        city: { type: String },
-        state: { type: String },
-        zipCode: { type: String },
-        country: { type: String },
     },
     partyDetails: {
         shipperId: { type: Schema.Types.ObjectId, ref: "CompanyModel" },
@@ -123,7 +108,6 @@ const JobSchema = new Schema<IJob>({
         vendorId: { type: Schema.Types.ObjectId, ref: "CompanyModel" },
         assignedTask: { type: String }
     }],
-    // 4. Bolt the DocumentSchema into the JobSchema
     documents: {
         type: [DocumentSchema],
         default: []

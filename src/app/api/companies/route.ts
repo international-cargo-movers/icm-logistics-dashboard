@@ -36,6 +36,9 @@ export async function POST(request:Request){
         const newCompany = await CompanyModel.create({
             name: body.name,
             type: body.type || ["Customer"],
+            // THE FIX: Catch 'email' from frontend and save it as 'contactEmail'
+            contactEmail: body.email || body.contactEmail, 
+            contactName:body.contactName,
             defaultSalesPerson: body.defaultSalesPerson || body.salesPerson, 
             taxId: body.taxId,
             streetAddress: body.streetAddress,
@@ -47,5 +50,35 @@ export async function POST(request:Request){
         return NextResponse.json({success:true,data:newCompany},{status:201})
     }catch(error:any){
         return NextResponse.json({success:false,error:error.message},{status:500});
+    }
+}
+
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
+    try {
+        await dbConnect();
+        const body = await request.json();
+
+        // Map frontend "email" to the DB's "contactEmail" if it exists
+        const updatePayload: any = { ...body };
+        if (body.email) {
+            updatePayload.contactEmail = body.email;
+            delete updatePayload.email;
+        }
+        const resolvedParams = await params
+        const updatedCompany = await CompanyModel.findByIdAndUpdate(
+            resolvedParams.id,
+            { $set: updatePayload },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedCompany) {
+            return NextResponse.json({ success: false, error: "Company not found in CRM" }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, data: updatedCompany }, { status: 200 });
+
+    } catch (error: any) {
+        console.error("Error updating company CRM:", error);
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }

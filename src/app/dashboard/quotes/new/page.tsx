@@ -66,7 +66,7 @@ export default function NewQuotePage() {
         const companyJson = await companyRes.json();
         const portJson = await portRes.json();
 
-        if (companyJson.success) setCustomers(companyJson.data.filter((c: any) => c.type.includes("Customer")));
+        if (companyJson.success) setCustomers(companyJson.data.filter((c: any) => c.type.includes("Customer")||c.type.includes("Shipper")||c.type.includes("Consignee") ));
         if (portJson.success) {
           setPorts(portJson.data);
           const uniqueCountriesMap = new Map();
@@ -92,7 +92,7 @@ export default function NewQuotePage() {
         body: JSON.stringify({
           name: customerSearch.trim(),
           type: ["Customer"],
-          email: quoteData.customerEmail 
+          contactEmail: quoteData.customerEmail 
         })
       });
       const json = await res.json();
@@ -114,16 +114,16 @@ export default function NewQuotePage() {
   const handleEmailBlur = async () => {
     if (quoteData.customerId && quoteData.customerEmail) {
       const customer = customers.find(c => c._id === quoteData.customerId);
-      if (customer && customer.email !== quoteData.customerEmail) {
+      if (customer && customer.contactEmail !== quoteData.customerEmail) {
         try {
           const res = await fetch(`/api/companies/${quoteData.customerId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: quoteData.customerEmail })
+            body: JSON.stringify({ contactEmail: quoteData.customerEmail })
           });
           if (res.ok) {
             toast.success("Customer email updated in Master Directory!");
-            setCustomers(customers.map(c => c._id === quoteData.customerId ? { ...c, email: quoteData.customerEmail } : c));
+            setCustomers(customers.map(c => c._id === quoteData.customerId ? { ...c, contactEmail: quoteData.customerEmail } : c));
           }
         } catch (e) {
           console.error("Failed to sync email", e);
@@ -297,7 +297,7 @@ export default function NewQuotePage() {
                             <CommandGroup>
                               {customers.map((c) => (
                                 <CommandItem key={c._id} value={c.name} onSelect={() => {
-                                  setQuoteData({ ...quoteData, customerId: c._id, customerName: c.name, customerEmail: c.email || c.contactEmail || "" });
+                                  setQuoteData({ ...quoteData, customerId: c._id, customerName: c.name, customerEmail: c.contactEmail || c.contactEmail || "" });
                                   setOpenCustomer(false);
                                   setCustomerSearch("");
                                 }}>

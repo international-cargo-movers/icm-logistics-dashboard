@@ -100,26 +100,76 @@ export default function PartiesSection() {
     setActiveModal(type)
   }
 
-  const handleModalSave = async () => {
-    console.log(`Saving rich data for ${activeModal}:`, modalData)
-    
-    if (activeModal === "shipper") {
-        setSearchShipper(modalData.name)
-        setValue("partyDetails.shipperId", modalData.name) 
-    } else if (activeModal === "consignee") {
-        setSearchConsignee(modalData.name)
-        setValue("partyDetails.consigneeId", modalData.name)
-    } else if (activeModal === "notify") {
-        setSearchNotify(modalData.name)
-        setValue("partyDetails.notifyPartyId", modalData.name)
-    } else if (activeModal === "agent") {
-        setSearchAgent(modalData.name)
-        setValue("partyDetails.overseasAgentId", modalData.name)
-    }
-    
-    setActiveModal(null)
-  }
+const handleModalSave = async () => {
+  if (!activeModal) return;
 
+  try {
+    const fieldMap: Record<string, string> = {
+      shipper: "shipperId",
+      consignee: "consigneeId",
+      notify: "notifyPartyId",
+      agent: "overseasAgentId"
+    };
+    
+    const fieldName = fieldMap[activeModal];
+    const currentIdOrName = getValues(`partyDetails.${fieldName}`);
+
+    // 1. Check if we already have a MongoID or if the Name exists in our local list
+    const isMongoId = /^[0-9a-fA-F]{24}$/.test(currentIdOrName);
+    const existingByName = companies.find(
+      c => c.name.toLowerCase() === modalData.name.trim().toLowerCase()
+    );
+
+    // 2. Resolve the correct Strategy (Update or Create)
+    const companyToUpdate = isMongoId ? currentIdOrName : existingByName?._id;
+    const method = companyToUpdate ? "PUT" : "POST";
+    const endpoint = companyToUpdate ? `/api/companies/${companyToUpdate}` : "/api/companies";
+
+    // 3. Prepare Payload
+    const payload = companyToUpdate 
+      ? modalData 
+      : { ...modalData, type: [activeModal.charAt(0).toUpperCase() + activeModal.slice(1)] };
+
+    const res = await fetch(endpoint, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const json = await res.json();
+
+    if (json.success) {
+      // 4. Update the Form State
+      const finalId = json.data._id;
+      const finalName = json.data.name;
+
+      if (activeModal === "shipper") {
+          setSearchShipper(finalName);
+          setValue("partyDetails.shipperId", finalId); 
+      } else if (activeModal === "consignee") {
+          setSearchConsignee(finalName);
+          setValue("partyDetails.consigneeId", finalId);
+      } else if (activeModal === "notify") {
+          setSearchNotify(finalName);
+          setValue("partyDetails.notifyPartyId", finalId);
+      } else if (activeModal === "agent") {
+          setSearchAgent(finalName);
+          setValue("partyDetails.overseasAgentId", finalId);
+      }
+      
+      // Refresh the local companies list so the UI stays in sync
+      const refreshRes = await fetch("/api/companies");
+      const refreshJson = await refreshRes.json();
+      if (refreshJson.success) setCompanies(refreshJson.data);
+
+      setActiveModal(null);
+    } else {
+      alert("CRM Sync Error: " + json.error);
+    }
+  } catch (error) {
+    console.error("Modal Save Failed:", error);
+  }
+};
   return (
     <section className="relative">
       <h2 className="text-xl font-bold mb-4 text-on-surface">Shipment Parties</h2>

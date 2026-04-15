@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { toast } from "sonner"
 
 import Header from "@/components/dashboard/new-job/header"
 import CustomerSection from "@/components/dashboard/new-job/customer-section"
@@ -69,7 +70,6 @@ export const jobFormSchema = z.object({
 
 export type JobFormValues = z.infer<typeof jobFormSchema>
 
-// Define our absolute baseline for wiping the form
 const defaultFormValues = {
   quoteReference: "",
   customerDetails: { companyId: "", salesPerson: "", taxId: "", streetAddress: "", city: "", state: "", zipCode: "", country: "" },
@@ -86,12 +86,25 @@ export default function NewJobPage() {
   const [approvedQuotes, setApprovedQuotes] = useState<any[]>([]);
   const [openQuoteBox, setOpenQuoteBox] = useState(false);
   const [isLinked, setIsLinked] = useState(false);
+  const [companies, setCompanies] = useState<any[]>([]);
 
   const form = useForm<z.infer<typeof jobFormSchema>>({
     resolver: zodResolver(jobFormSchema) as any,
     defaultValues: defaultFormValues,
   })
 
+  useEffect(() => {
+  async function fetchCompanies() {
+    try {
+      const res = await fetch("/api/companies");
+      const json = await res.json();
+      if (json.success) setCompanies(json.data);
+    } catch (error) {
+      console.error("Failed to fetch companies:", error);
+    }
+  }
+  fetchCompanies();
+}, []);
   useEffect(() => {
     async function fetchQuotes() {
       try {
@@ -103,14 +116,12 @@ export default function NewJobPage() {
     fetchQuotes();
   }, []);
 
-  // --- 1. THE "NONE" MASTER RESET ---
   const handleClearQuote = () => {
     form.reset(defaultFormValues);
     setIsLinked(false);
     setOpenQuoteBox(false);
   }
 
-  // --- 2. THE WIPE & REPLACE ENGINE ---
   const handleLinkQuote = async (quote: any) => {
     let fullCompany = null;
     const compId = quote.customerDetails?.companyId?._id || quote.customerDetails?.companyId;
@@ -125,8 +136,6 @@ export default function NewJobPage() {
 
     const cleanWeight = quote.cargoSummary?.estimatedWeight ? quote.cargoSummary.estimatedWeight.replace(/[^0-9.]/g, '') : "";
 
-    // We merge the Quote data directly on top of `defaultFormValues`, 
-    // ensuring we don't accidentally keep data from a previously selected quote!
     form.reset({
       ...defaultFormValues,
       quoteReference: quote.quoteId,
@@ -162,19 +171,50 @@ export default function NewJobPage() {
 
   async function onSubmit(values: z.infer<typeof jobFormSchema>) {
     try {
+      // toast.loading("Syncing CRM and creating Job...");
+
       const resolveCompanyId = async (inputNameOrId: string | undefined, fallbackType: string, extraData: any = {}) => {
         if (!inputNameOrId || inputNameOrId.trim() === "") return undefined;
-        if (/^[0-9a-fA-F]{24}$/.test(inputNameOrId)) return inputNameOrId;
 
-        const res = await fetch("/api/companies");
-        const json = await res.json();
-        const existingCompany = json.data?.find((c: any) => c.name.toLowerCase() === inputNameOrId.toLowerCase());
+        const cleanData = Object.fromEntries(Object.entries(extraData).filter(([_, v]) => v != null && v !== ""));
 
-        if (existingCompany) return existingCompany._id;
+        // 1. Check if it's already a valid MongoDB ID
+        if (/^[0-9a-fA-F]{24}$/.test(inputNameOrId)) {
+          if (Object.keys(cleanData).length > 0) {
+            const putRes = await fetch(`/api/companies/${inputNameOrId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(cleanData)
+            });
+            if (!putRes.ok) {
+              const errJson = await putRes.json();
+              throw new Error(`CRM Update Failed: ${errJson.error}`);
+            }
+          }
+          return inputNameOrId;
+        }
 
+        // 2. NEW: Check if this name already exists in our fetched companies list
+        // This prevents the duplicate key error
+        const existingCompany = companies.find(
+          (c:any) => c.name.toLowerCase() === inputNameOrId.trim().toLowerCase()
+        );
+
+        if (existingCompany) {
+          // If it exists, update it instead of creating it
+          await fetch(`/api/companies/${existingCompany._id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(cleanData)
+          });
+          return existingCompany._id;
+        }
+
+        // 3. If it's truly new, then create it
         const createRes = await fetch("/api/companies", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: inputNameOrId, type: [fallbackType], ...extraData }),
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: inputNameOrId, type: [fallbackType], ...cleanData }),
         });
 
         const createJson = await createRes.json();
@@ -182,7 +222,17 @@ export default function NewJobPage() {
         throw new Error(createJson.error || `Failed to create new ${fallbackType}`);
       };
 
-      const finalCompanyId = await resolveCompanyId(values.customerDetails.companyId, "Customer");
+      const customerExtraData = {
+        defaultSalesPerson: values.customerDetails.salesPerson,
+        taxId: values.customerDetails.taxId,
+        streetAddress: values.customerDetails.streetAddress,
+        city: values.customerDetails.city,
+        state: values.customerDetails.state,
+        zipCode: values.customerDetails.zipCode,
+        country: values.customerDetails.country
+      };
+
+      const finalCompanyId = await resolveCompanyId(values.customerDetails.companyId, "Customer", customerExtraData);
       const finalShipperId = await resolveCompanyId(values.partyDetails?.shipperId, "Shipper");
       const finalConsigneeId = await resolveCompanyId(values.partyDetails?.consigneeId, "Consignee");
       const finalNotifyPartyId = await resolveCompanyId(values.partyDetails?.notifyPartyId, "Notify Party");
@@ -197,7 +247,7 @@ export default function NewJobPage() {
 
       const finalJobPayload = {
         ...values,
-        customerDetails: { ...values.customerDetails, companyId: finalCompanyId },
+        customerDetails: { companyId: finalCompanyId }, // Fully normalized
         partyDetails: {
           shipperId: finalShipperId || undefined,
           consigneeId: finalConsigneeId || undefined,
@@ -233,15 +283,17 @@ export default function NewJobPage() {
       });
 
       if (response.ok) {
+        toast.success("Job Created & CRM Synchronized!");
         router.push("/dashboard");
       } else {
-        console.error("Backend refused the job.");
+        const errJson = await response.json();
+        throw new Error(errJson.error || "Backend refused the job.");
       }
-    } catch (error: any) { console.error("Network error submitting form:", error); }
+    } catch (error: any) {
+      console.error("Network error submitting form:", error);
+      toast.error(error.message || "Failed to save job");
+    }
   }
-  // if (status === "loading") {
-  //       return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials...</div>
-  //   }
 
   if (session && !["SuperAdmin", "Operations"].includes(session?.user?.role || "")) {
     return (
@@ -258,6 +310,7 @@ export default function NewJobPage() {
       </div>
     )
   }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit, (errors) => console.error("ZOD BLOCKED", errors))} className="flex flex-col h-screen bg-surface text-on-surface">
@@ -288,7 +341,6 @@ export default function NewJobPage() {
                       <CommandList>
                         <CommandEmpty>No approved quotes found.</CommandEmpty>
 
-                        {/* THE NEW RESET BUTTON */}
                         <CommandGroup>
                           <CommandItem onSelect={handleClearQuote} className="text-error font-bold cursor-pointer">
                             <XCircle className="mr-2 h-4 w-4" /> Clear Selection (Blank Job)

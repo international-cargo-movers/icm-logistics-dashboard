@@ -7,7 +7,8 @@ export interface IQuoteLineItem {
     chargeType: string;       // e.g., "Origin", "Freight", "Destination"
     buyPrice: number;         // What you pay the vendor
     sellPrice: number;        // What you charge the customer
-    currency: string;         // e.g., "USD", "EUR"
+    currency: string;   
+    roe: number;      // e.g., "USD", "EUR"
     notes?: string;           // Optional remarks for this specific charge
 }
 
@@ -87,6 +88,7 @@ const QuoteSchema: Schema<IQuote> = new Schema(
                     buyPrice: { type: Number, required: true, default: 0 },
                     sellPrice: { type: Number, required: true, default: 0 },
                     currency: { type: String, default: "USD" },
+                    roe: { type: Number, required: true, default: 1 },
                     notes: { type: String }
                 }
             ],
@@ -116,16 +118,21 @@ QuoteSchema.pre("save", function (this: IQuote, next) {
 
     if (this.financials && this.financials.lineItems) {
         this.financials.lineItems.forEach(item => {
-            calcTotalBuy += (item.buyPrice || 0);
-            calcTotalSell += (item.sellPrice || 0);
+            console.log(item.roe);
+            // THE FIX: Multiply by ROE to get the base (INR) value
+            const roe = item.roe || 1;
+            calcTotalBuy += (item.buyPrice || 0) * roe;
+            calcTotalSell += (item.sellPrice || 0) * roe;
         });
     }
 
     this.financials.totalBuy = calcTotalBuy;
     this.financials.totalSell = calcTotalSell;
     this.financials.profitMargin = calcTotalSell - calcTotalBuy;
+    
+    // Set base currency to INR since totals are now converted
+    this.financials.baseCurrency = "INR"; 
 });
-
 const QuoteModel: Model<IQuote> = mongoose.models.Quote || mongoose.model<IQuote>("Quote", QuoteSchema);
 
 export default QuoteModel;

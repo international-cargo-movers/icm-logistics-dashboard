@@ -38,7 +38,7 @@ export default function MasterDirectoryPage() {
   const [isEditOpen, setIsEditOpen] = React.useState(false)
   const [selectedCompany, setSelectedCompany] = React.useState<ICompany | null>(null)
   const [editForm, setEditForm] = React.useState<Partial<ICompany>>({})
-  const canEditMasterData = session && ["SuperAdmin", "Finance","Sales"].includes(session?.user?.role || "")
+  const canEditMasterData = session && ["SuperAdmin", "Finance", "Sales"].includes(session?.user?.role || "")
   React.useEffect(() => {
     async function fetchCompanies() {
       try {
@@ -73,7 +73,17 @@ export default function MasterDirectoryPage() {
     if (activeTab === "Vendors") defaultType = "Vendor"
     if (activeTab === "Shippers/Consignees") defaultType = "Shipper"
 
-    setEditForm({ type: [defaultType] })
+    setEditForm({
+      name: "",
+      type: [defaultType],
+      taxId: "",
+      streetAddress: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      country: "",
+      contactName: "",
+      contactEmail: ""})
     setIsEditOpen(true)
   }
 
@@ -90,7 +100,10 @@ export default function MasterDirectoryPage() {
       const isNew = !selectedCompany;
       const method = isNew ? "POST" : "PUT";
 
-      const res = await fetch("/api/companies", {
+      // THE FIX: Direct PUT requests to the dynamic ID endpoint!
+      const endpoint = isNew ? "/api/companies" : `/api/companies/${editForm._id}`;
+
+      const res = await fetch(endpoint, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm)

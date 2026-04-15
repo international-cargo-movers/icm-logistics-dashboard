@@ -29,12 +29,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ quot
 
         // --- THE SERVER LOCK ---
         const session = await getServerSession(authOptions);
-        
+
         // Block if not logged in, or if role is NOT SuperAdmin or Sales
         if (!session?.user?.role || !["SuperAdmin", "Sales"].includes(session.user.role)) {
-            return NextResponse.json({ 
-                success: false, 
-                error: "Security Violation: You do not have clearance to modify quotes." 
+            return NextResponse.json({
+                success: false,
+                error: "Security Violation: You do not have clearance to modify quotes."
             }, { status: 403 });
         }
         // -----------------------
@@ -74,6 +74,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ quot
             buyPrice: Number(item.buyPrice),
             sellPrice: Number(item.sellPrice),
             currency: item.currency || "USD",
+            roe: Number(item.roe) || 1,
+            notes: item.notes || ""
         }));
 
         // If it was rejected or draft, editing it moves it back to Draft/Sent depending on action

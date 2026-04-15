@@ -10,7 +10,7 @@ export async function GET(){
     try{
         await dbConnect();
         const jobs = await JobModel.find({})
-        .populate("customerDetails.companyId","name billingAddress")
+        .populate("customerDetails.companyId","name streetAddress state taxId zipCode defaultSalesPerson country city")
         .sort({createdAt:-1});
 
         return NextResponse.json({success:true,data:jobs},{status:200});

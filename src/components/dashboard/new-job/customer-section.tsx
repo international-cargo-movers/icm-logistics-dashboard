@@ -34,7 +34,7 @@ export default function CustomerSection({ isReadOnly }: { isReadOnly?: boolean }
         const res = await fetch("/api/companies")
         const json = await res.json();
         if (json.success) {
-          const customerOnly = json.data.filter((c:any)=>c.type && c.type.includes("Customer"))
+          const customerOnly = json.data.filter((c:any)=>c.type && (c.type.includes("Customer")||c.type.includes("Shipper")||c.type.includes("Consignee")))
           setCompanies(customerOnly)
         }
       } catch (error) { console.error("Failed to Fetch companies: ", error) }

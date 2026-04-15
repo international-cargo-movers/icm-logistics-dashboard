@@ -32,7 +32,7 @@ function numberToWords(num: number): string {
     return `INR ${convert(wholeNumber)} ${decimal > 0 ? ` & ${decimal}/100` : ""} Only`;
 }
 
-// --- SCHEMA (Updated with Advanced Routing & Tax fields) ---
+// --- SCHEMA ---
 const invoiceSchema = z.object({
     invoiceNo: z.string().min(1, "Required"),
     issueDate: z.string(),
@@ -110,17 +110,30 @@ export default function SmartInvoiceGenerator() {
 
         setValue("jobId", job._id)
         setValue("jobReference",job.jobId)
-        setValue("customerName", job.customerDetails?.companyId?.name || "Unknown Customer")
+
+        // THE FIX: Pull data from the nested populated company object
+        const company = job.customerDetails?.companyId || {};
+ 
+        setValue("customerName", company.name || "Unknown Customer")
         
         const addressParts = [
-            job.customerDetails?.streetAddress, job.customerDetails?.city, 
-            job.customerDetails?.state, job.customerDetails?.country
+            company.streetAddress, 
+            company.city, 
+            company.state, 
+            company.zipCode,
+            company.country
         ].filter(Boolean)
+        
         setValue("billingAddress", addressParts.join(", ") || "No Address Provided")
+        
+        // Map CRM 'taxId' to Invoice 'gstin'
+        setValue("gstin", company.taxId || "")
+
         setValue("origin", job.shipmentDetails?.portOfLoading || "TBD")
         setValue("destination", job.shipmentDetails?.portOfDischarge || "TBD")
-        setValue("commodity", job.shipmentDetails?.commodity || "General Cargo")
-        setValue("grossWeight", job.shipmentDetails?.grossWeight || 0)
+        setValue("commodity", job.cargoDetails?.commodity || "General Cargo")
+        setValue("grossWeight", job.cargoDetails?.grossWeight || 0)
+        setValue("noOfPackages", job.cargoDetails?.noOfPackages || 0)
 
         if (job.quoteReference) {
             toast.message(`Fetching Financials from Quote: ${job.quoteReference}`)
@@ -218,9 +231,8 @@ export default function SmartInvoiceGenerator() {
             const blob = await pdf(<InvoicePDF data={invoicePayload} />).toBlob()
             const url = URL.createObjectURL(blob)
             window.open(url, '_blank')
-            console.log("Job Reference",invoicePayload.jobReference)
             toast.success("Transaction Recorded & PDF Generated!")
-            router.push("/dashboard/invoices") // Redirecting to invoices list instead of root dashboard
+            router.push("/dashboard/invoices") 
         } catch (error: any) { toast.error("Failed to generate invoice.") } 
         finally { setIsSubmitting(false) }
     }
