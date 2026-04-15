@@ -53,7 +53,7 @@ export async function POST(request:Request){
     }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         await dbConnect();
         const body = await request.json();
