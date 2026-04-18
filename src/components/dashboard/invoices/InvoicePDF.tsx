@@ -145,8 +145,8 @@ export default function InvoicePDF({ data }: { data: any }) {
               <Text style={styles.wCurr}>Curr</Text>
               <Text style={styles.wRoe}>ROE</Text>
               <Text style={styles.wGstP}>GST%</Text>
-              <Text style={styles.wTaxable}>Taxable (₹)</Text>
-              <Text style={styles.wGstAmt}>GST Amt (₹)</Text>
+              <Text style={styles.wTaxable}>Taxable (INR)</Text>
+              <Text style={styles.wGstAmt}>GST Amt (INR)</Text>
             </View>
 
             {/* Rows */}
@@ -225,7 +225,7 @@ export default function InvoicePDF({ data }: { data: any }) {
           {/* NET AMOUNT & WORDS */}
           <View style={[styles.rowBorderBottom, { padding: 4, backgroundColor: '#f0f0f0' }]}>
             <Text style={{ width: '70%' }}><Text style={styles.boldText}>Amount in Words:</Text> {data.totals?.amountInWords}</Text>
-            <Text style={[{ width: '30%', textAlign: 'right', fontSize: 10 }, styles.boldText]}>Net Amount: ₹{data.totals?.netAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+            <Text style={[{ width: '30%', textAlign: 'right', fontSize: 10 }, styles.boldText]}>Net Amount: INR {data.totals?.netAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
           </View>
 
           {/* BANK DETAILS */}

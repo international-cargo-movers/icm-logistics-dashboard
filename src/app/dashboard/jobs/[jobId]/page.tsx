@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Truck, Anchor, Plane, MapPin, Package, Building2, FileText, Download, ExternalLink, File as FileIcon } from "lucide-react"
+import ShippingDocManager from "@/components/dashboard/shipping-docs/ShippingDocManager"
 
 // Helper function to force Cloudinary to download the file instead of opening it
 const getDownloadUrl = (url: string) => {
@@ -26,14 +27,19 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
     const job = await JobModel.findOne({ jobId: jobId })
         .populate("customerDetails.companyId", "name taxId streetAddress city state zipCode country defaultSalesPerson")
         .populate("vendorDetails.vendorId", "name")
+        .populate("partyDetails.shipperId","name taxId streetAddress city state zipCode country")
+        .populate("partyDetails.consigneeId","name taxId streetAddress city state zipCode country")
         .lean()
 
     if (!job) {
         return notFound()
     }
 
-    const ModeIcon = job.shipmentDetails?.mode.toLowerCase() === "air" ? Plane
-        : job.shipmentDetails?.mode.toLowerCase() === "sea" ? Anchor
+    console.log("Consignee: ",job.partyDetails?.consigneeId?.name);
+
+    const sanitizedJob = JSON.parse(JSON.stringify(job))
+    const ModeIcon = job.shipmentDetails?.mode.toLowerCase() === "air export"||"air import" ? Plane
+        : job.shipmentDetails?.mode.toLowerCase() === "sea fcl export"||"sea fcl import"||"sea lcl export"||"sea lcl import" ? Anchor
             : Truck;
 
     return (
@@ -155,18 +161,18 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                                             </p>
                                             <div className="flex items-center gap-3 mt-3">
                                                 {/* View Button (Opens in new tab) */}
-                                                <a 
-                                                    href={doc.fileUrl} 
-                                                    target="_blank" 
+                                                <a
+                                                    href={doc.fileUrl}
+                                                    target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
                                                 >
                                                     <ExternalLink className="h-3 w-3" /> View
                                                 </a>
-                                                
+
                                                 {/* Download Button (Forces download via fl_attachment) */}
-                                                <a 
-                                                    href={getDownloadUrl(doc.fileUrl)} 
+                                                <a
+                                                    href={getDownloadUrl(doc.fileUrl)}
                                                     download
                                                     className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1 transition-colors"
                                                 >
@@ -185,7 +191,7 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                             </div>
                         )}
                     </Card>
-
+                    <ShippingDocManager job={sanitizedJob}/>
                 </div>
 
                 {/* RIGHT COLUMN (Entities) */}
@@ -247,6 +253,66 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Sales Person</p>
                                 <p className="text-sm font-medium text-foreground">
                                     {job.customerDetails?.salesPerson || job.customerDetails?.companyId?.defaultSalesPerson || "—"}
+                                </p>
+                            </div>
+                        </div>
+                    </Card>
+                    {/* Structured Consignee Card */}
+                    <Card className="p-6 border border-border shadow-sm border-t-4 border-t-primary">
+                        <h2 className="text-lg font-bold flex items-center gap-2 mb-6 pb-4 border-b">
+                            <Building2 className="text-primary" /> The Consignee
+                        </h2>
+
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="h-12 w-12 bg-primary/10 text-primary flex items-center justify-center rounded-lg font-bold text-lg shrink-0">
+                                {job.partyDetails?.consigneeId?.name?.substring(0, 2).toUpperCase() || "??"}
+                            </div>
+                            <div className="overflow-hidden">
+                                <h3 className="font-bold text-foreground text-lg truncate" title={job.partyDetails?.consigneeId?.name}>
+                                    {job.partyDetails?.consigneeId?.name || "Unknown Company"}
+                                </h3>
+                                <p className="text-sm text-muted-foreground truncate">
+                                    Tax ID: <span className="font-mono text-primary font-medium">{job.partyDetails?.consigneeId?.taxId || "N/A"}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-y-5 gap-x-4">
+                            <div className="col-span-2">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Street Address</p>
+                                <p className="text-sm font-medium text-foreground leading-snug">
+                                    { job.partyDetails?.consigneeId?.streetAddress || "—"}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">City</p>
+                                <p className="text-sm font-medium text-foreground leading-snug">
+                                    {job.partyDetails?.consigneeId?.city || "—"}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">State / Prov</p>
+                                <p className="text-sm font-medium text-foreground leading-snug">
+                                    {job.partyDetails?.consigneeId?.state || "—"}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Zip Code</p>
+                                <p className="text-sm font-medium text-foreground leading-snug">
+                                    {job.partyDetails?.consigneeId?.zipCode || "—"}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Country</p>
+                                <p className="text-sm font-medium text-foreground leading-snug">
+                                    {job.partyDetails?.consigneeId?.country || "—"}
+                                </p>
+                            </div>
+
+                            <div className="col-span-2 mt-1 pt-5 border-t">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Sales Person</p>
+                                <p className="text-sm font-medium text-foreground">
+                                    {job.partyDetails?.consigneeId?.defaultSalesPerson || "—"}
                                 </p>
                             </div>
                         </div>
