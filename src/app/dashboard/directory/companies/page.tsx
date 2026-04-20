@@ -13,6 +13,7 @@ import {
   Building2
 } from "lucide-react"
 import { useSession } from "next-auth/react";
+import CompanyLedger from "@/components/dashboard/ledger/CompanyLedger";
 
 // 1. Updated Interface to match our new MongoDB Schema
 interface ICompany {
@@ -39,6 +40,7 @@ export default function MasterDirectoryPage() {
   const [selectedCompany, setSelectedCompany] = React.useState<ICompany | null>(null)
   const [editForm, setEditForm] = React.useState<Partial<ICompany>>({})
   const canEditMasterData = session && ["SuperAdmin", "Finance", "Sales"].includes(session?.user?.role || "")
+  const [panelTab, setPanelTab] = React.useState<"Details" | "Ledger">("Details")
   React.useEffect(() => {
     async function fetchCompanies() {
       try {

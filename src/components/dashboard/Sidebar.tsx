@@ -8,6 +8,7 @@ import {
   ScrollText,
   Folders,
   UsersRound,
+  HandCoins,
   LogOut // Added LogOut icon
 } from "lucide-react"
 import Link from "next/link"
@@ -32,6 +33,7 @@ export default function Sidebar() {
         <NavItem href="/dashboard/jobs" pathname={pathname} icon={Package} label="Jobs" />
         <NavItem href="/dashboard/invoices" pathname={pathname} icon={Receipt} label="Invoicing" />
         <NavItem href="/dashboard/directory/companies" pathname={pathname} icon={Folders} label="Directory" />
+        <NavItem href="/dashboard/ledger" pathname={pathname} icon={HandCoins} label="Ledger" />
         <NavItem href="/dashboard/team" pathname={pathname} icon={UsersRound} label="Team" />
       </nav>
 
