@@ -1,7 +1,7 @@
 "use client"
 
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts'
 
 export function RevenueChart({ data }: { data: any[] }) {
@@ -19,28 +19,29 @@ export function RevenueChart({ data }: { data: any[] }) {
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={{ top: 10, right: 10, left: 30, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-          <XAxis 
-            dataKey="name" 
-            stroke="#64748b" 
-            fontSize={12} 
-            tickLine={false} 
-            axisLine={false} 
-            dy={10} 
+          <XAxis
+            dataKey="name"
+            stroke="#64748b"
+            fontSize={12}
+            tickLine={false}
+            axisLine={false}
+            dy={10}
           />
-          <YAxis 
-            stroke="#64748b" 
-            fontSize={12} 
-            tickLine={false} 
-            axisLine={false} 
+          <YAxis
+            stroke="#64748b"
+            fontSize={12}
+            tickLine={false}
+            axisLine={false}
             tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`} // Formats Y-axis to Lakhs for cleanliness
           />
-          <Tooltip 
+          <Tooltip
             cursor={{ fill: '#f1f5f9' }}
             contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-            formatter={(value: number) => [formatCurrency(value), ""]}
+            // Changed 'value: number' to 'value: any' and added a Number() fallback
+            formatter={(value: any, name: any) => [formatCurrency(Number(value) || 0), name]}
           />
           <Legend wrapperStyle={{ paddingTop: '20px' }} />
-          
+
           {/* Two Bars for comparison */}
           <Bar dataKey="Invoiced" fill="#94a3b8" radius={[4, 4, 0, 0]} name="Billed Amount" />
           <Bar dataKey="Received" fill="#10b981" radius={[4, 4, 0, 0]} name="Payment Received" />
@@ -76,8 +77,8 @@ export function JobModeChart({ data }: { data: any[] }) {
               <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip 
-             contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+          <Tooltip
+            contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
           />
           <Legend verticalAlign="bottom" height={36} iconType="circle" />
         </PieChart>
