@@ -32,8 +32,24 @@ export default function DocumentWorkshop() {
               <input {...register("shippingDocuments.awbDetails.awbSerialNumber")} maxLength={8} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm font-mono" placeholder="52695995" />
             </div>
             <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">HAWB Number</label>
+              <input {...register("shippingDocuments.awbDetails.hawbNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="ICMICN064" />
+            </div>
+            <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase">Agent IATA Code</label>
               <input {...register("shippingDocuments.awbDetails.iataCode")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="14-3 0825" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Shipper Account No.</label>
+              <input {...register("shippingDocuments.awbDetails.shipperAccountNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="A1234567" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Consignee Account No.</label>
+              <input {...register("shippingDocuments.awbDetails.consigneeAccountNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="C9876543" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Accounting Information</label>
+              <input {...register("shippingDocuments.awbDetails.accountingInformation")} defaultValue="FREIGHT PREPAID" className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" />
             </div>
           </div>
           <div className="space-y-2">
@@ -50,8 +66,20 @@ export default function DocumentWorkshop() {
           </div>
           <div className="grid grid-cols-3 gap-6">
             <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">B/L Number</label>
+              <input {...register("shippingDocuments.bolDetails.bolNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="e.g. ICM/24-25/001" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Booking Reference</label>
+              <input {...register("shippingDocuments.bolDetails.bookingReference")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="e.g. ICMPLDEL/UGKLA/169" />
+            </div>
+            <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase">Container Seal No.</label>
               <input {...register("shippingDocuments.bolDetails.sealNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="e.g. MLIN3226520" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">MTU Number</label>
+              <input {...register("shippingDocuments.bolDetails.mtuNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="e.g. TRK-99281" />
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase">Freight Payable At</label>
@@ -61,10 +89,24 @@ export default function DocumentWorkshop() {
               <label className="text-[10px] font-bold text-slate-500 uppercase">No. of Original B/Ls</label>
               <input {...register("shippingDocuments.bolDetails.noOfOriginalBl")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="THREE (3)" />
             </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Place & Date of Issue</label>
+              <input {...register("shippingDocuments.bolDetails.placeAndDateOfIssue")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="MUMBAI - 27/02/2026" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Shipped On Board Date</label>
+              <input {...register("shippingDocuments.bolDetails.shippedOnBoardDate")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="27/02/2026" />
+            </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-500 uppercase">Marks & Numbers</label>
-            <textarea {...register("shippingDocuments.bolDetails.marksAndNumbers")} className="w-full bg-slate-50 border-none rounded-lg p-3 text-sm h-20" placeholder="e.g. SHIPPER'S LOAD STOWAGE AND COUNT..." />
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Marks & Numbers</label>
+              <textarea {...register("shippingDocuments.bolDetails.marksAndNumbers")} className="w-full bg-slate-50 border-none rounded-lg p-3 text-sm h-20" placeholder="e.g. SHIPPER'S LOAD STOWAGE AND COUNT..." />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Handling Information</label>
+              <textarea {...register("shippingDocuments.bolDetails.handlingInformation")} className="w-full bg-slate-50 border-none rounded-lg p-3 text-sm h-20" placeholder="e.g. Temperature controlled, Fragile..." />
+            </div>
           </div>
         </div>
       )}

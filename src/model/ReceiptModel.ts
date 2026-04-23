@@ -1,33 +1,33 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document, models } from "mongoose";
 
 export interface IReceipt extends Document {
-  receiptNo: string;
-  date: Date;
-  companyId: mongoose.Types.ObjectId;
-  amount: number; // Base currency (INR)
-  paymentMode: "Bank Transfer" | "Cheque" | "Cash" | "UPI";
-  referenceNumber?: string; // UTR or Cheque No
-  notes?: string;
-  createdAt: Date;
-  updatedAt: Date;
+    receiptNo: string;
+    type: "Customer" | "Vendor";
+    invoiceId: mongoose.Types.ObjectId; // Reference to Invoice or VendorInvoice
+    invoiceNo: string;
+    companyId: mongoose.Types.ObjectId; // Reference to CompanyModel
+    companyName: string;
+    amount: number;
+    paymentDate: Date;
+    paymentMode: "Bank Transfer" | "Cheque" | "Cash" | "Other";
+    referenceNo: string; // UTR, Cheque No, etc.
+    notes?: string;
+    recordedBy: string; // User email or ID
 }
 
-const ReceiptSchema = new Schema<IReceipt>(
-  {
+const ReceiptSchema = new Schema<IReceipt>({
     receiptNo: { type: String, required: true, unique: true },
-    date: { type: Date, required: true, default: Date.now },
-    companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
-    amount: { type: Number, required: true, min: 0 },
-    paymentMode: { 
-      type: String, 
-      enum: ["Bank Transfer", "Cheque", "Cash", "UPI"], 
-      required: true 
-    },
-    referenceNumber: { type: String },
-    notes: { type: String }
-  },
-  { timestamps: true }
-);
+    type: { type: String, enum: ["Customer", "Vendor"], required: true },
+    invoiceId: { type: Schema.Types.ObjectId, required: true },
+    invoiceNo: { type: String, required: true },
+    companyId: { type: Schema.Types.ObjectId, ref: "CompanyModel", required: true },
+    companyName: { type: String, required: true },
+    amount: { type: Number, required: true },
+    paymentDate: { type: Date, default: Date.now, required: true },
+    paymentMode: { type: String, enum: ["Bank Transfer", "Cheque", "Cash", "Other"], default: "Bank Transfer" },
+    referenceNo: { type: String, required: true },
+    notes: { type: String },
+    recordedBy: { type: String, required: true }
+}, { timestamps: true });
 
-const ReceiptModel = mongoose.models.Receipt || mongoose.model<IReceipt>("Receipt", ReceiptSchema);
-export default ReceiptModel;
+export default models.Receipt || mongoose.model<IReceipt>("Receipt", ReceiptSchema);

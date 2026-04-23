@@ -1,8 +1,9 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
     page: { padding: 25, fontFamily: 'Helvetica', fontSize: 8, color: '#000000' },
+    logo: { width: 140, marginBottom: 5 },
     outerBorder: { border: '1px solid #000', flexGrow: 1, display: 'flex', flexDirection: 'column' },
     row: { display: 'flex', flexDirection: 'row', borderBottom: '1px solid #000' },
 
@@ -30,6 +31,12 @@ const styles = StyleSheet.create({
     wDesc: { width: '45%', paddingHorizontal: 4 },
     wWeight: { width: '10%', textAlign: 'right' },
     wMeas: { width: '10%', textAlign: 'right' },
+
+    // Footer Grid
+    footerRow: { display: 'flex', flexDirection: 'row', borderBottom: '1px solid #000' },
+    footerCol: { borderRight: '1px solid #000', padding: 4 },
+    footerLabel: { fontSize: 6, fontWeight: 'bold', marginBottom: 2 },
+    footerValue: { fontSize: 7, marginTop: 2 },
 });
 
 export default function BolPDF({ data }: { data: any }) {
@@ -38,6 +45,25 @@ export default function BolPDF({ data }: { data: any }) {
     const cust = data?.customerDetails || {};
     const party = data?.partyDetails || {};
     const cargo = data?.cargoDetails || {};
+    const vendors = data?.vendorDetails || [];
+
+    // Resolve Delivery Agent (Fallback to Vendor if Overseas Agent is missing)
+    let deliveryAgent = party.overseasAgentId;
+    if (!deliveryAgent || !deliveryAgent.name) {
+        const fallbackVendor = vendors.find((v: any) => 
+            v.assignedTask && 
+            (v.assignedTask.toLowerCase().includes("delivery agent") || 
+             v.assignedTask.toLowerCase().includes("destination agent") ||
+             v.assignedTask.toLowerCase().includes("overseas agent"))
+        );
+        if (fallbackVendor && fallbackVendor.vendorId) {
+            deliveryAgent = fallbackVendor.vendorId;
+        }
+    }
+
+    // Helper to convert number to words for packages (simplified)
+    const totalPkgs = cargo.noOfPackages || "1";
+    const totalPkgsInWords = `SAY ${totalPkgs} PACKAGE(S) ONLY`;
 
     return (
         <Document>
@@ -63,9 +89,16 @@ export default function BolPDF({ data }: { data: any }) {
                                 <Text style={styles.address}>{party.consigneeId?.country || ""} </Text>
 
                             </View>
-                            <View style={[styles.boxNoBorder, { flexGrow: 1 }]}>
+                            <View style={styles.box}>
                                 <Text style={styles.label}>3. Notify Party (Name and Address)</Text>
                                 <Text style={styles.value}>SAME AS CONSIGNEE</Text>
+                            </View>
+                            <View style={[styles.boxNoBorder, { flexGrow: 1 }]}>
+                                <Text style={styles.label}>4. Delivery Agent (Name and Address)</Text>
+                                <Text style={styles.value}>{deliveryAgent?.name || ""}</Text>
+                                <Text style={styles.address}>{deliveryAgent?.streetAddress || ""}</Text>
+                                <Text style={styles.address}>{deliveryAgent?.city || ""}{deliveryAgent?.state ? `, ${deliveryAgent.state}` : ""} {deliveryAgent?.zipCode ? `- ${deliveryAgent.zipCode}` : ""}</Text>
+                                <Text style={styles.address}>{deliveryAgent?.country || ""}</Text>
                             </View>
                         </View>
 
@@ -82,9 +115,16 @@ export default function BolPDF({ data }: { data: any }) {
                                 </View>
                             </View>
                             <View style={{ borderTop: '1px solid #000', borderBottom: '1px solid #000', padding: 8, alignItems: 'center', justifyContent: 'center', minHeight: 90 }}>
-                                <Text style={styles.companyHeader}>INTERNATIONAL CARGO MOVERS</Text>
-                                <Text style={{ fontSize: 7, textAlign: 'center' }}>123 GLOBAL LOGISTICS PARK, NEW DELHI 110037</Text>
-                                <Text style={{ fontSize: 7, textAlign: 'center' }}>Email: operations@internationalcargo.com</Text>
+                                <Image src="/ICM logo.png" style={styles.logo} />
+                                <Text style={{ fontSize: 9, textAlign: 'center' }}>INTERNATIONAL CARGO MOVERS</Text>
+                                <Text style={{ fontSize: 8, textAlign: 'center' }}>193-A BASEMENT ARJUN NAGAR SAFDARJUNG ENCLAVE, NEW DELHI-110029, DELHI, INDIA
+                                </Text>
+                                <Text style={{ fontSize: 7, textAlign: 'center' }}>MOBILE: +91-9810213336 || Email: ravinder@internationalcargo.com</Text>
+                            </View>
+                            <View>
+                                <Text style={{ fontSize: 5, textAlign: 'center',margin:2 }}>
+                                    Received by the Carrier. Goods as specified below in apparent good order and condition unless otherwise stated, to be transported to such place as agreed, authorised or permitted herein and subject to all the terms and conditions appearing on the front and reverse of this Bill of Lading to which the Merchant agrees by accepting this Bill of Lading, local privileges and customs notwithstanding. The particulars below as stated by the shipper and the weight, measure, quantity, condition, contents and value of the Goods are unknown to the Carrier. In WITNESS, whereof one (1) original Bill of Lading has been signed if not otherwise stated below, the same being accomplished the other(s), if any to be void. Required by the Carrier one (1) original Bill of Lading must be surrendered duly endorsed in exchange for the Goods or Delivery Order.
+                                </Text>
                             </View>
                             <View style={{ flexGrow: 1, padding: 4, justifyContent: 'center' }}>
                                 <Text style={styles.documentTitle}>BILL OF LADING</Text>
@@ -123,8 +163,10 @@ export default function BolPDF({ data }: { data: any }) {
                             <Text style={styles.value}>{ship.portOfDischarge || "—"}</Text>
                         </View>
                         <View style={{ width: '50%', padding: 4 }}>
-                            <Text style={styles.label}>Container / Seal No.</Text>
-                            <Text style={styles.value}>{bol.sealNumber || "—"}</Text>
+                            <Text style={styles.label}>Container / Seal No. / MTU</Text>
+                            <Text style={styles.value}>
+                                {bol.sealNumber || "—"} {bol.mtuNumber ? `/ MTU: ${bol.mtuNumber}` : ""}
+                            </Text>
                         </View>
                     </View>
 
@@ -148,40 +190,90 @@ export default function BolPDF({ data }: { data: any }) {
                         <Text style={styles.wMeas}>{cargo.volumetricWeight || "—"}</Text>
                     </View>
 
-                    {/* FOOTER & SIGNATURES SECTION */}
-                    <View style={styles.row}>
-                        <View style={[styles.col50, { borderBottom: 'none' }]}>
-                            <View style={styles.row}>
-                                <View style={{ width: '50%', borderRight: '1px solid #000', padding: 4 }}>
-                                    <Text style={styles.label}>Freight Amount</Text>
-                                    <Text style={styles.value}>AS ARRANGED</Text>
-                                </View>
-                                <View style={{ width: '50%', padding: 4 }}>
-                                    <Text style={styles.label}>Freight Payable At</Text>
-                                    <Text style={styles.value}>{bol.freightPayableAt || "—"}</Text>
-                                </View>
-                            </View>
-                            <View style={[styles.row, { flexGrow: 1, borderBottom: 'none' }]}>
-                                <View style={{ width: '50%', borderRight: '1px solid #000', padding: 4 }}>
-                                    <Text style={styles.label}>Freight Terms</Text>
-                                    <Text style={styles.value}>{bol.freightTerms || "Prepaid"}</Text>
-                                </View>
-                                <View style={{ width: '50%', padding: 4 }}>
-                                    <Text style={styles.label}>No. of Original B/L</Text>
-                                    <Text style={styles.value}>{bol.noOfOriginalBl || "THREE (3)"}</Text>
-                                </View>
-                            </View>
+                    {/* TOTAL PACKAGES IN WORDS */}
+                    <View style={styles.footerRow}>
+                        <View style={[styles.footerCol, { width: '70%', borderRight: '1px solid #000' }]}>
+                            <Text style={styles.footerLabel}>TOTAL NUMBER OF CONTAINERS OR OTHER PACKAGES OF UNITS RECEIVED BY THE CARRIER (IN WORDS)</Text>
+                            <Text style={[styles.footerValue, { fontWeight: 'bold' }]}>{totalPkgsInWords}</Text>
                         </View>
+                        <View style={[styles.footerCol, { width: '10%', borderRight: '1px solid #000' }]}></View>
+                        <View style={[styles.footerCol, { width: '10%', borderRight: '1px solid #000' }]}></View>
+                        <View style={[styles.footerCol, { width: '10%', borderRight: 0 }]}></View>
+                    </View>
 
-                        <View style={[styles.col50NoBorder, { padding: 4, justifyContent: 'space-between' }]}>
-                            <View>
-                                <Text style={styles.label}>Place and Date of Issue</Text>
-                                <Text style={styles.value}>{bol.placeAndDateOfIssue || "—"}</Text>
-                            </View>
-                            <View style={{ marginTop: 20, alignItems: 'center' }}>
-                                <Text style={{ fontSize: 6, marginBottom: 20 }}>FOR INTERNATIONAL CARGO MOVERS</Text>
-                                <Text style={{ fontSize: 6, borderTop: '1px solid #000', width: '80%', textAlign: 'center', paddingTop: 2 }}>AS AGENT / AUTHORIZED SIGNATORY</Text>
-                            </View>
+                    {/* FREIGHT GRID */}
+                    <View style={styles.footerRow}>
+                        <View style={[styles.footerCol, { width: '20%' }]}>
+                            <Text style={styles.footerLabel}>HANDLING INFORMATION</Text>
+                            <Text style={styles.footerValue}>{bol.handlingInformation || "—"}</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '15%' }]}>
+                            <Text style={styles.footerLabel}>REVENUE TONS</Text>
+                            <Text style={styles.footerValue}>AS ARRANGED</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '10%' }]}>
+                            <Text style={styles.footerLabel}>RATE</Text>
+                            <Text style={styles.footerValue}>AS ARRANGED</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '25%' }]}>
+                            <Text style={styles.footerLabel}>FREIGHT AND CHARGES</Text>
+                            <Text style={styles.footerValue}>FREIGHT PREPAID</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '15%' }]}>
+                            <Text style={styles.footerLabel}>PREPAID</Text>
+                            <Text style={styles.footerValue}>PREPAID</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '15%', borderRight: 0 }]}>
+                            <Text style={styles.footerLabel}>COLLECT</Text>
+                            <Text style={styles.footerValue}>AS ARRANGED</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.footerRow}>
+                        <View style={[styles.footerCol, { width: '35%' }]}>
+                            <Text style={styles.footerLabel}>FREIGHT PREPAID AT</Text>
+                            <Text style={styles.footerValue}>AS ARRANGED</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '35%' }]}>
+                            <Text style={styles.footerLabel}>FREIGHT PAYABLE AT</Text>
+                            <Text style={styles.footerValue}>AS ARRANGED</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '30%', borderRight: 0 }]}>
+                            <Text style={styles.footerLabel}>PLACE AND DATE OF ISSUE</Text>
+                            <Text style={styles.footerValue}>{bol.placeAndDateOfIssue || "MUMBAI - 27/02/2026"}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.footerRow}>
+                        <View style={[styles.footerCol, { width: '45%' }]}>
+                            <Text style={styles.footerLabel}>TOTAL PREPAID IN NATIONAL CURRENCY</Text>
+                            <Text style={styles.footerValue}>AS ARRANGED</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '25%' }]}>
+                            <Text style={styles.footerLabel}>NO. OF ORIGINAL B/L</Text>
+                            <Text style={styles.footerValue}>{bol.noOfOriginalBl || "THREE (3)"}</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '30%', borderRight: 0 }]}>
+                            <Text style={styles.footerLabel}>For As Agent</Text>
+                            <Text style={[styles.footerValue, { fontWeight: 'bold' }]}>FOR INTIMATION CARGO MOVERS PVT.LTD</Text>
+                        </View>
+                    </View>
+
+                    {/* LADEN ON BOARD SECTION */}
+                    <View style={{ backgroundColor: '#f0f0f0', borderBottom: '1px solid #000', padding: 2 }}>
+                        <Text style={[styles.footerLabel, { textAlign: 'center', marginBottom: 0 }]}>LADEN ON BOARD THE VESSEL</Text>
+                    </View>
+                    <View style={[styles.footerRow, { borderBottom: 0, flexGrow: 1 }]}>
+                        <View style={[styles.footerCol, { width: '35%', minHeight: 40 }]}>
+                            <Text style={styles.footerLabel}>VESSEL - VOY</Text>
+                            <Text style={styles.footerValue}>{ship.vesselFlight || "—"}</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '35%', minHeight: 40 }]}>
+                            <Text style={styles.footerLabel}>SHIPPED ON BOARD DATE</Text>
+                            <Text style={styles.footerValue}>{bol.shippedOnBoardDate || "—"}</Text>
+                        </View>
+                        <View style={[styles.footerCol, { width: '30%', borderRight: 0, alignItems: 'flex-end', justifyContent: 'flex-end', paddingBottom: 10 }]}>
+                            <Text style={[styles.footerLabel, { fontSize: 8 }]}>AUTH SIGN.</Text>
                         </View>
                     </View>
 

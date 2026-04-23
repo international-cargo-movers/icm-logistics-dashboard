@@ -1,8 +1,9 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
     page: { padding: 25, fontFamily: 'Helvetica', fontSize: 8, color: '#000000' },
+    logo: { width: 120 },
     outerBorder: { border: '1px solid #000', flexGrow: 1, display: 'flex', flexDirection: 'column' },
     row: { display: 'flex', flexDirection: 'row', borderBottom: '1px solid #000' },
 
@@ -45,6 +46,7 @@ const styles = StyleSheet.create({
 });
 
 export default function AwbPDF({ data }: { data: any }) {
+    // Correctly dive into shippingDocuments for AWB specifics
     const awb = data?.shippingDocuments?.awbDetails || {};
     const ship = data?.shipmentDetails || {};
     const cust = data?.customerDetails || {};
@@ -61,48 +63,53 @@ export default function AwbPDF({ data }: { data: any }) {
                     {/* TOP 11-DIGIT BAR */}
                     <View style={styles.awbTopBar}>
                         <View style={styles.awbTopLeft}><Text style={styles.awbNumberLabel}>{awb.awbPrefix || "000"}</Text></View>
-                        <View style={styles.awbTopMid}><Text style={styles.awbNumberLabel}>{awb.airportOfDeparture || "ORG"}</Text></View>
+                        <View style={styles.awbTopMid}><Text style={styles.awbNumberLabel}>{ship.portOfLoading || "ORG"}</Text></View>
                         <View style={styles.awbTopRight}><Text style={styles.awbNumberLabel}>{fullAwbNumber}</Text></View>
                     </View>
 
                     <View style={styles.row}>
                         {/* LEFT COLUMN */}
                         <View style={styles.col50}>
-                            <View style={[styles.box, { minHeight: 55 }]}>
-                                <Text style={styles.label}>Shipper's Name and Address</Text>
-                                <Text style={styles.value}>{cust.companyId?.name || "AS PER INVOICE"}</Text>
-                                <Text style={styles.address}>{cust.companyId?.streetAddress || ""}</Text>
-                                <Text style={styles.address}>{cust.companyId?.city || ""}, {cust.companyId?.state || ""} -  {cust.companyId?.zipCode || ""}</Text>
-                                <Text style={styles.address}>{cust.companyId?.country || ""}</Text>
+                            <View style={[styles.box, { minHeight: 60 }]}>
+                                <View style={{ flexDirection: 'row', borderBottom: '0.5px solid #eee', marginBottom: 2, paddingBottom: 1 }}>
+                                    <View style={{ flex: 1 }}><Text style={styles.label}>Shipper's Name and Address</Text></View>
+                                    <View style={{ width: 100 }}><Text style={styles.label}>Shipper's Account Number</Text></View>
+                                </View>
+                                <View style={{ flexDirection: 'row' }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.value}>{cust.companyId?.name || "AS PER INVOICE"}</Text>
+                                        <Text style={styles.address}>{cust.companyId?.streetAddress || ""}</Text>
+                                        <Text style={styles.address}>{cust.companyId?.city || ""}, {cust.companyId?.state || ""} -  {cust.companyId?.zipCode || ""}</Text>
+                                        <Text style={styles.address}>{cust.companyId?.country || ""}</Text>
+                                    </View>
+                                    <View style={{ width: 100 }}>
+                                        <Text style={[styles.value, { fontSize: 7 }]}>{awb.shipperAccountNumber || ""}</Text>
+                                    </View>
+                                </View>
                             </View>
-                            <View style={[styles.box, { minHeight: 55 }]}>
-                                <Text style={styles.label}>Consignee's Name and Address</Text>
-                                <Text style={styles.value}>{party.consigneeId?.name || "AS PER INVOICE"}</Text>
-                                <Text style={styles.address}>{party.consigneeId?.streetAddress || ""}</Text>
-                                <Text style={styles.address}>{party.consigneeId?.city || ""}, {party.consigneeId?.state || ""} -  {party.consigneeId?.zipCode || ""}</Text>
-                                <Text style={styles.address}>{party.consigneeId?.country || ""} </Text>
-
+                            <View style={[styles.box, { minHeight: 60 }]}>
+                                <View style={{ flexDirection: 'row', borderBottom: '0.5px solid #eee', marginBottom: 2, paddingBottom: 1 }}>
+                                    <View style={{ flex: 1 }}><Text style={styles.label}>Consignee's Name and Address</Text></View>
+                                    <View style={{ width: 100 }}><Text style={styles.label}>Consignee's Account Number</Text></View>
+                                </View>
+                                <View style={{ flexDirection: 'row' }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.value}>{party.consigneeId?.name || "AS PER INVOICE"}</Text>
+                                        <Text style={styles.address}>{party.consigneeId?.streetAddress || ""}</Text>
+                                        <Text style={styles.address}>{party.consigneeId?.city || ""}, {party.consigneeId?.state || ""} -  {party.consigneeId?.zipCode || ""}</Text>
+                                        <Text style={styles.address}>{party.consigneeId?.country || ""} </Text>
+                                    </View>
+                                    <View style={{ width: 100 }}>
+                                        <Text style={[styles.value, { fontSize: 7 }]}>{awb.consigneeAccountNumber || ""}</Text>
+                                    </View>
+                                </View>
                             </View>
-                            <View style={styles.boxNoBorder}>
+                            <View style={styles.box}>
                                 <Text style={styles.label}>Issuing Carrier's Agent Name and City</Text>
                                 <Text style={styles.value}>INTERNATIONAL CARGO MOVERS</Text>
                                 <Text style={styles.value}>NEW DELHI, INDIA</Text>
                             </View>
-                        </View>
-
-                        {/* RIGHT COLUMN */}
-                        <View style={styles.col50NoBorder}>
-                            <View style={[styles.box, { minHeight: 55 }]}>
-                                <Text style={styles.label}>Not Negotiable</Text>
-                                <Text style={{ fontSize: 12, fontWeight: 'bold', marginVertical: 4 }}>Air Waybill</Text>
-                                <Text style={{ fontSize: 6 }}>Issued By: INTERNATIONAL CARGO MOVERS</Text>
-                            </View>
-                            <View style={[styles.box, { minHeight: 55 }]}>
-                                <Text style={{ fontSize: 6, lineHeight: 1.2 }}>
-                                    It is agreed that the goods described herein are accepted in apparent good order and condition (except as noted) for carriage SUBJECT TO THE CONDITIONS OF CONTRACT ON THE REVERSE HEREOF.
-                                </Text>
-                            </View>
-                            <View style={styles.microRow}>
+                            <View style={[styles.microRow, { borderBottom: 'none' }]}>
                                 <View style={[styles.microCol, { width: '50%' }]}>
                                     <Text style={styles.label}>Agent's IATA Code</Text>
                                     <Text style={styles.value}>{awb.iataCode || "—"}</Text>
@@ -111,6 +118,23 @@ export default function AwbPDF({ data }: { data: any }) {
                                     <Text style={styles.label}>Account No.</Text>
                                     <Text style={styles.value}>—</Text>
                                 </View>
+                            </View>
+                        </View>
+
+                        {/* RIGHT COLUMN */}
+                        <View style={styles.col50NoBorder}>
+                            <View style={[styles.box, { minHeight: 55, justifyContent: 'center' }]}>
+                                <Text style={styles.label}>Not Negotiable</Text>
+                                <Text style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 2 }}>Air Waybill</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 6, marginRight: 5 }}>Issued By:</Text>
+                                    <Image src="/ICM logo.png" style={styles.logo} />
+                                </View>
+                            </View>
+                            <View style={[styles.boxNoBorder, { minHeight: 110 }]}>
+                                <Text style={{ fontSize: 6, lineHeight: 1.2 }}>
+                                    It is agreed that the goods described herein are accepted in apparent good order and condition (except as noted) for carriage SUBJECT TO THE CONDITIONS OF CONTRACT ON THE REVERSE HEREOF. ALL GOODS MAY BE CARRIED BY ANY OTHER MEANS INCLUDING ROAD OR ANY OTHER CARRIER UNLESS SPECIFIC CONTRARY INSTRUCTIONS ARE GIVEN HEREON BY THE SHIPPER, AND SHIPPER AGREES THAT THE SHIPMENT MAY BE CARRIED VIA INTERMEDIATE STOPPING PLACES WHICH THE CARRIER DEEMS APPROPRIATE. THE SHIPPER’S ATTENTION IS DRAWN TO THE NOTICE CONCERNING CARRIER’S LIMITATION OF LIABILITY. Shipper may increase such limitation of liability by declaring a higher value for carriage and paying a supplemental charge if required.
+                                </Text>
                             </View>
                         </View>
                     </View>
@@ -151,7 +175,9 @@ export default function AwbPDF({ data }: { data: any }) {
                         </View>
                         <View style={[styles.microCol, { width: '25%' }]}>
                             <Text style={styles.label}>Flight/Date</Text>
-                            <Text style={styles.value}>{ship.vesselFlight || "TBA"}</Text>
+                            <Text style={styles.value}>
+                                {cargo.carrier || ""} {cargo.eta ? new Date(cargo.eta).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase() : "TBA"}
+                            </Text>
                         </View>
                         <View style={[styles.microCol, { width: '50%', borderRight: 'none' }]}>
                             <Text style={styles.label}>Handling Information</Text>
@@ -168,22 +194,41 @@ export default function AwbPDF({ data }: { data: any }) {
                         <View style={styles.cwChargeable}><Text style={styles.label}>Chargeable Wt</Text></View>
                         <View style={styles.cwRate}><Text style={styles.label}>Rate / Charge</Text></View>
                         <View style={styles.cwTotal}><Text style={styles.label}>Total</Text></View>
-                        <View style={styles.cwDesc}><Text style={styles.label}>Nature and Quantity of Goods</Text></View>
+                        <View style={styles.cwDesc}>
+                            <Text style={styles.label}>Nature and Quantity of Goods</Text>
+                            <Text style={styles.address}>(incl. Dimensions or Volume)</Text>
+                            </View>
                     </View>
 
                     <View style={styles.cargoGridRow}>
-                        <Text style={styles.cwPkgs}>{cargo.noOfPackages || "1"}</Text>
-                        <Text style={styles.cwGross}>{cargo.grossWeight || "—"}</Text>
-                        <Text style={styles.cwKgLb}>K</Text>
-                        <Text style={styles.cwClass}>Q</Text>
-                        <Text style={styles.cwChargeable}>{cargo.volumetricWeight || "—"}</Text>
-                        <Text style={styles.cwRate}>AS AGREED</Text>
-                        <Text style={styles.cwTotal}>AS AGREED</Text>
-                        <Text style={styles.cwDesc}>
-                            {cargo.commodity || "GENERAL CARGO"}{"\n\n"}
-                            {cargo.description || ""}{"\n\n"}
-                            DIMENSIONS: AS PER ATTACHED PL
-                        </Text>
+                        <View style={styles.cwPkgs}><Text>{cargo.noOfPackages || "1"}</Text></View>
+                        <View style={styles.cwGross}><Text>{cargo.grossWeight || "—"}</Text></View>
+                        <View style={styles.cwKgLb}><Text>K</Text></View>
+                        <View style={styles.cwClass}><Text>Q</Text></View>
+                        <View style={styles.cwChargeable}><Text>{cargo.volumetricWeight || "—"}</Text></View>
+                        <View style={styles.cwRate}><Text>AS AGREED</Text></View>
+                        <View style={styles.cwTotal}><Text>AS AGREED</Text></View>
+                        <View style={styles.cwDesc}>
+                            <Text style={styles.value}>{cargo.commodity || "GENERAL CARGO"}</Text>
+                            <Text style={{ marginTop: 10 }}>{cargo.description || ""}</Text>
+                            <Text style={{ marginTop: 10 }}>DIMENSIONS: AS PER ATTACHED PL</Text>
+                        </View>
+                    </View>
+
+                    {/* TOTAL SUMMARY ROW */}
+                    <View style={{ flexDirection: 'row', borderBottom: '1px solid #000', height: 25, alignItems: 'center' }}>
+                        <View style={[styles.cwPkgs, { borderRight: '1px solid #000', height: '100%', justifyContent: 'center' }]}>
+                            <Text style={styles.value}>{cargo.noOfPackages || "1"}</Text>
+                        </View>
+                        <View style={[styles.cwGross, { borderRight: '1px solid #000', height: '100%', justifyContent: 'center' }]}>
+                            <Text style={styles.value}>{cargo.grossWeight || "—"}</Text>
+                        </View>
+                        <View style={{ width: '42%', borderRight: '1px solid #000', height: '100%', justifyContent: 'center', paddingLeft: 10 }}>
+                            <Text style={styles.value}>AS AGREED</Text>
+                        </View>
+                        <View style={{ width: '38%', height: '100%', justifyContent: 'center', paddingLeft: 5 }}>
+                            <Text style={styles.value}>VOL IN KG: {cargo.volumetricWeight || "0.00"} KG</Text>
+                        </View>
                     </View>
 
                     {/* FOOTER SIGNATURES */}

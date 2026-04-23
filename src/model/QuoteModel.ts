@@ -28,8 +28,16 @@ export interface IQuote extends Document {
     };
     cargoSummary: {
         commodity: string;
+        items: {
+            description?: string;
+            noOfPackages?: number;
+            grossWeight?: number;
+            volumetricWeight?: number;
+        }[];
+        totalNoOfPackages?: number;
+        totalGrossWeight?: number;
+        totalVolumetricWeight?: number;
         equipment: string;        // e.g., "1x 40' HC" or "15 CBM"
-        estimatedWeight: string;  // e.g., "12,500 kg"
     };
     validity: {
         issueDate: Date;
@@ -72,10 +80,17 @@ const QuoteSchema: Schema<IQuote> = new Schema(
         },
         cargoSummary: {
             commodity: { type: String, default: "General Cargo" },
+            items: [{
+                description: String,
+                noOfPackages: Number,
+                grossWeight: Number,
+                volumetricWeight: Number,
+            }],
+            totalNoOfPackages: { type: Number, default: 0 },
+            totalGrossWeight: { type: Number, default: 0 },
+            totalVolumetricWeight: { type: Number, default: 0 },
             equipment: { type: String, required: true },
-            estimatedWeight: { type: String }
         },
-
         validity: {
             issueDate: { type: Date, default: Date.now },
             expiryDate: { type: Date, required: true }

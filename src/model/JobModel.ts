@@ -34,12 +34,19 @@ export interface IJob extends Document {
     };
     cargoDetails: {
         commodity?: string;
-        noOfPackages?: number;
-        packageUnit?: string;
-        grossWeight?: number;
-        grossWeightUnit?: string;
-        netWeight?: number;
-        dimensions?: string;
+        items: {
+            description?: string;
+            noOfPackages?: number;
+            packageUnit?: string;
+            grossWeight?: number;
+            netWeight?: number;
+            volumetricWeight?: number;
+            dimensions?: string;
+        }[];
+        totalNoOfPackages?: number;
+        totalGrossWeight?: number;
+        totalNetWeight?: number;
+        totalVolumetricWeight?: number;
         carrier?: string;
         etd?: Date;
         eta?: Date;
@@ -63,6 +70,9 @@ export interface IJob extends Document {
       sealNumber?: string; // [cite: 14]
       noOfOriginalBl?: string; // e.g., "THREE (3)" [cite: 14]
       placeAndDateOfIssue?: string; // e.g., "MUMBAI - 27/02/2026" [cite: 14]
+      shippedOnBoardDate?: string;
+      handlingInformation?: string;
+      mtuNumber?: string;
     };
 
     // Airway Bill Specifics 
@@ -71,6 +81,9 @@ export interface IJob extends Document {
       awbSerialNumber?: string; // 8-digit serial 
       hawbNumber?: string; // e.g., "ICMICN064" 
       iataCode?: string; // Agent's IATA code 
+      shipperAccountNumber?: string;
+      consigneeAccountNumber?: string;
+      accountingInformation?: string;
       declaredValueCarriage?: string; // Default: "NVD" 
       declaredValueCustoms?: string; // Default: "NCV" 
       handlingInformation?: string; // 
@@ -114,12 +127,19 @@ const JobSchema = new Schema<IJob>({
     },
     cargoDetails: {
         commodity: { type: String },
-        noOfPackages: { type: Number },
-        packageUnit: { type: String },
-        grossWeight: { type: Number },
-        grossWeightUnit: { type: String },
-        netWeight: { type: Number },
-        dimensions: { type: String },
+        items: [{
+            description: String,
+            noOfPackages: Number,
+            packageUnit: String,
+            grossWeight: Number,
+            netWeight: Number,
+            volumetricWeight: Number,
+            dimensions: String,
+        }],
+        totalNoOfPackages: { type: Number, default: 0 },
+        totalGrossWeight: { type: Number, default: 0 },
+        totalNetWeight: { type: Number, default: 0 },
+        totalVolumetricWeight: { type: Number, default: 0 },
         carrier: { type: String },
         etd: { type: Date },
         eta: { type: Date },
@@ -150,6 +170,9 @@ const JobSchema = new Schema<IJob>({
             sealNumber: String,
             noOfOriginalBl: { type: String, default: "THREE (3)" },
             placeAndDateOfIssue: String,
+            shippedOnBoardDate: String,
+            handlingInformation: String,
+            mtuNumber: String,
         },
         // Airway Bill Specifics
         awbDetails: {
@@ -157,6 +180,9 @@ const JobSchema = new Schema<IJob>({
             awbSerialNumber: String, // 8-digit serial
             hawbNumber: String,
             iataCode: String,
+            shipperAccountNumber: { type: String },
+            consigneeAccountNumber: { type: String },
+            accountingInformation: { type: String, default: "FREIGHT PREPAID" },
             declaredValueCarriage: { type: String, default: "NVD" },
             declaredValueCustoms: { type: String, default: "NCV" },
             handlingInformation: String,

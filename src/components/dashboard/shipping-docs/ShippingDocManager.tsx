@@ -18,26 +18,36 @@ export default function ShippingDocManager({ job }: { job: any }) {
 
     // Determine mode and if documents already exist
     const mode = job?.shipmentDetails?.mode || "";
-    const isAir = mode.toLowerCase().includes("air export") || mode.toLowerCase().includes("air import");
-    console.log("Mode: ", mode)
-    console.log("isAir: ", isAir)
+    const isAir = mode.toLowerCase().includes("air");
 
-    const hasBol = !!job?.shippingDocuments?.bolDetails?.sealNumber;
-    const hasAwb = !!job?.shippingDocuments?.awbDetails?.awbPrefix;
+    const hasBol = !!job?.shippingDocuments?.bolDetails?.bolNumber;
+    const hasAwb = !!job?.shippingDocuments?.awbDetails?.awbSerialNumber;
     const hasDocument = isAir ? hasAwb : hasBol;
 
     // Initialize form with existing data if any
-    const { register, handleSubmit } = useForm({
+    const { register, handleSubmit, reset } = useForm({
         defaultValues: {
-            shipmentDetails:job?.shipmentDetails||{},
+            shipmentDetails: job?.shipmentDetails || {},
             shippingDocuments: job?.shippingDocuments || {}
         }
     });
+
+    // Reset form when job data changes (important for re-fetching)
+    React.useEffect(() => {
+        if (job) {
+            reset({
+                shipmentDetails: job.shipmentDetails || {},
+                shippingDocuments: job.shippingDocuments || {}
+            });
+        }
+    }, [job, reset]);
 
     const onSubmit = async (data: any) => {
         setSaving(true);
         try {
             // Calls the dedicated docs update route we made earlier
+            // We pass data directly because register() uses "shippingDocuments.awbDetails..." 
+            // so data is { shippingDocuments: { awbDetails: { ... } } }
             const res = await fetch(`/api/jobs/${job._id}/docs`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
@@ -46,13 +56,16 @@ export default function ShippingDocManager({ job }: { job: any }) {
 
             const json = await res.json();
             if (json.success) {
+                // IMPORTANT: Update the local job object so the PDF generator picks up new values immediately
+                job.shippingDocuments = data.shippingDocuments;
                 setIsEditing(false);
-                router.refresh(); // Refresh the page to show the Download/View buttons
+                router.refresh(); 
             } else {
-                alert("Failed to save documents.");
+                toast.error("Failed to save documents.");
             }
         } catch (error) {
             console.error(error);
+            toast.error("An error occurred while saving.");
         } finally {
             setSaving(false);
         }
@@ -177,6 +190,18 @@ export default function ShippingDocManager({ job }: { job: any }) {
                                 <input {...register("shippingDocuments.awbDetails.iataCode")} className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm" placeholder="14-3 0825" />
                             </div>
                             <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Shipper Account No.</label>
+                                <input {...register("shippingDocuments.awbDetails.shipperAccountNumber")} className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm" placeholder="A1234567" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Consignee Account No.</label>
+                                <input {...register("shippingDocuments.awbDetails.consigneeAccountNumber")} className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm" placeholder="C9876543" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Accounting Information</label>
+                                <input {...register("shippingDocuments.awbDetails.accountingInformation")} defaultValue="FREIGHT PREPAID" className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm" placeholder="FREIGHT PREPAID" />
+                            </div>
+                            <div className="space-y-2">
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Airport of Departure</label>
                                 <input {...register("shipmentDetails.portOfLoading")} className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm uppercase" placeholder="DEL" />
                             </div>
@@ -215,6 +240,10 @@ export default function ShippingDocManager({ job }: { job: any }) {
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Container Seal No.</label>
                                 <input {...register("shippingDocuments.bolDetails.sealNumber")} className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm" placeholder="e.g. MLIN3226520" />
                             </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">MTU Number</label>
+                                <input {...register("shippingDocuments.bolDetails.mtuNumber")} className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm" placeholder="e.g. TRK-99281" />
+                            </div>
 
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Freight Terms</label>
@@ -232,15 +261,25 @@ export default function ShippingDocManager({ job }: { job: any }) {
                                 <input {...register("shippingDocuments.bolDetails.noOfOriginalBl")} defaultValue="THREE (3)" className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm" />
                             </div>
 
-                            <div className="space-y-2 col-span-3">
+                            <div className="space-y-2">
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Place & Date of Issue</label>
                                 <input {...register("shippingDocuments.bolDetails.placeAndDateOfIssue")} className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm" placeholder="e.g. NEW DELHI, 18-APR-2026" />
                             </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Shipped On Board Date</label>
+                                <input {...register("shippingDocuments.bolDetails.shippedOnBoardDate")} className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm" placeholder="27/02/2026" />
+                            </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase">Marks & Numbers</label>
-                            <textarea {...register("shippingDocuments.bolDetails.marksAndNumbers")} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm h-20" placeholder="e.g. SHIPPER'S LOAD STOWAGE AND COUNT..." />
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Marks & Numbers</label>
+                                <textarea {...register("shippingDocuments.bolDetails.marksAndNumbers")} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm h-20" placeholder="e.g. SHIPPER'S LOAD STOWAGE AND COUNT..." />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Handling Information</label>
+                                <textarea {...register("shippingDocuments.bolDetails.handlingInformation")} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm h-20" placeholder="e.g. Temperature controlled, Fragile..." />
+                            </div>
                         </div>
                     </div>
                 )}

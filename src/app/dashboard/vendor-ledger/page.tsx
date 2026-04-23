@@ -10,29 +10,29 @@ import {
     Activity, 
     ShieldCheck, 
     Scale,
-    TrendingUp,
+    TrendingDown,
     Clock
 } from "lucide-react"
-import CompanyLedger from "@/components/dashboard/ledger/CompanyLedger"
+import VendorLedger from "@/components/dashboard/ledger/VendorLedger"
 import Sidebar from "@/components/dashboard/Sidebar"
 import TopNav from "@/components/dashboard/TopNav"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 
-export default function LedgerPage() {
+export default function VendorLedgerPage() {
     const [companies, setCompanies] = useState<any[]>([])
     const [searchTerm, setSearchTerm] = useState("")
     const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        const fetchCustomers = async () => {
+        const fetchVendors = async () => {
             try {
                 const res = await fetch("/api/companies");
                 const json = await res.json();
                 if (json.success) {
-                    const customersOnly = json.data.filter((c: any) => c.type.includes("Customer"));
-                    setCompanies(customersOnly);
+                    const vendorsOnly = json.data.filter((c: any) => c.type.includes("Vendor"));
+                    setCompanies(vendorsOnly);
                 }
             } catch (error) {
                 console.error("Failed to fetch companies:", error);
@@ -40,7 +40,7 @@ export default function LedgerPage() {
                 setLoading(false);
             }
         };
-        fetchCustomers();
+        fetchVendors();
     }, []);
 
     const filteredCompanies = companies.filter(c => 
@@ -52,7 +52,7 @@ export default function LedgerPage() {
             <div className="flex items-center justify-center min-h-screen bg-slate-50">
                 <div className="flex flex-col items-center gap-4">
                     <Activity className="h-12 w-12 text-blue-600 animate-spin" />
-                    <p className="text-slate-500 font-bold animate-pulse">Syncing Financial Ledgers...</p>
+                    <p className="text-slate-500 font-bold animate-pulse">Syncing Payables Ledgers...</p>
                 </div>
             </div>
         );
@@ -67,21 +67,21 @@ export default function LedgerPage() {
 
                 <div className="pt-24 h-[calc(100vh)] flex overflow-hidden">
                     
-                    {/* Account Selection Sidebar */}
+                    {/* Vendor Selection Sidebar */}
                     <div className="w-96 border-r border-slate-100 bg-white flex flex-col h-full">
                         <div className="p-8 border-b border-slate-50">
                             <div className="flex items-center gap-2 mb-6">
-                                <span className="h-1 w-6 bg-blue-600 rounded-full"></span>
-                                <span className="text-[10px] font-black tracking-[0.2em] text-blue-600 uppercase">
+                                <span className="h-1 w-6 bg-rose-600 rounded-full"></span>
+                                <span className="text-[10px] font-black tracking-[0.2em] text-rose-600 uppercase">
                                     Accounts
                                 </span>
                             </div>
-                            <h2 className="text-2xl font-black text-slate-900 tracking-tighter mb-6">Receivables</h2>
+                            <h2 className="text-2xl font-black text-slate-900 tracking-tighter mb-6">Payables</h2>
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                 <Input 
-                                    placeholder="Filter by customer..." 
-                                    className="pl-10 bg-slate-50 border-none rounded-xl focus-visible:ring-blue-600 font-bold"
+                                    placeholder="Filter by vendor..." 
+                                    className="pl-10 bg-slate-50 border-none rounded-xl focus-visible:ring-rose-600 font-bold"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
@@ -95,7 +95,7 @@ export default function LedgerPage() {
                                     onClick={() => setSelectedCompanyId(company._id)}
                                     className={`w-full text-left p-5 rounded-2xl transition-all group flex items-center justify-between ${
                                         selectedCompanyId === company._id 
-                                        ? "bg-blue-600 text-white shadow-xl shadow-blue-500/20" 
+                                        ? "bg-rose-600 text-white shadow-xl shadow-rose-500/20" 
                                         : "hover:bg-slate-50"
                                     }`}
                                 >
@@ -107,7 +107,7 @@ export default function LedgerPage() {
                                             <Badge className={`border-none text-[8px] font-black uppercase px-2 py-0 ${
                                                 selectedCompanyId === company._id ? "bg-white/20 text-white" : "bg-slate-100 text-slate-400"
                                             }`}>
-                                                Customer
+                                                Vendor
                                             </Badge>
                                             <p className={`text-[10px] font-bold truncate ${selectedCompanyId === company._id ? "text-white/60" : "text-slate-400"}`}>
                                                 {company.city || "Global"}
@@ -129,16 +129,16 @@ export default function LedgerPage() {
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="flex items-center gap-3 mb-4">
-                                            <div className="p-3 bg-white rounded-2xl shadow-sm text-blue-600">
+                                            <div className="p-3 bg-white rounded-2xl shadow-sm text-rose-600">
                                                 <Scale className="h-6 w-6" />
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1">Financial Statement</p>
-                                                <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Account Ledger</h1>
+                                                <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest leading-none mb-1">Financial Statement</p>
+                                                <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Vendor Ledger</h1>
                                             </div>
                                         </div>
                                         <p className="text-slate-500 font-medium ml-1">
-                                            Live audit of all transactions and settlements for <span className="text-slate-900 font-black">{companies.find(c => c._id === selectedCompanyId)?.name}</span>.
+                                            Live audit of all transactions and settlements for supply partner <span className="text-slate-900 font-black">{companies.find(c => c._id === selectedCompanyId)?.name}</span>.
                                         </p>
                                     </div>
                                     <Badge className="bg-emerald-50 text-emerald-700 border-none font-black uppercase text-[10px] px-4 py-1.5">
@@ -146,7 +146,7 @@ export default function LedgerPage() {
                                     </Badge>
                                 </div>
 
-                                <CompanyLedger companyId={selectedCompanyId} />
+                                <VendorLedger companyId={selectedCompanyId} />
                             </div>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-center p-12">
@@ -155,7 +155,7 @@ export default function LedgerPage() {
                                 </div>
                                 <h3 className="text-2xl font-black text-slate-900 tracking-tighter mb-3">Initialize Financial Audit</h3>
                                 <p className="text-slate-400 font-medium max-w-sm">
-                                    Choose an entity from the account directory to view their complete transaction history and current balance.
+                                    Choose a supply partner from the account directory to view their complete transaction history and current balance.
                                 </p>
                             </div>
                         )}

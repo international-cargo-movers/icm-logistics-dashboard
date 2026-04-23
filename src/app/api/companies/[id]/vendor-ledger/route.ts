@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import InvoiceModel from "@/model/InvoiceModel";
+import VendorInvoiceModel from "@/model/VendorInvoiceModel";
 import ReceiptModel from "@/model/ReceiptModel";
 
 export async function GET(
@@ -11,15 +11,15 @@ export async function GET(
         await dbConnect();
         const { id } = await params;
 
-        // 1. Fetch all Invoices for this customer
-        const invoices = await InvoiceModel.find({ "customerDetails.companyId": id }).lean();
+        // 1. Fetch all Vendor Invoices for this vendor
+        const vendorInvoices = await VendorInvoiceModel.find({ "vendorDetails.vendorId": id }).lean();
         
-        // 2. Fetch all Receipts for this customer
-        const receipts = await ReceiptModel.find({ companyId: id, type: "Customer" }).lean();
+        // 2. Fetch all Receipts for this vendor
+        const receipts = await ReceiptModel.find({ companyId: id, type: "Vendor" }).lean();
 
-        // 3. Map Invoices to transaction format
-        const invoiceTransactions = invoices.map((inv: any) => {
-            const invoiceDate = new Date(inv.invoiceDate || inv.createdAt);
+        // 3. Map Vendor Invoices to transaction format
+        const invoiceTransactions = vendorInvoices.map((inv: any) => {
+            const invoiceDate = new Date(inv.vendorInvoiceDate || inv.createdAt);
             const dueDate = new Date(invoiceDate);
             dueDate.setDate(dueDate.getDate() + 30); 
 
@@ -27,7 +27,7 @@ export async function GET(
                 id: inv._id.toString(),
                 type: "Invoice",
                 date: invoiceDate,
-                reference: inv.invoiceNo,
+                reference: inv.vendorInvoiceNo,
                 status: inv.status || "Unpaid",
                 amount: inv.totals?.netAmount || 0,
                 amountPaid: inv.amountPaid || 0,
@@ -47,10 +47,10 @@ export async function GET(
                 reference: rct.receiptNo,
                 invoiceNo: rct.invoiceNo,
                 status: "Cleared",
-                amount: 0, // Billed amount is 0 for receipts
+                amount: 0, 
                 amountPaid: rct.amount,
                 balanceDue: 0,
-                notes: `Payment for ${rct.invoiceNo} (${rct.referenceNo})`,
+                notes: `Disbursement for ${rct.invoiceNo} (${rct.referenceNo})`,
                 paymentMode: rct.paymentMode,
                 createdAt: rct.createdAt
             };
@@ -61,14 +61,13 @@ export async function GET(
         combinedLedger.sort((a, b) => {
             const dateDiff = b.date.getTime() - a.date.getTime();
             if (dateDiff !== 0) return dateDiff;
-            // If same date, sort by createdAt (receipts usually come after invoices)
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
 
         return NextResponse.json({ success: true, data: combinedLedger });
 
     } catch (error: any) {
-        console.error("Ledger API Error:", error);
+        console.error("Vendor Ledger API Error:", error);
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }

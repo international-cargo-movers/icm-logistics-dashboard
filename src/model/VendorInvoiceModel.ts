@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, models } from "mongoose";
 
-export interface ILineItem {
+export interface IVendorLineItem {
     description: string;
     sacCode: string;
     rate: number;
@@ -11,14 +11,14 @@ export interface ILineItem {
     gstAmount: number;
 }
 
-export interface IInvoice extends Document {
-    invoiceNo: string;
-    invoiceDate: Date;
+export interface IVendorInvoice extends Document {
+    vendorInvoiceNo: string;
+    vendorInvoiceDate: Date;
     jobId: mongoose.Types.ObjectId; 
-    jobReference: string; // <-- NEW: Stores "JOB-2026-001" safely
+    jobReference: string; // Stores "JOB-2026-001" safely
     
-    customerDetails: {
-        companyId: mongoose.Types.ObjectId;
+    vendorDetails: {
+        vendorId: mongoose.Types.ObjectId;
         name: string;
         billingAddress?: string;
         gstin?: string;
@@ -32,7 +32,7 @@ export interface IInvoice extends Document {
         chargeableWeight?: number; noOfPackages?: number; containerNo?: string;  
         egm?: string; igm?: string; sbNo?: string;         
     };
-    lineItems: ILineItem[];
+    lineItems: IVendorLineItem[];
     totals: {
         totalTaxable: number; totalGst: number; roundOff: number;
         netAmount: number; amountInWords: string; 
@@ -42,15 +42,15 @@ export interface IInvoice extends Document {
     status: "Draft" | "Unpaid" | "Paid" | "Overdue" | "Partially Paid";
 }
 
-const InvoiceSchema = new Schema<IInvoice>({
-    invoiceNo: { type: String, required: true, unique: true },
-    invoiceDate: { type: Date, default: Date.now, required: true },
+const VendorInvoiceSchema = new Schema<IVendorInvoice>({
+    vendorInvoiceNo: { type: String, required: true, unique: true },
+    vendorInvoiceDate: { type: Date, default: Date.now, required: true },
     
     jobId: { type: Schema.Types.ObjectId, ref: "Job", required: true },
-    jobReference: { type: String, required: true }, // <-- NEW: Allowed in DB
+    jobReference: { type: String, required: true },
 
-    customerDetails: {
-        companyId: { type: Schema.Types.ObjectId, ref: "CompanyModel", required: true },
+    vendorDetails: {
+        vendorId: { type: Schema.Types.ObjectId, ref: "CompanyModel", required: true },
         name: { type: String, required: true },
         billingAddress: { type: String, required: true },
         gstin: { type: String }, stateCode: { type: String }, email: { type: String },
@@ -82,4 +82,4 @@ const InvoiceSchema = new Schema<IInvoice>({
     }
 }, { timestamps: true });
 
-export default models.Invoice || mongoose.model<IInvoice>("Invoice", InvoiceSchema);
+export default models.VendorInvoice || mongoose.model<IVendorInvoice>("VendorInvoice", VendorInvoiceSchema);

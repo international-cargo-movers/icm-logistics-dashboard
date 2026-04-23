@@ -4,6 +4,7 @@ import JobModel from "@/model/JobModel"
 import dbConnect from "@/lib/mongodb"
 import "@/model/CompanyModel"
 import StatusDropdown from "@/components/dashboard/jobs/StatusDropdown"
+import EntitySwitcher from "@/components/dashboard/jobs/EntitySwitcher"
 
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -20,15 +21,17 @@ const getDownloadUrl = (url: string) => {
 }
 
 // Server Component
+// Rebuild trigger
 export default async function JobControlRoom({ params }: { params: { jobId: string } }) {
     await dbConnect();
     const { jobId } = await params;
 
     const job = await JobModel.findOne({ jobId: jobId })
         .populate("customerDetails.companyId", "name taxId streetAddress city state zipCode country defaultSalesPerson")
-        .populate("vendorDetails.vendorId", "name")
+        .populate("vendorDetails.vendorId", "name taxId streetAddress city state zipCode country")
         .populate("partyDetails.shipperId","name taxId streetAddress city state zipCode country")
         .populate("partyDetails.consigneeId","name taxId streetAddress city state zipCode country")
+        .populate("partyDetails.overseasAgentId","name taxId streetAddress city state zipCode country")
         .lean()
 
     if (!job) {
@@ -47,11 +50,19 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
             {/* Header */}
             <div className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <Link href="/dashboard">
-                        <Button variant="ghost" className="pl-0 text-muted-foreground hover:text-primary mb-2">
-                            <ArrowLeft className="mr-2 h-4 w-4" /> Back To Dashboard
-                        </Button>
-                    </Link>
+                    <div className="flex items-center gap-3 mb-2">
+                        <Link href="/dashboard">
+                            <Button variant="ghost" className="pl-0 text-muted-foreground hover:text-primary">
+                                <ArrowLeft className="mr-2 h-4 w-4" /> Back To Dashboard
+                            </Button>
+                        </Link>
+                        <span className="text-muted-foreground/30">|</span>
+                        <Link href={`/dashboard/jobs/${job.jobId}/reconciliation`}>
+                            <Button variant="ghost" className="text-muted-foreground hover:text-blue-600">
+                                <FileText className="mr-2 h-4 w-4" /> Reconciliation
+                            </Button>
+                        </Link>
+                    </div>
                     <div className="flex items-center gap-4">
                         <h1 className="text-4xl font-extrabold text-primary tracking-tight">
                             {job.jobId}
@@ -197,126 +208,10 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                 {/* RIGHT COLUMN (Entities) */}
                 <div className="space-y-8">
 
-                    {/* Structured Customer Card */}
-                    <Card className="p-6 border border-border shadow-sm border-t-4 border-t-primary">
-                        <h2 className="text-lg font-bold flex items-center gap-2 mb-6 pb-4 border-b">
-                            <Building2 className="text-primary" /> The Client
-                        </h2>
-
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="h-12 w-12 bg-primary/10 text-primary flex items-center justify-center rounded-lg font-bold text-lg shrink-0">
-                                {job.customerDetails?.companyId?.name?.substring(0, 2).toUpperCase() || "??"}
-                            </div>
-                            <div className="overflow-hidden">
-                                <h3 className="font-bold text-foreground text-lg truncate" title={job.customerDetails?.companyId?.name}>
-                                    {job.customerDetails?.companyId?.name || "Unknown Company"}
-                                </h3>
-                                <p className="text-sm text-muted-foreground truncate">
-                                    Tax ID: <span className="font-mono text-primary font-medium">{job.customerDetails?.taxId || job.customerDetails?.companyId?.taxId || "N/A"}</span>
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-y-5 gap-x-4">
-                            <div className="col-span-2">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Street Address</p>
-                                <p className="text-sm font-medium text-foreground leading-snug">
-                                    {job.customerDetails?.streetAddress || job.customerDetails?.companyId?.streetAddress || "—"}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">City</p>
-                                <p className="text-sm font-medium text-foreground leading-snug">
-                                    {job.customerDetails?.city || job.customerDetails?.companyId?.city || "—"}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">State / Prov</p>
-                                <p className="text-sm font-medium text-foreground leading-snug">
-                                    {job.customerDetails?.state || job.customerDetails?.companyId?.state || "—"}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Zip Code</p>
-                                <p className="text-sm font-medium text-foreground leading-snug">
-                                    {job.customerDetails?.zipCode || job.customerDetails?.companyId?.zipCode || "—"}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Country</p>
-                                <p className="text-sm font-medium text-foreground leading-snug">
-                                    {job.customerDetails?.country || job.customerDetails?.companyId?.country || "—"}
-                                </p>
-                            </div>
-
-                            <div className="col-span-2 mt-1 pt-5 border-t">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Sales Person</p>
-                                <p className="text-sm font-medium text-foreground">
-                                    {job.customerDetails?.salesPerson || job.customerDetails?.companyId?.defaultSalesPerson || "—"}
-                                </p>
-                            </div>
-                        </div>
-                    </Card>
-                    {/* Structured Consignee Card */}
-                    <Card className="p-6 border border-border shadow-sm border-t-4 border-t-primary">
-                        <h2 className="text-lg font-bold flex items-center gap-2 mb-6 pb-4 border-b">
-                            <Building2 className="text-primary" /> The Consignee
-                        </h2>
-
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="h-12 w-12 bg-primary/10 text-primary flex items-center justify-center rounded-lg font-bold text-lg shrink-0">
-                                {job.partyDetails?.consigneeId?.name?.substring(0, 2).toUpperCase() || "??"}
-                            </div>
-                            <div className="overflow-hidden">
-                                <h3 className="font-bold text-foreground text-lg truncate" title={job.partyDetails?.consigneeId?.name}>
-                                    {job.partyDetails?.consigneeId?.name || "Unknown Company"}
-                                </h3>
-                                <p className="text-sm text-muted-foreground truncate">
-                                    Tax ID: <span className="font-mono text-primary font-medium">{job.partyDetails?.consigneeId?.taxId || "N/A"}</span>
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-y-5 gap-x-4">
-                            <div className="col-span-2">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Street Address</p>
-                                <p className="text-sm font-medium text-foreground leading-snug">
-                                    { job.partyDetails?.consigneeId?.streetAddress || "—"}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">City</p>
-                                <p className="text-sm font-medium text-foreground leading-snug">
-                                    {job.partyDetails?.consigneeId?.city || "—"}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">State / Prov</p>
-                                <p className="text-sm font-medium text-foreground leading-snug">
-                                    {job.partyDetails?.consigneeId?.state || "—"}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Zip Code</p>
-                                <p className="text-sm font-medium text-foreground leading-snug">
-                                    {job.partyDetails?.consigneeId?.zipCode || "—"}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Country</p>
-                                <p className="text-sm font-medium text-foreground leading-snug">
-                                    {job.partyDetails?.consigneeId?.country || "—"}
-                                </p>
-                            </div>
-
-                            <div className="col-span-2 mt-1 pt-5 border-t">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Sales Person</p>
-                                <p className="text-sm font-medium text-foreground">
-                                    {job.partyDetails?.consigneeId?.defaultSalesPerson || "—"}
-                                </p>
-                            </div>
-                        </div>
-                    </Card>
+                    <EntitySwitcher 
+                        client={job.customerDetails} 
+                        consignee={job.partyDetails?.consigneeId} 
+                    />
 
                     {/* Vendors Card */}
                     <Card className="p-6">

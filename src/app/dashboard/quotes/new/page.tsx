@@ -49,8 +49,10 @@ export default function NewQuotePage() {
     mode: "",
     cargoSummary: {
       commodity: "",
-      equipment: "",
-      estimatedWeight: ""
+      items: [
+        { description: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }
+      ],
+      equipment: ""
     },
     // NEW: Updated default items to include 'roe' and 'notes'
     lineItems: [
@@ -58,6 +60,41 @@ export default function NewQuotePage() {
       { chargeName: "Customs Clearance", chargeType: "Origin", currency: "INR", roe: 1, buyPrice: 3500, sellPrice: 5500, notes: "PER INVOICE" }
     ]
   })
+
+  // LIVE TOTALS - Calculated every render pass
+  const cargoTotals = quoteData.cargoSummary.items.reduce((acc, item) => {
+    acc.pkgs += Number(item.noOfPackages || 0)
+    acc.gross += Number(item.grossWeight || 0)
+    acc.vol += Number(item.volumetricWeight || 0)
+    return acc
+  }, { pkgs: 0, gross: 0, vol: 0 })
+
+  const addCargoItem = () => {
+    setQuoteData({
+      ...quoteData,
+      cargoSummary: {
+        ...quoteData.cargoSummary,
+        items: [...quoteData.cargoSummary.items, { description: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }]
+      }
+    })
+  }
+
+  const removeCargoItem = (index: number) => {
+    const newItems = quoteData.cargoSummary.items.filter((_, idx) => idx !== index)
+    setQuoteData({
+      ...quoteData,
+      cargoSummary: { ...quoteData.cargoSummary, items: newItems.length > 0 ? newItems : [{ description: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }] }
+    })
+  }
+
+  const updateCargoItem = (index: number, field: string, value: any) => {
+    const newItems = [...quoteData.cargoSummary.items]
+    newItems[index] = { ...newItems[index], [field]: value } as any
+    setQuoteData({
+      ...quoteData,
+      cargoSummary: { ...quoteData.cargoSummary, items: newItems }
+    })
+  }
 
   useEffect(() => {
     async function fetchMasterData() {
@@ -473,23 +510,64 @@ export default function NewQuotePage() {
               </div>
             </section>
 
-            {/* Cargo Summary (Unchanged) */}
+            {/* Cargo Summary (Updated for Multiple Items) */}
             <section className="space-y-6 pt-6 border-t border-outline-variant/10">
-              <div className="flex items-center gap-2 border-l-4 border-primary pl-4">
+              <div className="flex items-center justify-between border-l-4 border-primary pl-4">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Cargo Summary</h2>
+                <button onClick={addCargoItem} className="text-xs font-bold bg-primary/10 text-primary px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-primary/20 transition-colors">
+                  <Plus className="w-3.5 h-3.5" /> Add Line
+                </button>
               </div>
-              <div className="grid grid-cols-3 gap-4 bg-surface-container-low p-5 rounded-xl border border-outline-variant/10">
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-on-surface-variant block">Commodity</label>
-                  <input type="text" value={quoteData.cargoSummary.commodity} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, commodity: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  <label className="text-xs font-semibold text-on-surface-variant block">Commodity Group</label>
+                  <input type="text" value={quoteData.cargoSummary.commodity} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, commodity: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" placeholder="e.g. Furniture" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-on-surface-variant block">Equipment / Volume</label>
                   <input type="text" placeholder="e.g. 1x 40' HC or 15 CBM" value={quoteData.cargoSummary.equipment} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, equipment: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-on-surface-variant block">Est. Gross Weight</label>
-                  <input type="text" placeholder="e.g. 12,500 kg" value={quoteData.cargoSummary.estimatedWeight} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, estimatedWeight: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+
+              <div className="space-y-3">
+                {quoteData.cargoSummary.items.map((item, index) => (
+                  <div key={index} className="grid grid-cols-12 gap-3 items-end bg-surface-container-low p-4 rounded-xl border border-outline-variant/10 group">
+                    <div className="col-span-5 space-y-1.5">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase">Description</label>
+                      <input type="text" value={item.description} onChange={(e) => updateCargoItem(index, 'description', e.target.value)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" placeholder="e.g. Wooden Tables" />
+                    </div>
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase">Pkgs</label>
+                      <input type="number" value={item.noOfPackages} onChange={(e) => updateCargoItem(index, 'noOfPackages', parseInt(e.target.value) || 0)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" />
+                    </div>
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase">Gross Wt (kg)</label>
+                      <input type="number" value={item.grossWeight} onChange={(e) => updateCargoItem(index, 'grossWeight', parseFloat(e.target.value) || 0)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" />
+                    </div>
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase">Vol Wt (kg)</label>
+                      <input type="number" value={item.volumetricWeight} onChange={(e) => updateCargoItem(index, 'volumetricWeight', parseFloat(e.target.value) || 0)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" />
+                    </div>
+                    <div className="col-span-1 pb-1">
+                      <button onClick={() => removeCargoItem(index)} className="p-2 text-on-surface-variant hover:bg-error-container hover:text-error rounded-md opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 p-4 bg-primary/5 rounded-xl border border-primary/10">
+                <div className="text-center">
+                  <span className="text-[10px] font-bold text-primary uppercase">Total Pkgs</span>
+                  <div className="text-lg font-bold">{quoteData.cargoSummary.totalNoOfPackages}</div>
+                </div>
+                <div className="text-center border-x border-primary/10">
+                  <span className="text-[10px] font-bold text-primary uppercase">Total Gross Weight</span>
+                  <div className="text-lg font-bold">{quoteData.cargoSummary.totalGrossWeight} kg</div>
+                </div>
+                <div className="text-center">
+                  <span className="text-[10px] font-bold text-primary uppercase">Total Vol. Weight</span>
+                  <div className="text-lg font-bold">{quoteData.cargoSummary.totalVolumetricWeight} kg</div>
                 </div>
               </div>
             </section>

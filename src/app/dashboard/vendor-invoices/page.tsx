@@ -16,7 +16,7 @@ import {
   Edit, 
   CheckCircle,
   Activity,
-  TrendingUp,
+  TrendingDown,
   Scale,
   ShieldCheck,
   ChevronLeft,
@@ -24,7 +24,7 @@ import {
   PlusCircle
 } from "lucide-react"
 import { pdf } from '@react-pdf/renderer'
-import InvoicePDF from '@/components/dashboard/invoices/InvoicePDF'
+import VendorInvoicePDF from '@/components/dashboard/vendor-invoices/VendorInvoicePDF'
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -33,9 +33,9 @@ import Sidebar from "@/components/dashboard/Sidebar"
 import TopNav from "@/components/dashboard/TopNav"
 import RecordPaymentModal from "@/components/dashboard/ledger/RecordPaymentModal"
 
-export default function InvoicesDashboardPage() {
+export default function VendorInvoicesDashboardPage() {
   const router = useRouter()
-  const [invoices, setInvoices] = React.useState<any[]>([])
+  const [vendorInvoices, setVendorInvoices] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
 
   const [searchTerm, setSearchTerm] = React.useState("")
@@ -46,29 +46,29 @@ export default function InvoicesDashboardPage() {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [selectedInvoice, setSelectedInvoice] = React.useState<any>(null);
 
-  const fetchInvoices = async () => {
+  const fetchVendorInvoices = async () => {
     setIsLoading(true)
     try {
-      const res = await fetch('/api/invoices')
+      const res = await fetch('/api/vendor-invoices')
       const json = await res.json()
-      if (json.success) setInvoices(json.data)
+      if (json.success) setVendorInvoices(json.data)
     } catch (error) {
-      toast.error("Failed to fetch invoices")
+      toast.error("Failed to fetch vendor invoices")
     } finally {
       setIsLoading(false)
     }
   }
 
   React.useEffect(() => {
-    fetchInvoices()
+    fetchVendorInvoices()
   }, [])
 
-  const filteredInvoices = React.useMemo(() => {
-    return invoices.filter(inv => {
+  const filteredVendorInvoices = React.useMemo(() => {
+    return vendorInvoices.filter(inv => {
       const searchLower = searchTerm.toLowerCase()
       const matchesSearch =
-        inv.invoiceNo?.toLowerCase().includes(searchLower) ||
-        inv.customerDetails?.name?.toLowerCase().includes(searchLower) ||
+        inv.vendorInvoiceNo?.toLowerCase().includes(searchLower) ||
+        inv.vendorDetails?.name?.toLowerCase().includes(searchLower) ||
         inv.jobId?.toLowerCase().includes(searchLower)
       if (!matchesSearch) return false
 
@@ -82,20 +82,20 @@ export default function InvoicesDashboardPage() {
       if (dateFilter === "30Days") {
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        const invDate = new Date(inv.invoiceDate || inv.createdAt)
+        const invDate = new Date(inv.vendorInvoiceDate || inv.createdAt)
         if (invDate < thirtyDaysAgo) return false
       }
       return true
     })
-  }, [invoices, searchTerm, statusFilter, dateFilter])
+  }, [vendorInvoices, searchTerm, statusFilter, dateFilter])
 
   const stats = React.useMemo(() => {
-    const s = filteredInvoices.reduce((acc: any, inv: any) => {
+    const s = filteredVendorInvoices.reduce((acc: any, inv: any) => {
       const total = Number(inv.totals?.netAmount) || 0;
       const paid = Number(inv.amountPaid) || (inv.status === "Paid" ? total : 0);
       
-      acc.totalRevenue += total;
-      acc.received += paid;
+      acc.totalVendorCost += total;
+      acc.settled += paid;
       acc.outstanding += (total - paid);
 
       if (inv.status?.toLowerCase() === "overdue") {
@@ -103,11 +103,11 @@ export default function InvoicesDashboardPage() {
       }
 
       return acc;
-    }, { totalRevenue: 0, outstanding: 0, overdue: 0, received: 0 });
+    }, { totalVendorCost: 0, outstanding: 0, overdue: 0, settled: 0 });
 
-    const clearanceRate = s.totalRevenue > 0 ? (s.received / s.totalRevenue) * 100 : 0;
-    return { ...s, clearanceRate };
-  }, [filteredInvoices])
+    const settlementRate = s.totalVendorCost > 0 ? (s.settled / s.totalVendorCost) * 100 : 0;
+    return { ...s, settlementRate };
+  }, [filteredVendorInvoices])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -120,28 +120,28 @@ export default function InvoicesDashboardPage() {
   const handleRecordPayment = (inv: any) => {
     setSelectedInvoice({
         id: inv._id,
-        invoiceNo: inv.invoiceNo,
+        invoiceNo: inv.vendorInvoiceNo,
         totalAmount: inv.totals?.netAmount || 0,
         balanceDue: inv.balanceDue ?? (inv.status === "Paid" ? 0 : inv.totals?.netAmount || 0),
-        type: "Customer"
+        type: "Vendor"
     });
     setIsModalOpen(true);
   };
 
   const handleView = async (inv: any) => {
-    toast.info("Opening Invoice...")
+    toast.info("Opening Vendor Invoice...")
     try {
-      const cleanPayload = {
-        ...inv,
-        invoiceNo: inv.invoiceNo,
-        issueDate: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[0] : "",
-        jobId: inv.jobReference || inv.jobId,
-        customerName: inv.customerDetails?.name || "Unknown",
-        billingAddress: inv.customerDetails?.billingAddress || "",
-        lineItems: inv.lineItems || [],
-        totals: inv.totals || {}
-      };
-      const blob = await pdf(<InvoicePDF data={cleanPayload} />).toBlob()
+        const cleanPayload = {
+            ...inv,
+            vendorInvoiceNo: inv.vendorInvoiceNo,
+            vendorInvoiceDate: inv.vendorInvoiceDate ? new Date(inv.vendorInvoiceDate).toISOString().split('T')[0] : "",
+            jobId: inv.jobReference || inv.jobId,
+            vendorName: inv.vendorDetails?.name || "Unknown",
+            billingAddress: inv.vendorDetails?.billingAddress || "",
+            lineItems: inv.lineItems || [],
+            totals: inv.totals || {}
+          };
+      const blob = await pdf(<VendorInvoicePDF data={cleanPayload} />).toBlob()
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
     } catch (error) { toast.error("Failed to generate PDF view") }
@@ -152,29 +152,29 @@ export default function InvoicesDashboardPage() {
     try {
         const cleanPayload = {
             ...inv,
-            invoiceNo: inv.invoiceNo,
-            issueDate: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[0] : "",
+            vendorInvoiceNo: inv.vendorInvoiceNo,
+            vendorInvoiceDate: inv.vendorInvoiceDate ? new Date(inv.vendorInvoiceDate).toISOString().split('T')[0] : "",
             jobId: inv.jobReference || inv.jobId,
-            customerName: inv.customerDetails?.name || "Unknown",
-            billingAddress: inv.customerDetails?.billingAddress || "",
+            vendorName: inv.vendorDetails?.name || "Unknown",
+            billingAddress: inv.vendorDetails?.billingAddress || "",
             lineItems: inv.lineItems || [],
             totals: inv.totals || {}
           };
-      const blob = await pdf(<InvoicePDF data={cleanPayload} />).toBlob()
+      const blob = await pdf(<VendorInvoicePDF data={cleanPayload} />).toBlob()
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `${inv.invoiceNo}.pdf`
+      link.download = `${inv.vendorInvoiceNo}.pdf`
       link.click()
     } catch (error) { toast.error("Failed to download PDF") }
   }
 
-  if (isLoading && invoices.length === 0) {
+  if (isLoading && vendorInvoices.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <div className="flex flex-col items-center gap-4">
           <Activity className="h-12 w-12 text-blue-600 animate-spin" />
-          <p className="text-slate-500 font-bold animate-pulse">Synchronizing Receivables...</p>
+          <p className="text-slate-500 font-bold animate-pulse">Synchronizing Payables...</p>
         </div>
       </div>
     );
@@ -195,21 +195,21 @@ export default function InvoicesDashboardPage() {
               <div className="flex items-center gap-2 mb-3">
                 <span className="h-1 w-8 bg-blue-600 rounded-full"></span>
                 <span className="text-[10px] font-black tracking-[0.3em] text-blue-600 uppercase">
-                  Receivables Management
+                  Payables Control
                 </span>
               </div>
               <h2 className="text-5xl font-black text-slate-900 tracking-tighter mb-4 leading-none">
-                Customer Invoices
+                Vendor Invoices
               </h2>
               <p className="text-slate-500 text-lg font-medium">
-                Tracking <span className="text-blue-600 font-bold">{formatCurrency(stats.outstanding)}</span> in outstanding revenue across global accounts.
+                Managing <span className="text-blue-600 font-bold">{formatCurrency(stats.outstanding)}</span> in outstanding vendor dues across suppliers.
               </p>
             </div>
 
-            <Link href="/dashboard/invoices/new">
+            <Link href="/dashboard/vendor-invoices/new">
                 <Button className="group flex items-center gap-3 px-8 py-7 rounded-2xl font-bold shadow-2xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white border-none">
                     <Plus className="h-5 w-5" />
-                    Create New Invoice
+                    Record Vendor Invoice
                 </Button>
             </Link>
           </div>
@@ -218,18 +218,18 @@ export default function InvoicesDashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white group hover:translate-y-[-4px] transition-all">
               <div className="flex justify-between items-start mb-6">
-                <div className="p-3 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                  <TrendingUp className="h-6 w-6" />
+                <div className="p-3 bg-rose-50 rounded-2xl text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-colors">
+                  <TrendingDown className="h-6 w-6" />
                 </div>
-                <Badge className="bg-blue-100 text-blue-700 border-none font-bold">
-                    Total Billed
+                <Badge className="bg-rose-100 text-rose-700 border-none font-bold">
+                    Gross Payables
                 </Badge>
               </div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Invoiced Revenue</p>
-              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{formatCurrency(stats.totalRevenue)}</h3>
-              <div className="mt-4 flex items-center gap-2 text-blue-600 font-bold text-xs">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Vendor Cost</p>
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{formatCurrency(stats.totalVendorCost)}</h3>
+              <div className="mt-4 flex items-center gap-2 text-rose-600 font-bold text-xs">
                 <Activity className="h-4 w-4" />
-                <span>Gross Billings</span>
+                <span>Accumulated Costs</span>
               </div>
             </Card>
 
@@ -239,14 +239,14 @@ export default function InvoicesDashboardPage() {
                   <CheckCircle className="h-6 w-6" />
                 </div>
                 <Badge className="bg-emerald-100 text-emerald-700 border-none font-bold">
-                    {stats.clearanceRate.toFixed(1)}% Rate
+                    {stats.settlementRate.toFixed(1)}% Rate
                 </Badge>
               </div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Clearance Rate</p>
-              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{formatCurrency(stats.received)}</h3>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Settled Amount</p>
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{formatCurrency(stats.settled)}</h3>
               <div className="mt-4 flex items-center gap-2 text-emerald-600 font-bold text-xs">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Total Received</span>
+                <span>Total Settled</span>
               </div>
             </Card>
 
@@ -260,7 +260,7 @@ export default function InvoicesDashboardPage() {
               <h3 className="text-3xl font-black text-slate-900 tracking-tight">{formatCurrency(stats.outstanding)}</h3>
               <div className="mt-4 flex items-center gap-2 text-amber-600 font-bold text-xs">
                 <Scale className="h-4 w-4" />
-                <span>Pending Liquidity</span>
+                <span>Pending Outflow</span>
               </div>
             </Card>
 
@@ -270,11 +270,11 @@ export default function InvoicesDashboardPage() {
                   <AlertTriangle className="h-6 w-6" />
                 </div>
               </div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Overdue Portfolio</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Overdue Liability</p>
               <h3 className="text-3xl font-black text-slate-900 tracking-tight">{formatCurrency(stats.overdue)}</h3>
               <div className="mt-4 flex items-center gap-2 text-rose-600 font-bold text-xs">
                 <Activity className="h-4 w-4" />
-                <span>Overdue Receivables</span>
+                <span>Overdue Payables</span>
               </div>
             </Card>
           </div>
@@ -308,7 +308,7 @@ export default function InvoicesDashboardPage() {
                     </Button>
                 </div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    {filteredInvoices.length} Invoices Found
+                    {filteredVendorInvoices.length} Bills Detected
                 </div>
             </div>
 
@@ -317,8 +317,8 @@ export default function InvoicesDashboardPage() {
                     <table className="w-full text-left">
                         <thead className="bg-slate-50/50 border-b border-slate-50">
                             <tr>
-                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Invoice ID</th>
-                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Customer</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Bill ID</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Vendor</th>
                                 <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Billed</th>
                                 <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Paid</th>
                                 <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Balance</th>
@@ -327,31 +327,31 @@ export default function InvoicesDashboardPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {filteredInvoices.length === 0 ? (
+                            {filteredVendorInvoices.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="px-8 py-16 text-center">
                                         <div className="flex flex-col items-center gap-2">
                                             <Wallet className="h-10 w-10 text-slate-200" />
-                                            <p className="text-slate-400 font-bold">No receivables found matching your criteria.</p>
+                                            <p className="text-slate-400 font-bold">No payables found matching your criteria.</p>
                                         </div>
                                     </td>
                                 </tr>
                             ) : (
-                                filteredInvoices.map((inv: any) => (
+                                filteredVendorInvoices.map((inv: any) => (
                                     <tr key={inv._id} className="group hover:bg-slate-50/50 transition-all border-slate-50">
                                         <td className="px-8 py-6">
                                             <div className="flex items-center gap-3">
                                                 <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
                                                     <ShieldCheck className="h-4 w-4" />
                                                 </div>
-                                                <span className="font-black text-slate-900">{inv.invoiceNo}</span>
+                                                <span className="font-black text-slate-900">{inv.vendorInvoiceNo}</span>
                                             </div>
                                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-1">
-                                                {new Date(inv.invoiceDate || inv.createdAt).toLocaleDateString()}
+                                                {new Date(inv.vendorInvoiceDate || inv.createdAt).toLocaleDateString()}
                                             </p>
                                         </td>
                                         <td className="px-8 py-6">
-                                            <p className="font-bold text-slate-700 truncate max-w-[150px]">{inv.customerDetails?.name || "Unknown"}</p>
+                                            <p className="font-bold text-slate-700 truncate max-w-[150px]">{inv.vendorDetails?.name || "Unknown"}</p>
                                             <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase">
                                                 {inv.jobReference || inv.jobId || "N/A"}
                                             </span>
@@ -359,7 +359,7 @@ export default function InvoicesDashboardPage() {
                                         <td className="px-8 py-6 text-right font-bold text-slate-900">
                                             {formatCurrency(inv.totals?.netAmount)}
                                         </td>
-                                        <td className="px-8 py-6 text-right font-bold text-emerald-600">
+                                        <td className="px-8 py-6 text-right font-bold text-rose-600">
                                             {formatCurrency(inv.amountPaid || (inv.status === "Paid" ? inv.totals?.netAmount : 0))}
                                         </td>
                                         <td className="px-8 py-6 text-right font-black text-rose-600">
@@ -381,7 +381,7 @@ export default function InvoicesDashboardPage() {
                                         <td className="px-8 py-6 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 {inv.status !== "Paid" && (
-                                                    <Button onClick={() => handleRecordPayment(inv)} variant="ghost" size="sm" className="h-9 px-3 rounded-xl text-blue-600 hover:bg-blue-50 font-black text-[9px] uppercase">
+                                                    <Button onClick={() => handleRecordPayment(inv)} variant="ghost" size="sm" className="h-9 px-3 rounded-xl text-rose-600 hover:bg-rose-50 font-black text-[9px] uppercase">
                                                         <PlusCircle className="w-3.5 h-3.5 mr-1.5" /> Settle
                                                     </Button>
                                                 )}
@@ -390,9 +390,6 @@ export default function InvoicesDashboardPage() {
                                                 </Button>
                                                 <Button onClick={() => handleDownload(inv)} variant="ghost" size="sm" className="h-9 w-9 p-0 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50">
                                                     <Download className="w-4 h-4" />
-                                                </Button>
-                                                <Button onClick={() => router.push(`/dashboard/invoices/edit/${inv.invoiceNo}`)} variant="ghost" size="sm" className="h-9 w-9 p-0 rounded-xl text-slate-400 hover:text-amber-600 hover:bg-amber-50">
-                                                    <Edit className="w-4 h-4" />
                                                 </Button>
                                             </div>
                                         </td>
@@ -411,7 +408,7 @@ export default function InvoicesDashboardPage() {
       <RecordPaymentModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={fetchInvoices}
+        onSuccess={fetchVendorInvoices}
         invoiceData={selectedInvoice}
       />
     </div>

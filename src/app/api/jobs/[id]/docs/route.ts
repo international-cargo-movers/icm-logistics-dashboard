@@ -8,10 +8,23 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         const { id } = await params;
         const body = await request.json();
 
+        // Update shippingDocuments sub-fields explicitly to avoid overwriting the whole object
+        const updateData: any = {};
+        if (body.awbDetails) {
+            for (const key in body.awbDetails) {
+                updateData[`shippingDocuments.awbDetails.${key}`] = body.awbDetails[key];
+            }
+        }
+        if (body.bolDetails) {
+            for (const key in body.bolDetails) {
+                updateData[`shippingDocuments.bolDetails.${key}`] = body.bolDetails[key];
+            }
+        }
+
         const updatedJob = await JobModel.findByIdAndUpdate(
             id,
-            { $set: { shippingDocuments: body } },
-            { returnDocument: 'after', runValidators: true }
+            { $set: updateData },
+            { new: true, runValidators: true }
         );
 
         return NextResponse.json({ success: true, data: updatedJob });

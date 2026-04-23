@@ -52,10 +52,10 @@ const styles = StyleSheet.create({
   footerBox: { padding: 4, minHeight: 60 }
 });
 
-export default function InvoicePDF({ data }: { data: any }) {
+export default function VendorInvoicePDF({ data }: { data: any }) {
   const lineItems = data.lineItems || [];
   const snapshot = data.shipmentSnapshot || {};
-  const cust = data.customerDetails || {};
+  const vendor = data.vendorDetails || {};
 
   // Group items by SAC for the HSN summary table at the bottom
   const hsnSummaryMap = lineItems.reduce((acc: any, item: any) => {
@@ -68,14 +68,15 @@ export default function InvoicePDF({ data }: { data: any }) {
     return acc;
   }, {});
   const hsnSummaryArray = Object.values(hsnSummaryMap);
-  console.log("Invoice PDF job reference: ",data.jobReference);
+  console.log("Vendor Invoice PDF job reference: ",data.jobReference);
+  
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.outerBorder}>
           
           {/* HEADER TITLE */}
-          <Text style={styles.headerTitle}>Tax Invoice</Text>
+          <Text style={styles.headerTitle}>Vendor Invoice</Text>
 
           {/* COMPANY HEADER */}
           <View style={[styles.rowBorderBottom, { padding: 8, justifyContent: 'center' }]}>
@@ -88,21 +89,21 @@ export default function InvoicePDF({ data }: { data: any }) {
             </View>
           </View>
 
-          {/* BILL TO & INVOICE META */}
+          {/* BILL TO VENDOR & INVOICE META */}
           <View style={styles.rowBorderBottom}>
-            {/* Left: Recipient */}
+            {/* Left: Vendor */}
             <View style={[styles.colBorderRight, styles.halfWidth]}>
-              <Text style={styles.boldText}>Recipient / Bill To:</Text>
-              <Text style={[styles.boldText, { fontSize: 9, marginTop: 4 }]}>{cust.name?.toUpperCase()}</Text>
-              <Text style={{ marginTop: 2 }}>{cust.billingAddress}</Text>
-              <Text style={{ marginTop: 4 }}><Text style={styles.boldText}>GSTIN/UIN:</Text> {cust.gstin || "URD"}</Text>
-              <Text><Text style={styles.boldText}>State Name & Code:</Text> {cust.stateCode || "07"}</Text>
+              <Text style={styles.boldText}>Bill To / Vendor:</Text>
+              <Text style={[styles.boldText, { fontSize: 9, marginTop: 4 }]}>{vendor.name?.toUpperCase()}</Text>
+              <Text style={{ marginTop: 2 }}>{vendor.billingAddress}</Text>
+              <Text style={{ marginTop: 4 }}><Text style={styles.boldText}>GSTIN/UIN:</Text> {vendor.gstin || "URD"}</Text>
+              <Text><Text style={styles.boldText}>State Name & Code:</Text> {vendor.stateCode || "07"}</Text>
             </View>
 
             {/* Right: Invoice Meta */}
             <View style={[styles.colNoBorder, styles.halfWidth]}>
-              <View style={styles.flexRow}><Text style={styles.metaLabel}>Tax Invoice No:</Text><Text style={[styles.metaValue, styles.boldText]}>{data.invoiceNo}</Text></View>
-              <View style={styles.flexRow}><Text style={styles.metaLabel}>Invoice Date:</Text><Text style={styles.metaValue}>{new Date(data.invoiceDate).toLocaleDateString()}</Text></View>
+              <View style={styles.flexRow}><Text style={styles.metaLabel}>Vendor Invoice No:</Text><Text style={[styles.metaValue, styles.boldText]}>{data.vendorInvoiceNo}</Text></View>
+              <View style={styles.flexRow}><Text style={styles.metaLabel}>Invoice Date:</Text><Text style={styles.metaValue}>{new Date(data.vendorInvoiceDate).toLocaleDateString()}</Text></View>
               <View style={styles.flexRow}><Text style={styles.metaLabel}>Job No:</Text><Text style={styles.metaValue}>{data.jobReference}</Text></View>
               <View style={styles.flexRow}><Text style={styles.metaLabel}>OBL / MAWB No:</Text><Text style={styles.metaValue}>{snapshot.oblMawb || "—"}</Text></View>
               <View style={styles.flexRow}><Text style={styles.metaLabel}>HBL / HAWB No:</Text><Text style={styles.metaValue}>{snapshot.hblHawb || "—"}</Text></View>
@@ -225,7 +226,7 @@ export default function InvoicePDF({ data }: { data: any }) {
           {/* NET AMOUNT & WORDS */}
           <View style={[styles.rowBorderBottom, { padding: 4, backgroundColor: '#f0f0f0' }]}>
             <Text style={{ width: '70%' }}><Text style={styles.boldText}>Amount in Words:</Text> {data.totals?.amountInWords}</Text>
-            <Text style={[{ width: '30%', textAlign: 'right', fontSize: 10 }, styles.boldText]}>Net Amount: INR{data.totals?.netAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+            <Text style={[{ width: '30%', textAlign: 'right', fontSize: 10 }, styles.boldText]}>Net Amount: INR {data.totals?.netAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
           </View>
 
           {/* BANK DETAILS */}

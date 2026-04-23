@@ -9,22 +9,22 @@ import {
     Calendar, 
     Clock, 
     CheckCircle2, 
-    TrendingUp, 
+    TrendingDown, 
     Scale, 
     AlertTriangle, 
     Activity,
     Download,
     ShieldCheck,
-    ArrowUpRight,
+    ArrowDownRight,
     PlusCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import RecordPaymentModal from "./RecordPaymentModal";
 
-export default function CompanyLedger({ companyId }: { companyId: string }) {
+export default function VendorLedger({ companyId }: { companyId: string }) {
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    
+
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -32,14 +32,14 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
     const fetchLedger = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/companies/${companyId}/ledger`);
+            const res = await fetch(`/api/companies/${companyId}/vendor-ledger`);
             const json = await res.json();
             if (json.success) {
                 setInvoices(json.data);
             }
         } catch (error) {
-            console.error("Failed to fetch invoices", error);
-            toast.error("Failed to sync ledger data.");
+            console.error("Failed to fetch vendor invoices", error);
+            toast.error("Failed to sync vendor ledger data.");
         } finally {
             setLoading(false);
         }
@@ -63,7 +63,7 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
             invoiceNo: inv.reference,
             totalAmount: inv.amount,
             balanceDue: inv.balanceDue ?? (inv.status === "Paid" ? 0 : inv.amount),
-            type: "Customer"
+            type: "Vendor"
         });
         setIsModalOpen(true);
     };
@@ -83,8 +83,8 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
     if (loading) {
         return (
             <div className="py-20 flex flex-col items-center justify-center gap-4">
-                <Activity className="h-10 w-10 text-blue-600 animate-spin" />
-                <p className="text-slate-400 font-bold animate-pulse uppercase text-[10px] tracking-widest">Compiling Financial Statement...</p>
+                <Activity className="h-10 w-10 text-rose-600 animate-spin" />
+                <p className="text-slate-400 font-bold animate-pulse uppercase text-[10px] tracking-widest">Compiling Liability Statement...</p>
             </div>
         );
     }
@@ -95,11 +95,11 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
             {/* Ledger KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white group hover:translate-y-[-4px] transition-all">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Lifetime Invoiced</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Lifetime Payables</p>
                     <h3 className="text-3xl font-black text-slate-900 tracking-tight">{formatCurrency(stats.total)}</h3>
-                    <div className="mt-4 flex items-center gap-2 text-blue-600 font-bold text-xs">
-                        <TrendingUp className="h-4 w-4" />
-                        <span>Gross Exposure</span>
+                    <div className="mt-4 flex items-center gap-2 text-rose-600 font-bold text-xs">
+                        <TrendingDown className="h-4 w-4" />
+                        <span>Gross Liability</span>
                     </div>
                 </Card>
 
@@ -108,16 +108,16 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
                     <h3 className="text-3xl font-black text-slate-900 tracking-tight">{formatCurrency(stats.settled)}</h3>
                     <div className="mt-4 flex items-center gap-2 text-emerald-600 font-bold text-xs">
                         <ShieldCheck className="h-4 w-4" />
-                        <span>{stats.rate.toFixed(1)}% Recovery Rate</span>
+                        <span>{stats.rate.toFixed(1)}% Settlement Rate</span>
                     </div>
                 </Card>
 
-                <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-blue-600 group hover:translate-y-[-4px] transition-all">
+                <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-rose-600 group hover:translate-y-[-4px] transition-all">
                     <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">Account Balance</p>
                     <h3 className="text-3xl font-black text-white tracking-tight">{formatCurrency(stats.outstanding)}</h3>
                     <div className="mt-4 flex items-center gap-2 text-white/80 font-bold text-xs">
                         <Scale className="h-4 w-4" />
-                        <span>Current Dues</span>
+                        <span>Outstanding Dues</span>
                     </div>
                 </Card>
             </div>
@@ -126,11 +126,11 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
             <div className="space-y-6">
                 <div className="flex items-center justify-between px-2">
                     <div>
-                        <h3 className="text-xl font-black text-slate-800 tracking-tight">Audit Trail</h3>
-                        <p className="text-slate-400 text-sm font-medium">Detailed transaction logs and settlements</p>
+                        <h3 className="text-xl font-black text-slate-800 tracking-tight">Supply Partner Trail</h3>
+                        <p className="text-slate-400 text-sm font-medium">Detailed billings and disbursement logs</p>
                     </div>
                     <Button variant="outline" className="rounded-2xl border-slate-200 font-bold text-xs h-11 px-6 hover:bg-white shadow-sm">
-                        <Download className="w-4 h-4 mr-2 text-blue-600" /> Export Statement
+                        <Download className="w-4 h-4 mr-2 text-rose-600" /> Export Statement
                     </Button>
                 </div>
 
@@ -140,7 +140,7 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
                             <TableHeader className="bg-slate-50/50 border-b border-slate-50">
                                 <TableRow className="hover:bg-transparent border-slate-50">
                                     <TableHead className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Date</TableHead>
-                                    <TableHead className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Reference</TableHead>
+                                    <TableHead className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Bill Ref</TableHead>
                                     <TableHead className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Billed</TableHead>
                                     <TableHead className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Paid</TableHead>
                                     <TableHead className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Balance</TableHead>
@@ -154,7 +154,7 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
                                         <TableCell colSpan={7} className="text-center py-20">
                                             <div className="flex flex-col items-center gap-2">
                                                 <Scale className="h-10 w-10 text-slate-200" />
-                                                <p className="text-slate-400 font-bold">No financial records detected for this account.</p>
+                                                <p className="text-slate-400 font-bold">No financial records detected for this supply partner.</p>
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -165,7 +165,7 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
                                                 <div className="flex items-center gap-3">
                                                     <div className={`p-2 rounded-lg transition-colors ${
                                                         inv.type === 'Invoice' 
-                                                            ? 'bg-slate-100 group-hover:bg-blue-600 group-hover:text-white' 
+                                                            ? 'bg-slate-100 group-hover:bg-rose-600 group-hover:text-white' 
                                                             : 'bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white text-emerald-600'
                                                     }`}>
                                                         {inv.type === 'Invoice' ? <Calendar className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -176,14 +176,14 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
                                             <td className="px-8 py-6">
                                                 <div className="flex flex-col">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="font-black text-slate-900 group-hover:text-blue-600 transition-colors">{inv.reference}</span>
+                                                        <span className="font-black text-slate-900 group-hover:text-rose-600 transition-colors">{inv.reference}</span>
                                                         <Badge variant="outline" className={`text-[8px] font-black uppercase px-2 py-0 border-none ${
-                                                            inv.type === 'Invoice' ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'
+                                                            inv.type === 'Invoice' ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
                                                         }`}>
                                                             {inv.type}
                                                         </Badge>
                                                     </div>
-                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-1">{inv.notes || "Standard Transaction"}</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-1">{inv.notes || "Standard Supply Bill"}</p>
                                                 </div>
                                             </td>
                                             <td className="px-8 py-6 text-right">
@@ -218,9 +218,9 @@ export default function CompanyLedger({ companyId }: { companyId: string }) {
                                                         onClick={() => handleRecordPayment(inv)}
                                                         variant="ghost" 
                                                         size="sm" 
-                                                        className="h-10 px-4 rounded-xl text-blue-600 font-black text-[10px] uppercase hover:bg-blue-50"
+                                                        className="h-10 px-4 rounded-xl text-rose-600 font-black text-[10px] uppercase hover:bg-rose-50"
                                                     >
-                                                        <PlusCircle className="w-3.5 h-3.5 mr-2" /> Record Payment
+                                                        <PlusCircle className="w-3.5 h-3.5 mr-2" /> Record Settlement
                                                     </Button>
                                                 )}
                                                 {(inv.status === "Paid" || inv.status === "Cleared") && (

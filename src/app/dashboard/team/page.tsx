@@ -2,15 +2,34 @@
 
 import * as React from "react"
 import { useSession } from "next-auth/react"
-import { Shield, Plus, UserPlus, Mail, Lock } from "lucide-react"
+import { 
+    Shield, 
+    Plus, 
+    UserPlus, 
+    Mail, 
+    Lock, 
+    Activity, 
+    UsersRound, 
+    ShieldCheck, 
+    Scale, 
+    Briefcase,
+    ChevronRight,
+    X,
+    User
+} from "lucide-react"
 import { toast } from "sonner"
+import Sidebar from "@/components/dashboard/Sidebar"
+import TopNav from "@/components/dashboard/TopNav"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 export default function TeamManagementPage() {
   const { data: session } = useSession()
   const [users, setUsers] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   
-  // New User Form State
   const [showAddForm, setShowAddForm] = React.useState(false)
   const [formData, setFormData] = React.useState({
     firstName: "", lastName: "", email: "", password: "", role: "Operations"
@@ -28,13 +47,20 @@ export default function TeamManagementPage() {
         setIsLoading(false)
       }
     }
-    // Only fetch if they are a SuperAdmin
     if (session?.user?.role === "SuperAdmin") {
       fetchUsers()
     } else {
       setIsLoading(false)
     }
   }, [session])
+
+  const stats = React.useMemo(() => {
+    const total = users.length;
+    const admins = users.filter(u => u.role === "SuperAdmin").length;
+    const ops = users.filter(u => u.role === "Operations").length;
+    const finance = users.filter(u => u.role === "Finance").length;
+    return { total, admins, ops, finance };
+  }, [users]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,126 +87,277 @@ export default function TeamManagementPage() {
     }
   }
 
-  // Security Gate: If they aren't a SuperAdmin, kick them out of this specific view
   if (session?.user?.role !== "SuperAdmin") {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-screen text-center px-6">
-        <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
-        <p className="text-slate-500 max-w-md">Your current role ({session?.user?.role || 'Unknown'}) does not have clearance to view or modify team architecture.</p>
+      <div className="bg-[#F8FAFC] min-h-screen">
+        <Sidebar />
+        <main className="pl-64 flex flex-col items-center justify-center min-h-screen text-center p-12">
+            <div className="p-10 bg-white rounded-[40px] shadow-2xl shadow-slate-200/50 mb-8 border border-slate-50">
+                <Shield className="h-16 w-16 text-rose-600 opacity-20" />
+            </div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-4">Restricted Architecture</h1>
+            <p className="text-slate-500 max-w-md font-medium text-lg leading-relaxed">
+                Your current authorization level (<span className="text-rose-600 font-bold">{session?.user?.role || 'Viewer'}</span>) does not have clearance to view or modify team architecture.
+            </p>
+            <Button onClick={() => window.history.back()} variant="ghost" className="mt-8 text-blue-600 font-bold hover:bg-blue-50">
+                Return to Dashboard
+            </Button>
+        </main>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-12 py-12 bg-slate-50 text-slate-900 font-sans min-h-screen">
-      <div className="max-w-6xl mx-auto space-y-8">
-        
-        <div className="flex justify-between items-end">
-          <div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">Team Architecture</h1>
-            <p className="text-slate-500 text-lg mt-1">Provision accounts and manage Role-Based Access Control.</p>
-          </div>
-          <button 
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="px-6 py-3 bg-black text-white rounded-lg font-bold flex items-center gap-2 hover:bg-slate-800 transition-all shadow-md"
-          >
-            {showAddForm ? "Cancel" : <><UserPlus className="w-4 h-4" /> Provision Employee</>}
-          </button>
-        </div>
+    <div className="bg-[#F8FAFC] text-slate-900 antialiased font-body min-h-screen">
+      <Sidebar />
 
-        {/* PROVISIONING FORM */}
-        {showAddForm && (
-          <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-4">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-6">New Account Details</h2>
-            <form onSubmit={handleCreateUser} className="grid grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-600">First Name</label>
-                <input required type="text" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="w-full bg-slate-50 border-none rounded-lg h-11 px-4 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-600">Last Name</label>
-                <input required type="text" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="w-full bg-slate-50 border-none rounded-lg h-11 px-4 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-600">Work Email</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border-none rounded-lg h-11 pl-10 pr-4 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-600">Temporary Password</label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input required type="text" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="Give this to the employee" className="w-full bg-slate-50 border-none rounded-lg h-11 pl-10 pr-4 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
-                </div>
-              </div>
-              <div className="space-y-2 col-span-2">
-                <label className="text-xs font-bold text-slate-600 block mb-2">Access Role Level</label>
-                <div className="flex gap-4">
-                  {["SuperAdmin", "Finance", "Operations", "Sales", "Viewer"].map(role => (
-                    <button 
-                      key={role} type="button" 
-                      onClick={() => setFormData({...formData, role})}
-                      className={`flex-1 py-3 text-sm font-bold rounded-lg border transition-all ${formData.role === role ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
-                    >
-                      {role}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="col-span-2 flex justify-end pt-4 border-t border-slate-100">
-                <button type="submit" className="px-8 py-3 bg-blue-600 text-white rounded-lg font-bold shadow-md shadow-blue-600/20 hover:bg-blue-700 transition-all">
-                  Create Account
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
+      <main className="min-h-screen flex flex-col">
+        <TopNav searchTerm="" onSearchChange={() => {}} />
 
-        {/* TEAM DIRECTORY TABLE */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Employee</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email Address</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">System Role</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {isLoading ? (
-                <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-medium">Loading directory...</td></tr>
-              ) : users.map(user => (
-                <tr key={user._id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-slate-900">{user.firstName} {user.lastName}</div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">{user.email}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                      user.role === 'SuperAdmin' ? 'bg-purple-100 text-purple-700' :
-                      user.role === 'Finance' ? 'bg-emerald-100 text-emerald-700' :
-                      user.role === 'Operations' ? 'bg-blue-100 text-blue-700' :
-                      'bg-slate-100 text-slate-700'
-                    }`}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${user.isActive ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                      <span className="text-xs font-bold text-slate-500">{user.isActive ? 'Active' : 'Suspended'}</span>
+        <div className="pt-24 px-8 lg:px-12 pb-12 space-y-12">
+          
+          {/* Header */}
+          <div className="flex flex-col md:flex-row justify-between items-end gap-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="h-1 w-8 bg-blue-600 rounded-full"></span>
+                <span className="text-[10px] font-black tracking-[0.3em] text-blue-600 uppercase">
+                    Security & Access
+                </span>
+              </div>
+              <h2 className="text-5xl font-black text-slate-900 tracking-tighter mb-4 leading-none">
+                Team Architecture
+              </h2>
+              <p className="text-slate-500 text-lg font-medium">
+                Managing access controls for <span className="text-blue-600 font-bold">{stats.total}</span> active system users.
+              </p>
+            </div>
+
+            <Button 
+              onClick={() => setShowAddForm(!showAddForm)} 
+              className={`group flex items-center gap-3 px-8 py-7 rounded-2xl font-bold shadow-2xl transition-all border-none ${showAddForm ? 'bg-slate-200 text-slate-600' : 'bg-blue-600 text-white shadow-blue-500/20 hover:scale-[1.02] hover:bg-blue-700'}`}
+            >
+              {showAddForm ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+              {showAddForm ? "Cancel Provisioning" : "Provision Employee"}
+            </Button>
+          </div>
+
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white group hover:translate-y-[-4px] transition-all">
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  <UsersRound className="h-6 w-6" />
+                </div>
+                <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-none font-bold">
+                    Staff
+                </Badge>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Employees</p>
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stats.total} <span className="text-sm text-slate-400">Users</span></h3>
+              <div className="mt-4 flex items-center gap-2 text-blue-600 font-bold text-xs">
+                <Activity className="h-4 w-4" />
+                <span>Active Directory</span>
+              </div>
+            </Card>
+
+            <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white group hover:translate-y-[-4px] transition-all">
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                  <ShieldCheck className="h-6 w-6" />
+                </div>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Super Admins</p>
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stats.admins} <span className="text-sm text-slate-400">Root</span></h3>
+              <div className="mt-4 flex items-center gap-2 text-indigo-600 font-bold text-xs">
+                <Shield className="h-4 w-4" />
+                <span>System Controllers</span>
+              </div>
+            </Card>
+
+            <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white group hover:translate-y-[-4px] transition-all">
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                  <Scale className="h-6 w-6" />
+                </div>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Finance Unit</p>
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stats.finance} <span className="text-sm text-slate-400">Accountants</span></h3>
+              <div className="mt-4 flex items-center gap-2 text-emerald-600 font-bold text-xs">
+                <ShieldCheck className="h-4 w-4" />
+                <span>Financial Clearance</span>
+              </div>
+            </Card>
+
+            <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white group hover:translate-y-[-4px] transition-all">
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 bg-amber-50 rounded-2xl text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                  <Briefcase className="h-6 w-6" />
+                </div>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Ops Command</p>
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stats.ops} <span className="text-sm text-slate-400">Coordinators</span></h3>
+              <div className="mt-4 flex items-center gap-2 text-amber-600 font-bold text-xs">
+                <Activity className="h-4 w-4" />
+                <span>Freight Logistics</span>
+              </div>
+            </Card>
+          </div>
+
+          {/* PROVISIONING FORM */}
+          {showAddForm && (
+            <Card className="border-none shadow-2xl shadow-blue-500/10 bg-white rounded-[40px] overflow-hidden animate-in fade-in slide-in-from-top-6 duration-500">
+                <div className="p-10 border-b border-slate-50 bg-slate-50/30">
+                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-2">New Node Deployment</p>
+                    <h3 className="text-3xl font-black text-slate-900 tracking-tighter">Provision New Account</h3>
+                </div>
+                <form onSubmit={handleCreateUser} className="p-10 space-y-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">First Name</label>
+                            <Input 
+                                required value={formData.firstName} 
+                                onChange={e => setFormData({...formData, firstName: e.target.value})} 
+                                className="bg-slate-50 border-none rounded-2xl py-6 font-bold focus-visible:ring-blue-600"
+                                placeholder="John"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Last Name</label>
+                            <Input 
+                                required value={formData.lastName} 
+                                onChange={e => setFormData({...formData, lastName: e.target.value})} 
+                                className="bg-slate-50 border-none rounded-2xl py-6 font-bold focus-visible:ring-blue-600"
+                                placeholder="Doe"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Enterprise Email</label>
+                            <div className="relative">
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <Input 
+                                    required type="email" value={formData.email} 
+                                    onChange={e => setFormData({...formData, email: e.target.value})} 
+                                    className="bg-slate-50 border-none rounded-2xl py-6 pl-12 font-bold focus-visible:ring-blue-600"
+                                    placeholder="john.doe@company.com"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Temporary Access Key</label>
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <Input 
+                                    required value={formData.password} 
+                                    onChange={e => setFormData({...formData, password: e.target.value})} 
+                                    className="bg-slate-50 border-none rounded-2xl py-6 pl-12 font-bold focus-visible:ring-blue-600"
+                                    placeholder="Temp Password"
+                                />
+                            </div>
+                        </div>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+                    <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Access Authorization Level</label>
+                        <div className="flex flex-wrap gap-4">
+                            {["SuperAdmin", "Finance", "Operations", "Sales", "Viewer"].map(role => (
+                                <button 
+                                    key={role} type="button" 
+                                    onClick={() => setFormData({...formData, role})}
+                                    className={`px-6 py-3 text-xs font-black uppercase tracking-tighter rounded-xl transition-all border ${
+                                        formData.role === role 
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20' 
+                                            : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    {role}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="pt-8 border-t border-slate-50 flex justify-end">
+                        <Button type="submit" className="px-12 py-7 bg-blue-600 text-white rounded-2xl font-black shadow-2xl shadow-blue-500/20 hover:bg-blue-700 transition-all border-none">
+                            Deploy New Account
+                        </Button>
+                    </div>
+                </form>
+            </Card>
+          )}
+
+          {/* TEAM DIRECTORY TABLE */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between px-2">
+                <div>
+                    <h3 className="text-2xl font-black text-slate-800 tracking-tight">Access Directory</h3>
+                    <p className="text-slate-400 font-medium">Monitoring system engagement and role compliance</p>
+                </div>
+                <Badge variant="outline" className="border-slate-200 text-slate-400 font-black uppercase text-[10px] px-4 py-1.5">
+                    Live Authorization Sync
+                </Badge>
+            </div>
+
+            <Card className="border-none shadow-2xl shadow-slate-200/50 bg-white overflow-hidden rounded-[40px]">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-50/50 border-b border-slate-50">
+                            <tr>
+                                <th className="px-10 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Employee Identity</th>
+                                <th className="px-10 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Communications</th>
+                                <th className="px-10 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">System Permission</th>
+                                <th className="px-10 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Status Hub</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {isLoading ? (
+                                <tr><td colSpan={4} className="p-20 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">Syncing Directory...</td></tr>
+                            ) : users.map(user => (
+                                <tr key={user._id} className="group hover:bg-slate-50/50 transition-all border-slate-50">
+                                    <td className="px-10 py-7">
+                                        <div className="flex items-center gap-4">
+                                            <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                <User className="h-6 w-6" />
+                                            </div>
+                                            <div>
+                                                <p className="font-black text-slate-900 text-lg tracking-tight">{user.firstName} {user.lastName}</p>
+                                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter mt-1">Direct Staff</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-10 py-7">
+                                        <p className="font-bold text-slate-700">{user.email}</p>
+                                        <div className="flex items-center gap-1 text-[10px] text-blue-600 font-black uppercase tracking-tighter mt-1">
+                                            <Mail className="h-3 w-3" /> Professional Mail
+                                        </div>
+                                    </td>
+                                    <td className="px-10 py-7">
+                                        <Badge className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border-none ${
+                                            user.role === 'SuperAdmin' ? 'bg-indigo-50 text-indigo-700' :
+                                            user.role === 'Finance' ? 'bg-emerald-50 text-emerald-700' :
+                                            user.role === 'Operations' ? 'bg-blue-50 text-blue-700' :
+                                            'bg-slate-100 text-slate-600'
+                                        }`}>
+                                            {user.role} Access
+                                        </Badge>
+                                    </td>
+                                    <td className="px-10 py-7 text-right">
+                                        <div className="inline-flex items-center gap-3 bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100 group-hover:border-blue-100 group-hover:bg-blue-50/30 transition-all">
+                                            <div className={`h-2 w-2 rounded-full animate-pulse ${user.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                            <span className={`text-[10px] font-black uppercase tracking-widest ${user.isActive ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                                {user.isActive ? 'Live' : 'Locked'}
+                                            </span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+          </div>
+
         </div>
-      </div>
+      </main>
     </div>
   )
 }
