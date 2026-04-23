@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import InvoiceModel from "@/model/InvoiceModel";
+import { getTenantModels } from "@/model/tenantModels";
 
 export async function PATCH(
     request: Request, 
@@ -8,11 +8,12 @@ export async function PATCH(
 ) {
     try {
         await dbConnect();
+        const { Invoice } = await getTenantModels();
         const { invoiceId } = await params;
         const { status } = await request.json();
 
         // Ensure we only update the status field and nothing else
-        const updatedInvoice = await InvoiceModel.findByIdAndUpdate(
+        const updatedInvoice = await Invoice.findByIdAndUpdate(
             invoiceId,
             { $set: { status: status } },
             { new: true, runValidators: true }

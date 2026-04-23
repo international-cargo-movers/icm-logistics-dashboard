@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import CompanyModel from "@/model/CompanyModel";
+import { getTenantModels } from "@/model/tenantModels";
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         await dbConnect();
+        const { Company } = await getTenantModels();
         const body = await request.json();
 
         // 1. Prepare the update payload
@@ -16,7 +17,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             delete updatePayload.email; // Clean up the invalid key
         }
         const resolvedParams = await params;
-        const updatedCompany = await CompanyModel.findByIdAndUpdate(
+        const updatedCompany = await Company.findByIdAndUpdate(
              resolvedParams.id,
             { $set: updatePayload },
             { new: true, runValidators: true }

@@ -139,8 +139,29 @@ export default function SmartVendorInvoiceGenerator() {
         setValue("origin", job.shipmentDetails?.portOfLoading || "TBD")
         setValue("destination", job.shipmentDetails?.portOfDischarge || "TBD")
         setValue("commodity", job.cargoDetails?.commodity || "General Cargo")
-        setValue("grossWeight", job.cargoDetails?.grossWeight || 0)
-        setValue("noOfPackages", job.cargoDetails?.noOfPackages || 0)
+        
+        // Pull cargo totals
+        const gw = Number(job.cargoDetails?.totalGrossWeight || 0)
+        const vw = Number(job.cargoDetails?.totalVolumetricWeight || 0)
+        const pkgs = Number(job.cargoDetails?.totalNoOfPackages || 0)
+        
+        setValue("grossWeight", gw)
+        setValue("volumetricWeight", vw)
+        setValue("noOfPackages", pkgs)
+        
+        // Calculate Chargeable Weight (Max of GW and VW)
+        setValue("chargeableWeight", Math.max(gw, vw))
+
+        // Pull Shipping Document details
+        const hawb = job.shippingDocuments?.awbDetails?.hawbNumber || ""
+        const mawb = (job.shippingDocuments?.awbDetails?.awbPrefix && job.shippingDocuments?.awbDetails?.awbSerialNumber) 
+            ? `${job.shippingDocuments.awbDetails.awbPrefix}-${job.shippingDocuments.awbDetails.awbSerialNumber}` 
+            : (job.shippingDocuments?.bolDetails?.bolNumber || "")
+
+        setValue("hblHawb", hawb)
+        setValue("oblMawb", mawb)
+        setValue("vesselFlight", job.cargoDetails?.carrier || "")
+        setValue("containerNo", job.shippingDocuments?.bolDetails?.bookingReference || "")
 
         if (job.quoteReference) {
             toast.message(`Fetching Vendor Financials from Quote: ${job.quoteReference}`)

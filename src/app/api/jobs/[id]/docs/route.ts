@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import JobModel from "@/model/JobModel";
+import { getTenantModels } from "@/model/tenantModels";
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         await dbConnect();
+        const { Job } = await getTenantModels();
         const { id } = await params;
         const body = await request.json();
 
@@ -21,7 +22,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             }
         }
 
-        const updatedJob = await JobModel.findByIdAndUpdate(
+        const updatedJob = await Job.findByIdAndUpdate(
             id,
             { $set: updateData },
             { new: true, runValidators: true }

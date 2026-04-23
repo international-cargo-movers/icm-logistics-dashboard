@@ -3,13 +3,19 @@ import { NextResponse } from "next/server";
 
 export default withAuth(
   function middleware(req) {
-    // You can add advanced Role-Based Routing here later!
-    // For example: if (req.nextauth.token.role === 'Viewer' && req.nextUrl.pathname.includes('/new')) return blocked;
+    const token = req.nextauth.token;
+    const isAuth = !!token;
+    const isSelectCompanyPage = req.nextUrl.pathname === "/select-company";
+    const hasTenantId = req.cookies.has("tenant-id");
+
+    if (isAuth && !hasTenantId && !isSelectCompanyPage) {
+      return NextResponse.redirect(new URL("/select-company", req.url));
+    }
+
     return NextResponse.next();
   },
   {
     callbacks: {
-      // This simple line checks: "Does this user have a valid NextAuth token?"
       authorized: ({ token }) => !!token,
     },
   }

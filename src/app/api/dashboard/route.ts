@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import JobModel from "@/model/JobModel";
-import InvoiceModel from "@/model/InvoiceModel";
-import VendorInvoiceModel from "@/model/VendorInvoiceModel";
-import "@/model/CompanyModel"; // Force register Company schema for populate
+import { getTenantModels } from "@/model/tenantModels";
 
 export async function GET() {
     try {
         await dbConnect();
+        const { Job, Invoice, VendorInvoice } = await getTenantModels();
         
         // Fetch all data needed for aggregations
-        const jobs = await JobModel.find({}).populate("customerDetails.companyId", "name").lean();
-        const customerInvoices = await InvoiceModel.find({}).lean();
-        const vendorInvoices = await VendorInvoiceModel.find({}).lean();
+        const jobs = await Job.find({}).populate("customerDetails.companyId", "name").lean();
+        const customerInvoices = await Invoice.find({}).lean();
+        const vendorInvoices = await VendorInvoice.find({}).lean();
 
         // 1. Basic Stats
         const totalJobs = jobs.length;

@@ -10,7 +10,7 @@ export interface IUser extends Document {
   lastLogin: Date;
 }
 
-const UserSchema = new Schema<IUser>({
+export const UserSchema = new Schema<IUser>({
   email: { type: String, required: true, unique: true },
   passwordHash: { type: String, required: true },
   firstName: { type: String, required: true },

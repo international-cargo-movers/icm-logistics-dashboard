@@ -54,7 +54,7 @@ export default function QuotePDF({ data }: { data: any }) {
 
   // Construct dynamic banner title based on routing data
   const modeText = data.mode ? data.mode.toUpperCase() : "FREIGHT";
-  const weightText = cargo.estimatedWeight ? cargo.estimatedWeight.toUpperCase() : "";
+  const weightText = cargo.totalGrossWeight ? `${cargo.totalGrossWeight} KG` : "";
   const pol = data.originPort ? data.originPort.toUpperCase() : "ORIGIN";
   const pod = data.destinationPort ? data.destinationPort.toUpperCase() : "DEST";
   const dynamicTitle = `QUOTE FOR ${modeText} ${weightText} - ${pol} - ${pod} (PORT TO PORT)`;
@@ -119,15 +119,39 @@ export default function QuotePDF({ data }: { data: any }) {
                     <Text style={styles.infoValue}>{cargo.commodity || "General Cargo"}</Text>
                 </View>
                 <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Volume/Eq:</Text>
+                    <Text style={styles.infoLabel}>Equipment:</Text>
                     <Text style={styles.infoValue}>{cargo.equipment || "TBD"}</Text>
                 </View>
                 <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Est. Weight:</Text>
-                    <Text style={styles.infoValue}>{cargo.estimatedWeight || "TBD"}</Text>
+                    <Text style={styles.infoLabel}>Total Pkgs:</Text>
+                    <Text style={styles.infoValue}>{cargo.totalNoOfPackages || cargo.items?.reduce((a: any, b: any) => a + (Number(b.noOfPackages) || 0), 0) || 0}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Total Weight:</Text>
+                    <Text style={styles.infoValue}>{cargo.totalGrossWeight || cargo.items?.reduce((a: any, b: any) => a + (Number(b.grossWeight) || 0), 0) || 0} kg</Text>
                 </View>
             </View>
         </View>
+
+        {/* CARGO ITEMS TABLE (If multiple items exist) */}
+        {cargo.items && cargo.items.length > 0 && (
+          <View style={[styles.table, { marginBottom: 10 }]}>
+            <View style={[styles.tableHeader, { backgroundColor: '#f0f4f8' }]}>
+              <Text style={{ width: '40%', padding: 4 }}>Description</Text>
+              <Text style={{ width: '20%', padding: 4, textAlign: 'center' }}>Pkgs</Text>
+              <Text style={{ width: '20%', padding: 4, textAlign: 'center' }}>Gross Wt</Text>
+              <Text style={{ width: '20%', padding: 4, textAlign: 'center' }}>Vol Wt</Text>
+            </View>
+            {cargo.items.map((item: any, i: number) => (
+              <View key={i} style={styles.tableRow}>
+                <Text style={{ width: '40%' }}>{item.description || '-'}</Text>
+                <Text style={{ width: '20%', textAlign: 'center' }}>{item.noOfPackages || 0}</Text>
+                <Text style={{ width: '20%', textAlign: 'center' }}>{item.grossWeight || 0} kg</Text>
+                <Text style={{ width: '20%', textAlign: 'center' }}>{item.volumetricWeight || 0} kg</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* DYNAMIC YELLOW BANNER */}
         <View style={styles.quoteBanner}>

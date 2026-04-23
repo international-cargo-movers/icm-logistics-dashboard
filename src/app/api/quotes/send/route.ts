@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
-import QuoteModel from '@/model/QuoteModel';
+import { getTenantModels } from '@/model/tenantModels';
 import nodemailer from "nodemailer";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Ensure this matches your path!
@@ -8,6 +8,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Ensure this
 export async function POST(request: Request) {
     try {
         await dbConnect();
+        const { Quote } = await getTenantModels();
 
         // --- THE SERVER LOCK ---
         const session = await getServerSession(authOptions);
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
         }
 
         // 1. Map the frontend data to our strict MongoDB Schema
-        const newQuote = await QuoteModel.create({
+        const newQuote = await Quote.create({
             quoteId: quoteData.quoteRef,
             customerDetails: {
                 companyId: quoteData.customerId,
@@ -49,7 +50,15 @@ export async function POST(request: Request) {
             cargoSummary: {
                 commodity: quoteData.cargoSummary?.commodity || "General Cargo",
                 equipment: quoteData.cargoSummary?.equipment,
-                estimatedWeight: quoteData.cargoSummary?.estimatedWeight
+                items: quoteData.cargoSummary?.items?.map((item: any) => ({
+                    description: item.description,
+                    noOfPackages: Number(item.noOfPackages) || 0,
+                    grossWeight: Number(item.grossWeight) || 0,
+                    volumetricWeight: Number(item.volumetricWeight) || 0,
+                })) || [],
+                totalNoOfPackages: Number(quoteData.totalNoOfPackages) || 0,
+                totalGrossWeight: Number(quoteData.totalGrossWeight) || 0,
+                totalVolumetricWeight: Number(quoteData.totalVolumetricWeight) || 0,
             },
             validity: {
                 issueDate: new Date(),

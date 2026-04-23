@@ -1,9 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import dbConnect from "@/lib/mongodb"
-import JobModel from "@/model/JobModel"
-import InvoiceModel from "@/model/InvoiceModel"
-import VendorInvoiceModel from "@/model/VendorInvoiceModel"
+import { getTenantModels } from "@/model/tenantModels"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -22,16 +20,17 @@ import {
 
 export default async function ReconciliationPage({ params }: { params: { jobId: string } }) {
     await dbConnect();
+    const { Job, Invoice, VendorInvoice } = await getTenantModels();
     const { jobId } = await params;
 
-    const job = await JobModel.findOne({ jobId: jobId }).lean();
+    const job = await Job.findOne({ jobId: jobId }).lean();
     if (!job) return notFound();
 
     // Fetch all customer invoices for this job
-    const customerInvoices = await InvoiceModel.find({ jobId: job._id }).lean();
+    const customerInvoices = await Invoice.find({ jobId: job._id }).lean();
     
     // Fetch all vendor invoices for this job
-    const vendorInvoices = await VendorInvoiceModel.find({ jobId: job._id }).lean();
+    const vendorInvoices = await VendorInvoice.find({ jobId: job._id }).lean();
 
     const totalReceivables = customerInvoices.reduce((sum, inv) => sum + (inv.totals?.netAmount || 0), 0);
     const totalPayables = vendorInvoices.reduce((sum, inv) => sum + (inv.totals?.netAmount || 0), 0);

@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
-import QuoteModel from '@/model/QuoteModel';
-// Import CompanyModel to ensure it's registered before populate()
-import '@/model/CompanyModel';
-import CompanyModel from '@/model/CompanyModel';
+import { getTenantModels } from '@/model/tenantModels';
 
 export async function GET() {
     try {
         await dbConnect();
+        const { Quote, Company } = await getTenantModels();
         
-        console.log("Registered Schema: ",CompanyModel.modelName)
+        console.log("Registered Schema: ", Company.modelName)
         // Fetch all quotes, newest first, and dynamically pull the Company Name
-        const quotes = await QuoteModel.find()
+        const quotes = await Quote.find()
             .populate('customerDetails.companyId', 'name')
             .sort({ createdAt: -1 })
             .lean();
@@ -26,6 +24,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
     try {
         await dbConnect();
+        const { Quote } = await getTenantModels();
         const body = await request.json();
         const { quoteId, status } = body;
 
@@ -34,7 +33,7 @@ export async function PATCH(request: Request) {
         }
 
         // Update the status (e.g., from "Sent" to "Approved")
-        const updatedQuote = await QuoteModel.findOneAndUpdate(
+        const updatedQuote = await Quote.findOneAndUpdate(
             { quoteId },
             { status },
             { new: true }

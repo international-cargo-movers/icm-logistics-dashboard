@@ -29,8 +29,8 @@ export default function LoginPage() {
         setIsLoading(false)
       } else {
         toast.success("Welcome back!", { description: "Authenticating secure session..." })
-        // Send them to the dashboard!
-        router.push("/dashboard")
+        // Send them to company selection first!
+        router.push("/select-company")
       }
     } catch (error) {
       toast.error("System Error", { description: "Could not reach authentication servers." })

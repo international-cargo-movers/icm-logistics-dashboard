@@ -103,7 +103,7 @@ const DocumentSchema = new Schema({
     uploadedAt: { type: Date, default: Date.now }
 }, { _id: true });
 
-const JobSchema = new Schema<IJob>({
+export const JobSchema = new Schema<IJob>({
     jobId: { type: String, required: true, unique: true },
     quoteReference: { type: String },
     customerDetails: {

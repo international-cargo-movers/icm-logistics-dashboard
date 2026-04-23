@@ -201,11 +201,11 @@ export default function AwbPDF({ data }: { data: any }) {
                     </View>
 
                     <View style={styles.cargoGridRow}>
-                        <View style={styles.cwPkgs}><Text>{cargo.noOfPackages || "1"}</Text></View>
-                        <View style={styles.cwGross}><Text>{cargo.grossWeight || "—"}</Text></View>
+                        <View style={styles.cwPkgs}><Text>{cargo.totalNoOfPackages || cargo.noOfPackages || "1"}</Text></View>
+                        <View style={styles.cwGross}><Text>{cargo.totalGrossWeight || cargo.grossWeight || "—"}</Text></View>
                         <View style={styles.cwKgLb}><Text>K</Text></View>
                         <View style={styles.cwClass}><Text>Q</Text></View>
-                        <View style={styles.cwChargeable}><Text>{cargo.volumetricWeight || "—"}</Text></View>
+                        <View style={styles.cwChargeable}><Text>{cargo.totalVolumetricWeight || cargo.volumetricWeight || "—"}</Text></View>
                         <View style={styles.cwRate}><Text>AS AGREED</Text></View>
                         <View style={styles.cwTotal}><Text>AS AGREED</Text></View>
                         <View style={styles.cwDesc}>
@@ -218,16 +218,16 @@ export default function AwbPDF({ data }: { data: any }) {
                     {/* TOTAL SUMMARY ROW */}
                     <View style={{ flexDirection: 'row', borderBottom: '1px solid #000', height: 25, alignItems: 'center' }}>
                         <View style={[styles.cwPkgs, { borderRight: '1px solid #000', height: '100%', justifyContent: 'center' }]}>
-                            <Text style={styles.value}>{cargo.noOfPackages || "1"}</Text>
+                            <Text style={styles.value}>{cargo.totalNoOfPackages || cargo.noOfPackages || "1"}</Text>
                         </View>
                         <View style={[styles.cwGross, { borderRight: '1px solid #000', height: '100%', justifyContent: 'center' }]}>
-                            <Text style={styles.value}>{cargo.grossWeight || "—"}</Text>
+                            <Text style={styles.value}>{cargo.totalGrossWeight || cargo.grossWeight || "—"}</Text>
                         </View>
                         <View style={{ width: '42%', borderRight: '1px solid #000', height: '100%', justifyContent: 'center', paddingLeft: 10 }}>
                             <Text style={styles.value}>AS AGREED</Text>
                         </View>
                         <View style={{ width: '38%', height: '100%', justifyContent: 'center', paddingLeft: 5 }}>
-                            <Text style={styles.value}>VOL IN KG: {cargo.volumetricWeight || "0.00"} KG</Text>
+                            <Text style={styles.value}>VOL IN KG: {cargo.totalVolumetricWeight || cargo.volumetricWeight || "0.00"} KG</Text>
                         </View>
                     </View>
 

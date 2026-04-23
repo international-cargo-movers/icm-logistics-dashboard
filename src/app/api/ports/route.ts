@@ -1,10 +1,11 @@
 import {NextResponse} from 'next/server'
 import dbConnect from '@/lib/mongodb'
-import PortModel from '@/model/PortModel';
+import { getAdminModels } from '@/model/tenantModels';
 
 export async function GET(request:Request){
     try{
         await dbConnect();
+        const { Port } = await getAdminModels();
 
         const {searchParams} = new URL(request.url);
         const countryCode = searchParams.get("countryCode");
@@ -19,7 +20,7 @@ export async function GET(request:Request){
             query.type = type;
         }
 
-        const ports = await PortModel.find(query).sort({name:1});
+        const ports = await Port.find(query).sort({name:1});
         return NextResponse.json({success:true,data:ports},{status:200})
     }catch(error:any){
         console.error("Error fetching Ports: ",error);
@@ -30,13 +31,14 @@ export async function GET(request:Request){
 export async function POST(request:Request){
     try{
         await dbConnect();
+        const { Port } = await getAdminModels();
         const body = await request.json();
 
         if(Array.isArray(body)){
-            const newPorts = await PortModel.insertMany(body);
+            const newPorts = await Port.insertMany(body);
             return NextResponse.json({success:true,data:newPorts},{status:201});
         }else {
-            const newPort = await PortModel.create({
+            const newPort = await Port.create({
                 name: body.name,
                 locode: body.locode.toUpperCase(),
                 country: body.country,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import JobModel from "@/model/JobModel";
+import { getTenantModels } from "@/model/tenantModels";
 
 // GET: Fetch the specific job data to populate the edit form
 export async function GET(
@@ -9,10 +9,11 @@ export async function GET(
 ) {
     try {
         await dbConnect();
+        const { Job } = await getTenantModels();
         const { id } = await params;
         
         // Populate the companyId so the frontend has the full customer object if needed
-        const job = await JobModel.findById(id).populate("customerDetails.companyId");
+        const job = await Job.findById(id).populate("customerDetails.companyId");
         
         if (!job) {
             return NextResponse.json({ success: false, error: "Job not found" }, { status: 404 });
@@ -31,10 +32,11 @@ export async function PUT(
 ) {
     try {
         await dbConnect();
+        const { Job } = await getTenantModels();
         const { id } = await params;
         const body = await request.json();
 
-        const updatedJob = await JobModel.findByIdAndUpdate(
+        const updatedJob = await Job.findByIdAndUpdate(
             id,
             { $set: body },
             { returnDocument: 'after', runValidators: true }

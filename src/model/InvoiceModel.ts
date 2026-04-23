@@ -42,7 +42,7 @@ export interface IInvoice extends Document {
     status: "Draft" | "Unpaid" | "Paid" | "Overdue" | "Partially Paid";
 }
 
-const InvoiceSchema = new Schema<IInvoice>({
+export const InvoiceSchema = new Schema<IInvoice>({
     invoiceNo: { type: String, required: true, unique: true },
     invoiceDate: { type: Date, default: Date.now, required: true },
     

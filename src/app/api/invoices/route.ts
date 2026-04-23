@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import InvoiceModel from "@/model/InvoiceModel";
-import "@/model/JobModel" // Critical: Ensures Job model is loaded before populate runs
+import { getTenantModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function GET() {
     try {
         await dbConnect();
+        const { Invoice, Job } = await getTenantModels();
         
         // 1. Fetch invoices and POPULATE the jobId field from the Job collection
-        const invoices = await InvoiceModel.find({})
+        const invoices = await Invoice.find({})
             .populate("jobId", "jobId") // Looks up the Job and grabs its custom 'jobId' string
             .sort({ createdAt: -1 })
             .lean();
@@ -32,6 +32,7 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         await dbConnect();
+        const { Invoice } = await getTenantModels();
 
         // --- THE SERVER LOCK ---
         const session = await getServerSession(authOptions);
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
         // -----------------------
 
         const body = await request.json();
-        const newInvoice = await InvoiceModel.create(body);
+        const newInvoice = await Invoice.create(body);
 
         return NextResponse.json({ success: true, data: newInvoice }, { status: 201 });
     } catch (error: any) {

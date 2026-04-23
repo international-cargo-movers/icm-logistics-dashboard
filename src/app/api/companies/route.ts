@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import CompanyModel from "@/model/CompanyModel";
+import { getTenantModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function GET(){
     try{
         await dbConnect();
-        const companies = await CompanyModel.find({}).sort({name:1});
+        const { Company } = await getTenantModels();
+        const companies = await Company.find({}).sort({name:1});
         return NextResponse.json({success:true,data:companies},{status:200});
     }catch(error:any){
         console.log("Error fetching Companies: ",error)
@@ -18,6 +19,7 @@ export async function GET(){
 export async function POST(request:Request){
     try{
         await dbConnect();
+        const { Company } = await getTenantModels();
 
         // --- THE SERVER LOCK ---
         const session = await getServerSession(authOptions);
@@ -33,7 +35,7 @@ export async function POST(request:Request){
 
         const body = await request.json();
 
-        const newCompany = await CompanyModel.create({
+        const newCompany = await Company.create({
             name: body.name,
             type: body.type || ["Customer"],
             // THE FIX: Catch 'email' from frontend and save it as 'contactEmail'

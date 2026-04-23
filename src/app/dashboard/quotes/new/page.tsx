@@ -212,6 +212,9 @@ export default function NewQuotePage() {
       totalBuy,
       totalSell,
       profitMargin,
+      totalNoOfPackages: cargoTotals.pkgs,
+      totalGrossWeight: cargoTotals.gross,
+      totalVolumetricWeight: cargoTotals.vol,
       date: new Date().toISOString().split('T')[0],
       validUntil: new Date(Date.now() + quoteData.validityDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     };
@@ -559,15 +562,15 @@ export default function NewQuotePage() {
               <div className="grid grid-cols-3 gap-4 p-4 bg-primary/5 rounded-xl border border-primary/10">
                 <div className="text-center">
                   <span className="text-[10px] font-bold text-primary uppercase">Total Pkgs</span>
-                  <div className="text-lg font-bold">{quoteData.cargoSummary.totalNoOfPackages}</div>
+                  <div className="text-lg font-bold">{cargoTotals.pkgs}</div>
                 </div>
                 <div className="text-center border-x border-primary/10">
                   <span className="text-[10px] font-bold text-primary uppercase">Total Gross Weight</span>
-                  <div className="text-lg font-bold">{quoteData.cargoSummary.totalGrossWeight} kg</div>
+                  <div className="text-lg font-bold">{cargoTotals.gross} kg</div>
                 </div>
                 <div className="text-center">
                   <span className="text-[10px] font-bold text-primary uppercase">Total Vol. Weight</span>
-                  <div className="text-lg font-bold">{quoteData.cargoSummary.totalVolumetricWeight} kg</div>
+                  <div className="text-lg font-bold">{cargoTotals.vol} kg</div>
                 </div>
               </div>
             </section>

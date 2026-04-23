@@ -9,7 +9,7 @@ export interface IPort extends Document{
     isActive:boolean;
 }
 
-const PortSchema = new Schema<IPort>(
+export const PortSchema = new Schema<IPort>(
     {
         name:{type:String,required:true},
         locode:{type:String, required:true,unique:true,uppercase:true},

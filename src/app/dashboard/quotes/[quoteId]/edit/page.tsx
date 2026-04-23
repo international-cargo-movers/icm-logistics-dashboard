@@ -17,9 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 
 export default function EditQuotePage() {
-  const params = useParams()
+  const params = useParams() as { quoteId: string }
   const router = useRouter()
-  const quoteId = params.quoteId as string
+  const quoteId = params.quoteId
 
   const { data: session, status } = useSession()
 
@@ -245,6 +245,9 @@ export default function EditQuotePage() {
       totalBuy,
       totalSell,
       profitMargin,
+      totalNoOfPackages: cargoTotals.pkgs,
+      totalGrossWeight: cargoTotals.gross,
+      totalVolumetricWeight: cargoTotals.vol,
       date: new Date().toISOString().split('T')[0],
       validUntil: new Date(Date.now() + quoteData.validityDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     };

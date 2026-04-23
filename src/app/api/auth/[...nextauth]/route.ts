@@ -2,7 +2,7 @@ import NextAuth, { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import dbConnect from "@/lib/mongodb";
-import UserModel from "@/model/UserModel";
+import { getAdminModels } from "@/model/tenantModels";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -18,9 +18,10 @@ export const authOptions: NextAuthOptions = {
         }
 
         await dbConnect();
+        const { User } = await getAdminModels();
 
         // 1. Find the user
-        const user = await UserModel.findOne({ email: credentials.email }).lean();
+        const user: any = await User.findOne({ email: credentials.email }).lean();
         if (!user || !user.isActive) {
           throw new Error("Invalid credentials or inactive account");
         }

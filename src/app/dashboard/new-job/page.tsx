@@ -51,6 +51,15 @@ export const jobFormSchema = z.object({
   }),
   cargoDetails: z.object({
     commodity: z.string().optional(),
+    carrier: z.string().optional(),
+    items: z.array(z.object({
+      description: z.string().optional(),
+      noOfPackages: z.coerce.number().optional(),
+      grossWeight: z.coerce.number().optional(),
+      netWeight: z.coerce.number().optional(),
+      volumetricWeight: z.coerce.number().optional(),
+      dimensions: z.string().optional(),
+    })).optional(),
     packageCount: z.coerce.number().optional(),
     grossWeight: z.string().optional(),
     netWeight: z.string().optional(),
@@ -75,7 +84,17 @@ const defaultFormValues = {
   customerDetails: { companyId: "", salesPerson: "", taxId: "", streetAddress: "", city: "", state: "", zipCode: "", country: "" },
   partyDetails: { shipperId: "", consigneeId: "", notifyPartyId: "", overseasAgentId: "" },
   shipmentDetails: { mode: "", originCountry: "", originPort: "", destinationCountry: "", destinationPort: "" },
-  cargoDetails: { commodity: "", packageCount: 0, grossWeight: "", netWeight: "", dimensions: "", etd: undefined, eta: undefined },
+  cargoDetails: { 
+    commodity: "", 
+    carrier: "",
+    items: [{ description: "", noOfPackages: 0, grossWeight: 0, netWeight: 0, volumetricWeight: 0, dimensions: "" }],
+    packageCount: 0, 
+    grossWeight: "", 
+    netWeight: "", 
+    dimensions: "", 
+    etd: undefined, 
+    eta: undefined 
+  },
   vendorDetails: [],
   documents: [],
 };
@@ -135,6 +154,25 @@ export default function NewJobPage() {
     }
 
     const cleanWeight = quote.cargoSummary?.estimatedWeight ? quote.cargoSummary.estimatedWeight.replace(/[^0-9.]/g, '') : "";
+    
+    // Determine cargo items from quote
+    const quoteItems = quote.cargoSummary?.items?.length > 0 
+      ? quote.cargoSummary.items.map((item: any) => ({
+          description: item.description || "",
+          noOfPackages: Number(item.noOfPackages) || 0,
+          grossWeight: Number(item.grossWeight) || 0,
+          netWeight: Number(item.netWeight) || 0,
+          volumetricWeight: Number(item.volumetricWeight) || 0,
+          dimensions: item.dimensions || "",
+        }))
+      : [{ 
+          description: quote.cargoSummary?.commodity || "", 
+          noOfPackages: 0, 
+          grossWeight: Number(cleanWeight) || 0, 
+          netWeight: 0, 
+          volumetricWeight: 0, 
+          dimensions: "" 
+        }];
 
     form.reset({
       ...defaultFormValues,
@@ -161,6 +199,7 @@ export default function NewJobPage() {
       cargoDetails: {
         ...defaultFormValues.cargoDetails,
         commodity: quote.cargoSummary?.commodity || "",
+        items: quoteItems,
         grossWeight: cleanWeight || "",
       }
     });
@@ -245,6 +284,13 @@ export default function NewJobPage() {
         })
       );
 
+      // Calculate totals from items before sending
+      const items = values.cargoDetails.items || [];
+      const totalPkgs = items.reduce((sum, item) => sum + (Number(item.noOfPackages) || 0), 0);
+      const totalGross = items.reduce((sum, item) => sum + (Number(item.grossWeight) || 0), 0);
+      const totalNet = items.reduce((sum, item) => sum + (Number(item.netWeight) || 0), 0);
+      const totalVol = items.reduce((sum, item) => sum + (Number(item.volumetricWeight) || 0), 0);
+
       const finalJobPayload = {
         ...values,
         customerDetails: { companyId: finalCompanyId }, // Fully normalized
@@ -263,10 +309,12 @@ export default function NewJobPage() {
         },
         cargoDetails: {
           commodity: values.cargoDetails.commodity,
-          noOfPackages: values.cargoDetails.packageCount,
-          grossWeight: values.cargoDetails.grossWeight,
-          netWeight: values.cargoDetails.netWeight,
-          dimensions: values.cargoDetails.dimensions,
+          carrier: values.cargoDetails.carrier,
+          items: items,
+          totalNoOfPackages: totalPkgs,
+          totalGrossWeight: totalGross,
+          totalNetWeight: totalNet,
+          totalVolumetricWeight: totalVol,
           etd: values.cargoDetails.etd,
           eta: values.cargoDetails.eta
         },

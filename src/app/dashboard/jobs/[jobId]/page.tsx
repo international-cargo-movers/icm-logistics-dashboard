@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import JobModel from "@/model/JobModel"
 import dbConnect from "@/lib/mongodb"
-import "@/model/CompanyModel"
+import { getTenantModels } from "@/model/tenantModels"
 import StatusDropdown from "@/components/dashboard/jobs/StatusDropdown"
 import EntitySwitcher from "@/components/dashboard/jobs/EntitySwitcher"
 
@@ -24,9 +23,10 @@ const getDownloadUrl = (url: string) => {
 // Rebuild trigger
 export default async function JobControlRoom({ params }: { params: { jobId: string } }) {
     await dbConnect();
+    const { Job } = await getTenantModels();
     const { jobId } = await params;
 
-    const job = await JobModel.findOne({ jobId: jobId })
+    const job = await Job.findOne({ jobId: jobId })
         .populate("customerDetails.companyId", "name taxId streetAddress city state zipCode country defaultSalesPerson")
         .populate("vendorDetails.vendorId", "name taxId streetAddress city state zipCode country")
         .populate("partyDetails.shipperId","name taxId streetAddress city state zipCode country")

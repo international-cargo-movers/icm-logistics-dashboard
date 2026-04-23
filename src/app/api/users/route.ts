@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import dbConnect from "@/lib/mongodb";
-import UserModel from "@/model/UserModel";
+import { getAdminModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
 
@@ -9,6 +9,7 @@ import { authOptions } from "../auth/[...nextauth]/route";
 export async function GET() {
   try {
     await dbConnect();
+    const { User } = await getAdminModels();
     const session = await getServerSession(authOptions);
     
     // Extra Security: Ensure the person asking for the user list is an Admin
@@ -16,7 +17,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const users = await UserModel.find({}).select("-passwordHash").lean();
+    const users = await User.find({}).select("-passwordHash").lean();
     return NextResponse.json({ success: true, data: users });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -27,6 +28,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await dbConnect();
+    const { User } = await getAdminModels();
     const session = await getServerSession(authOptions);
 
     if (session?.user?.role !== "SuperAdmin") {
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
     const { email, password, firstName, lastName, role } = body;
 
     // Check if user already exists
-    const existingUser = await UserModel.findOne({ email });
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return NextResponse.json({ success: false, error: "Email already in use." }, { status: 400 });
     }
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
     // Hash their starting password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const newUser = await UserModel.create({
+    const newUser = await User.create({
       email,
       passwordHash,
       firstName,

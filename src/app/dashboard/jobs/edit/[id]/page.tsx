@@ -31,6 +31,28 @@ export default function EditJobPage() {
             if (json.success) {
                 const data = json.data;
                 
+                // MIGRATION HELPER: Map DB fields to Form fields for Routing Section
+                if (data.shipmentDetails) {
+                    data.shipmentDetails = {
+                        ...data.shipmentDetails,
+                        originCountry: data.shipmentDetails.polCountry,
+                        originPort: data.shipmentDetails.portOfLoading,
+                        destinationCountry: data.shipmentDetails.podCountry,
+                        destinationPort: data.shipmentDetails.portOfDischarge,
+                    };
+                }
+
+                // MIGRATION HELPER: Map Party IDs for Parties Section
+                if (data.partyDetails) {
+                    data.partyDetails = {
+                        ...data.partyDetails,
+                        shipperId: data.partyDetails.shipperId?._id || data.partyDetails.shipperId,
+                        consigneeId: data.partyDetails.consigneeId?._id || data.partyDetails.consigneeId,
+                        notifyPartyId: data.partyDetails.notifyPartyId?._id || data.partyDetails.notifyPartyId,
+                        overseasAgentId: data.partyDetails.overseasAgentId?._id || data.partyDetails.overseasAgentId,
+                    };
+                }
+                
                 // MIGRATION HELPER: Convert old single-cargo jobs to new items format
                 if (data.cargoDetails && (!data.cargoDetails.items || data.cargoDetails.items.length === 0)) {
                     data.cargoDetails.items = [{

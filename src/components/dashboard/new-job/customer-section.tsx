@@ -44,6 +44,10 @@ export default function CustomerSection({ isReadOnly }: { isReadOnly?: boolean }
 
   const currentCompanyId = watch("customerDetails.companyId") || ""
   const isKnownCompany = isValidMongoId(currentCompanyId) && companies.some(c => c._id === currentCompanyId)
+  
+  // Allow editing if the current ID is NOT a valid MongoDB ID (i.e. it's just a text name from a quote)
+  // or if explicitly allowed.
+  const canEditCompanyName = !isReadOnly || !isValidMongoId(currentCompanyId);
 
   // THE ULTIMATE GHOST-DATA FIX
   // This explicitly guarantees that the visual text box matches the background data state at all times!
@@ -112,12 +116,12 @@ export default function CustomerSection({ isReadOnly }: { isReadOnly?: boolean }
                 <FormLabel>Company Name *</FormLabel>
                 <FormControl>
                   <Combobox
-                    open={isReadOnly ? false : open}
-                    onOpenChange={isReadOnly ? () => {} : setOpen}
+                    open={canEditCompanyName ? open : false}
+                    onOpenChange={canEditCompanyName ? setOpen : () => {}}
                     value={companies.find(c => c._id === field.value)?.name || field.value} 
                     inputValue={searchQuery}
                     onValueChange={(val: string | null) => {
-                      if (isReadOnly) return;
+                      if (!canEditCompanyName) return;
                       const safeVal = val || ""
                       const selectedComp = companies.find(c => c.name.toLowerCase() === safeVal.toLowerCase())
                       if (selectedComp) {
@@ -130,7 +134,7 @@ export default function CustomerSection({ isReadOnly }: { isReadOnly?: boolean }
                       }
                     }}
                     onInputValueChange={(val: string) => {
-                      if (isReadOnly) return;
+                      if (!canEditCompanyName) return;
                       setSearchQuery(val)
                       if (val === "") {
                         field.onChange("")
@@ -139,13 +143,13 @@ export default function CustomerSection({ isReadOnly }: { isReadOnly?: boolean }
                     }}
                   >
                     <ComboboxInput 
-                      showTrigger={!isReadOnly}
-                      disabled={isReadOnly}
+                      showTrigger={canEditCompanyName}
+                      disabled={!canEditCompanyName}
                       placeholder="Search or type new..." 
-                      className={isReadOnly ? "bg-muted/50 opacity-70 cursor-not-allowed border-none text-on-surface font-semibold" : "border-none"}
-                      onBlur={() => { if (searchQuery && !isReadOnly) handleHoldText(searchQuery, field.onChange) }}
+                      className={!canEditCompanyName ? "bg-muted/50 opacity-70 cursor-not-allowed border-none text-on-surface font-semibold" : "border-none"}
+                      onBlur={() => { if (searchQuery && canEditCompanyName) handleHoldText(searchQuery, field.onChange) }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !isReadOnly) {
+                        if (e.key === 'Enter' && canEditCompanyName) {
                           e.preventDefault() 
                           e.stopPropagation() 
                           if (searchQuery) handleHoldText(searchQuery, field.onChange)

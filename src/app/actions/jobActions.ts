@@ -1,14 +1,15 @@
 "use server"
 
 import dbConnect from "@/lib/mongodb"
-import JobModel from "@/model/JobModel"
+import { getTenantModels } from "@/model/tenantModels"
 import {revalidatePath} from "next/cache"
 
 export async function updateJobStatus(jobId:string, newStatus: string){
     try{
         await dbConnect()
+        const { Job } = await getTenantModels()
 
-        await JobModel.findOneAndUpdate(
+        await Job.findOneAndUpdate(
             {jobId:jobId},
             {$set:{"cargoDetails.jobStatus":newStatus}}
         )

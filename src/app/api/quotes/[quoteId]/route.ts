@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
-import QuoteModel from '@/model/QuoteModel';
+import { getTenantModels } from '@/model/tenantModels';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Ensure this path matches
 
@@ -8,9 +8,10 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Ensure this
 export async function GET(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
     try {
         await dbConnect();
+        const { Quote } = await getTenantModels();
         const { quoteId } = await params;
 
-        const quote = await QuoteModel.findOne({ quoteId }).lean();
+        const quote = await Quote.findOne({ quoteId }).lean();
 
         if (!quote) {
             return NextResponse.json({ success: false, error: "Quote not found" }, { status: 404 });
@@ -26,6 +27,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ quot
 export async function PUT(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
     try {
         await dbConnect();
+        const { Quote } = await getTenantModels();
 
         // --- THE SERVER LOCK ---
         const session = await getServerSession(authOptions);
@@ -45,7 +47,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ quot
 
         // We use .findOne() and .save() instead of findOneAndUpdate() 
         // to ensure our Mongoose pre-save hook (which calculates profit margins) fires correctly!
-        const quote = await QuoteModel.findOne({ quoteId });
+        const quote = await Quote.findOne({ quoteId });
 
         if (!quote) {
             return NextResponse.json({ success: false, error: "Quote not found" }, { status: 404 });
@@ -65,7 +67,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ quot
         quote.cargoSummary = {
             commodity: quoteData.cargoSummary?.commodity || "General Cargo",
             equipment: quoteData.cargoSummary?.equipment,
-            estimatedWeight: quoteData.cargoSummary?.estimatedWeight
+            items: quoteData.cargoSummary?.items?.map((item: any) => ({
+                description: item.description,
+                noOfPackages: Number(item.noOfPackages) || 0,
+                grossWeight: Number(item.grossWeight) || 0,
+                volumetricWeight: Number(item.volumetricWeight) || 0,
+            })) || [],
+            totalNoOfPackages: Number(quoteData.totalNoOfPackages) || 0,
+            totalGrossWeight: Number(quoteData.totalGrossWeight) || 0,
+            totalVolumetricWeight: Number(quoteData.totalVolumetricWeight) || 0,
         };
         quote.validity.expiryDate = new Date(quoteData.validUntil);
         quote.financials.lineItems = quoteData.lineItems.map((item: any) => ({

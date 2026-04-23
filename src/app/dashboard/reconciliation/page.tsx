@@ -1,8 +1,6 @@
 import React from "react"
 import dbConnect from "@/lib/mongodb"
-import JobModel from "@/model/JobModel"
-import InvoiceModel from "@/model/InvoiceModel"
-import VendorInvoiceModel from "@/model/VendorInvoiceModel"
+import { getTenantModels } from "@/model/tenantModels"
 import { Card } from "@/components/ui/card"
 import { 
     TrendingUp, 
@@ -17,16 +15,17 @@ import ReconciliationClient from "@/components/dashboard/reconciliation/Reconcil
 
 export default async function GlobalReconciliationPage() {
     await dbConnect();
+    const { Job, Invoice, VendorInvoice } = await getTenantModels();
 
     // Fetch all jobs with populated customer details
-    const jobs = await JobModel.find({})
+    const jobs = await Job.find({})
         .populate("customerDetails.companyId", "name")
         .sort({ createdAt: -1 })
         .lean();
     
     // Fetch all invoices
-    const customerInvoices = await InvoiceModel.find({}).lean();
-    const vendorInvoices = await VendorInvoiceModel.find({}).lean();
+    const customerInvoices = await Invoice.find({}).lean();
+    const vendorInvoices = await VendorInvoice.find({}).lean();
 
     // Map data for easy access
     const receivablesMap: Record<string, number> = {};

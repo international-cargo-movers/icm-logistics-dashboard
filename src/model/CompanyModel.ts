@@ -21,7 +21,7 @@ export interface ICompany extends Document{
     defaultSalesPerson?:string;
 }
 
-const CompanySchema = new Schema<ICompany>(
+export const CompanySchema = new Schema<ICompany>(
     {
         name:{type:String, required:true,unique:true},
         type:[{type:String,required:true}],

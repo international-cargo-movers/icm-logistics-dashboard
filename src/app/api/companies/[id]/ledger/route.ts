@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import InvoiceModel from "@/model/InvoiceModel";
-import ReceiptModel from "@/model/ReceiptModel";
+import { getTenantModels } from "@/model/tenantModels";
 
 export async function GET(
     request: Request, 
@@ -9,13 +8,14 @@ export async function GET(
 ) {
     try {
         await dbConnect();
+        const { Invoice, Receipt } = await getTenantModels();
         const { id } = await params;
 
         // 1. Fetch all Invoices for this customer
-        const invoices = await InvoiceModel.find({ "customerDetails.companyId": id }).lean();
+        const invoices = await Invoice.find({ "customerDetails.companyId": id }).lean();
         
         // 2. Fetch all Receipts for this customer
-        const receipts = await ReceiptModel.find({ companyId: id, type: "Customer" }).lean();
+        const receipts = await Receipt.find({ companyId: id, type: "Customer" }).lean();
 
         // 3. Map Invoices to transaction format
         const invoiceTransactions = invoices.map((inv: any) => {

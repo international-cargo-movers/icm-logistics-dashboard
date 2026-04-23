@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import VendorInvoiceModel from "@/model/VendorInvoiceModel";
-import ReceiptModel from "@/model/ReceiptModel";
+import { getTenantModels } from "@/model/tenantModels";
 
 export async function GET(
     request: Request, 
@@ -9,13 +8,14 @@ export async function GET(
 ) {
     try {
         await dbConnect();
+        const { VendorInvoice, Receipt } = await getTenantModels();
         const { id } = await params;
 
         // 1. Fetch all Vendor Invoices for this vendor
-        const vendorInvoices = await VendorInvoiceModel.find({ "vendorDetails.vendorId": id }).lean();
+        const vendorInvoices = await VendorInvoice.find({ "vendorDetails.vendorId": id }).lean();
         
         // 2. Fetch all Receipts for this vendor
-        const receipts = await ReceiptModel.find({ companyId: id, type: "Vendor" }).lean();
+        const receipts = await Receipt.find({ companyId: id, type: "Vendor" }).lean();
 
         // 3. Map Vendor Invoices to transaction format
         const invoiceTransactions = vendorInvoices.map((inv: any) => {

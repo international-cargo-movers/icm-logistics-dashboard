@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import ReceiptModel from "@/model/ReceiptModel";
-import InvoiceModel from "@/model/InvoiceModel";
-import VendorInvoiceModel from "@/model/VendorInvoiceModel";
+import { getTenantModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth";
 
 export async function POST(request: Request) {
     try {
         await dbConnect();
+        const { Receipt, Invoice, VendorInvoice } = await getTenantModels();
         const session = await getServerSession();
         if (!session) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -25,11 +24,11 @@ export async function POST(request: Request) {
         let invoice;
         let Model;
         if (type === "Customer") {
-            Model = InvoiceModel;
-            invoice = await InvoiceModel.findById(invoiceId);
+            Model = Invoice;
+            invoice = await Invoice.findById(invoiceId);
         } else {
-            Model = VendorInvoiceModel;
-            invoice = await VendorInvoiceModel.findById(invoiceId);
+            Model = VendorInvoice;
+            invoice = await VendorInvoice.findById(invoiceId);
         }
 
         if (!invoice) {
@@ -40,7 +39,7 @@ export async function POST(request: Request) {
         const receiptNo = `RCT-${Date.now()}`;
 
         // 4. Create the Receipt Record
-        await ReceiptModel.create({
+        await Receipt.create({
             receiptNo,
             type,
             invoiceId,
@@ -57,7 +56,7 @@ export async function POST(request: Request) {
 
         // 5. RECALCULATE TOTAL PAID FROM ALL RECEIPTS (Source of Truth)
         // This ensures math never drifts and always matches the sum of receipts
-        const allReceipts = await ReceiptModel.find({ invoiceId });
+        const allReceipts = await Receipt.find({ invoiceId });
         const totalAmountPaid = allReceipts.reduce((sum, rct) => sum + (Number(rct.amount) || 0), 0);
         
         const totalBilled = Number(invoice.totals.netAmount) || 0;
@@ -95,11 +94,12 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
     try {
         await dbConnect();
+        const { Receipt } = await getTenantModels();
         const { searchParams } = new URL(request.url);
         const invoiceId = searchParams.get("invoiceId");
 
         const query = invoiceId ? { invoiceId } : {};
-        const receipts = await ReceiptModel.find(query).sort({ paymentDate: -1 });
+        const receipts = await Receipt.find(query).sort({ paymentDate: -1 });
 
         return NextResponse.json({ success: true, data: receipts });
     } catch (error: any) {

@@ -54,7 +54,7 @@ export interface IQuote extends Document {
 }
 
 // 3. Mongoose Schema Definition
-const QuoteSchema: Schema<IQuote> = new Schema(
+export const QuoteSchema: Schema<IQuote> = new Schema(
     {
         quoteId: {
             type: String,

@@ -42,7 +42,7 @@ export interface IVendorInvoice extends Document {
     status: "Draft" | "Unpaid" | "Paid" | "Overdue" | "Partially Paid";
 }
 
-const VendorInvoiceSchema = new Schema<IVendorInvoice>({
+export const VendorInvoiceSchema = new Schema<IVendorInvoice>({
     vendorInvoiceNo: { type: String, required: true, unique: true },
     vendorInvoiceDate: { type: Date, default: Date.now, required: true },
     

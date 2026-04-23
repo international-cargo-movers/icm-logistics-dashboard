@@ -19,15 +19,10 @@ import {
     PlusCircle
 } from "lucide-react";
 import { toast } from "sonner";
-import RecordPaymentModal from "./RecordPaymentModal";
 
 export default function VendorLedger({ companyId }: { companyId: string }) {
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-
-    // Modal State
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
     const fetchLedger = async () => {
         setLoading(true);
@@ -50,23 +45,21 @@ export default function VendorLedger({ companyId }: { companyId: string }) {
     }, [companyId]);
 
     const stats = useMemo(() => {
-        const total = invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0);
-        const settled = invoices.reduce((sum, inv) => sum + (inv.amountPaid || 0), 0);
+        // Standard Accounting Calculation:
+        // Lifetime Payables = Sum of all Vendor Invoices
+        // Settled Balance = Sum of all actual Payments (Receipts)
+        const total = invoices
+            .filter(inv => inv.type === "Invoice")
+            .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+            
+        const settled = invoices
+            .filter(inv => inv.type === "Receipt")
+            .reduce((sum, inv) => sum + (inv.amountPaid || 0), 0);
+            
         const outstanding = total - settled;
         const rate = total > 0 ? (settled / total) * 100 : 0;
         return { total, settled, outstanding, rate };
     }, [invoices]);
-
-    const handleRecordPayment = (inv: any) => {
-        setSelectedInvoice({
-            id: inv.id,
-            invoiceNo: inv.reference,
-            totalAmount: inv.amount,
-            balanceDue: inv.balanceDue ?? (inv.status === "Paid" ? 0 : inv.amount),
-            type: "Vendor"
-        });
-        setIsModalOpen(true);
-    };
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-IN', {
@@ -213,19 +206,14 @@ export default function VendorLedger({ companyId }: { companyId: string }) {
                                                 </Badge>
                                             </td>
                                             <td className="px-8 py-6 text-right">
-                                                {inv.type === 'Invoice' && inv.status !== "Paid" && (
-                                                    <Button 
-                                                        onClick={() => handleRecordPayment(inv)}
-                                                        variant="ghost" 
-                                                        size="sm" 
-                                                        className="h-10 px-4 rounded-xl text-rose-600 font-black text-[10px] uppercase hover:bg-rose-50"
-                                                    >
-                                                        <PlusCircle className="w-3.5 h-3.5 mr-2" /> Record Settlement
-                                                    </Button>
-                                                )}
                                                 {(inv.status === "Paid" || inv.status === "Cleared") && (
                                                     <div className="flex items-center justify-end gap-1.5 text-emerald-600 font-black text-[10px] uppercase tracking-tighter">
                                                         <ShieldCheck className="h-3.5 w-3.5" /> {inv.type === 'Invoice' ? 'Fully Settled' : 'Payment Verified'}
+                                                    </div>
+                                                )}
+                                                {inv.type === 'Invoice' && inv.status !== "Paid" && (
+                                                     <div className="flex items-center justify-end gap-1.5 text-rose-600 font-black text-[10px] uppercase tracking-tighter">
+                                                        <Clock className="h-3.5 w-3.5" /> Awaiting Payment
                                                     </div>
                                                 )}
                                             </td>
@@ -237,13 +225,6 @@ export default function VendorLedger({ companyId }: { companyId: string }) {
                     </div>
                 </Card>
             </div>
-
-            <RecordPaymentModal 
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSuccess={fetchLedger}
-                invoiceData={selectedInvoice}
-            />
         </div>
     );
 }

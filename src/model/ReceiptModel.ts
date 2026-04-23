@@ -15,7 +15,7 @@ export interface IReceipt extends Document {
     recordedBy: string; // User email or ID
 }
 
-const ReceiptSchema = new Schema<IReceipt>({
+export const ReceiptSchema = new Schema<IReceipt>({
     receiptNo: { type: String, required: true, unique: true },
     type: { type: String, enum: ["Customer", "Vendor"], required: true },
     invoiceId: { type: Schema.Types.ObjectId, required: true },
