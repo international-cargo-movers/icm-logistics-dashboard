@@ -62,7 +62,7 @@ export default function BolPDF({ data }: { data: any }) {
     }
 
     // Helper to convert number to words for packages (simplified)
-    const totalPkgs = cargo.noOfPackages || "1";
+    const totalPkgs = cargo.totalNoOfPackages || cargo.noOfPackages || "1";
     const totalPkgsInWords = `SAY ${totalPkgs} PACKAGE(S) ONLY`;
 
     return (
@@ -181,13 +181,13 @@ export default function BolPDF({ data }: { data: any }) {
 
                     <View style={[styles.cargoBody, { borderBottom: '1px solid #000' }]}>
                         <Text style={styles.wMarks}>{bol.marksAndNumbers || "N/M"}</Text>
-                        <Text style={styles.wPkgs}>{cargo.noOfPackages || "1"}</Text>
+                        <Text style={styles.wPkgs}>{cargo.totalNoOfPackages || cargo.noOfPackages || "1"}</Text>
                         <Text style={styles.wDesc}>
                             {cargo.commodity || "GENERAL CARGO"}{"\n\n"}
                             {cargo.description || ""}
                         </Text>
-                        <Text style={styles.wWeight}>{cargo.grossWeight ? `${cargo.grossWeight} KGS` : "—"}</Text>
-                        <Text style={styles.wMeas}>{cargo.volumetricWeight || "—"}</Text>
+                        <Text style={styles.wWeight}>{(cargo.totalGrossWeight || cargo.grossWeight) ? `${cargo.totalGrossWeight || cargo.grossWeight} KGS` : "—"}</Text>
+                        <Text style={styles.wMeas}>{cargo.totalVolumetricWeight || cargo.volumetricWeight || "—"}</Text>
                     </View>
 
                     {/* TOTAL PACKAGES IN WORDS */}
