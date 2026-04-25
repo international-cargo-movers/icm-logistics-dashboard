@@ -38,7 +38,7 @@ export async function POST(request: Request) {
         const session = await getServerSession(authOptions);
         
         // Block if not logged in, or if role is NOT SuperAdmin or Finance
-        if (!session?.user?.role || !["SuperAdmin", "Finance"].includes(session.user.role)) {
+        if (!session?.user?.role || !["SuperAdmin", "Finance", "Operations"].includes(session.user.role)) {
             return NextResponse.json({ 
                 success: false, 
                 error: "Security Violation: You do not have clearance to create financial records." 

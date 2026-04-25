@@ -286,7 +286,7 @@ export default function NewQuotePage() {
     }
   }
 
-  if (session && !["SuperAdmin", "Sales"].includes(session?.user?.role || "")) {
+  if (session && !["SuperAdmin", "Sales", "Operations"].includes(session?.user?.role || "")) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
         <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />

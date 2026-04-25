@@ -8,6 +8,7 @@ import {
     UserPlus, 
     Mail, 
     Lock, 
+    Key,
     Activity, 
     UsersRound, 
     ShieldCheck, 
@@ -15,7 +16,10 @@ import {
     Briefcase,
     ChevronRight,
     X,
-    User
+    User,
+    ShieldAlert,
+    UserX,
+    UserCheck
 } from "lucide-react"
 import { toast } from "sonner"
 import Sidebar from "@/components/dashboard/Sidebar"
@@ -24,6 +28,14 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export default function TeamManagementPage() {
   const { data: session } = useSession()
@@ -34,6 +46,11 @@ export default function TeamManagementPage() {
   const [formData, setFormData] = React.useState({
     firstName: "", lastName: "", email: "", password: "", role: "Operations"
   })
+
+  // Password Reset State
+  const [resettingUser, setResettingUser] = React.useState<any>(null)
+  const [newPassword, setNewPassword] = React.useState("")
+  const [isResetting, setIsResetting] = React.useState(false)
 
   React.useEffect(() => {
     async function fetchUsers() {
@@ -81,6 +98,57 @@ export default function TeamManagementPage() {
         setFormData({ firstName: "", lastName: "", email: "", password: "", role: "Operations" })
       } else {
         toast.error(json.error || "Failed to create account", { id: loadingToast })
+      }
+    } catch (error) {
+      toast.error("Network error occurred", { id: loadingToast })
+    }
+  }
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!resettingUser || !newPassword) return
+
+    setIsResetting(true)
+    const loadingToast = toast.loading(`Resetting password for ${resettingUser.firstName}...`)
+
+    try {
+      const res = await fetch(`/api/users/${resettingUser._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword })
+      })
+      const json = await res.json()
+
+      if (json.success) {
+        toast.success("Password updated successfully!", { id: loadingToast })
+        setResettingUser(null)
+        setNewPassword("")
+      } else {
+        toast.error(json.error || "Failed to reset password", { id: loadingToast })
+      }
+    } catch (error) {
+      toast.error("Network error occurred", { id: loadingToast })
+    } finally {
+      setIsResetting(false)
+    }
+  }
+
+  const toggleUserStatus = async (user: any) => {
+    const loadingToast = toast.loading(`${user.isActive ? 'Deactivating' : 'Activating'} account...`)
+
+    try {
+      const res = await fetch(`/api/users/${user._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !user.isActive })
+      })
+      const json = await res.json()
+
+      if (json.success) {
+        toast.success(`Account ${user.isActive ? 'deactivated' : 'activated'} successfully!`, { id: loadingToast })
+        setUsers(users.map(u => u._id === user._id ? { ...u, isActive: !user.isActive } : u))
+      } else {
+        toast.error(json.error || "Failed to update status", { id: loadingToast })
       }
     } catch (error) {
       toast.error("Network error occurred", { id: loadingToast })
@@ -341,11 +409,33 @@ export default function TeamManagementPage() {
                                         </Badge>
                                     </td>
                                     <td className="px-10 py-7 text-right">
-                                        <div className="inline-flex items-center gap-3 bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100 group-hover:border-blue-100 group-hover:bg-blue-50/30 transition-all">
-                                            <div className={`h-2 w-2 rounded-full animate-pulse ${user.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                                            <span className={`text-[10px] font-black uppercase tracking-widest ${user.isActive ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                                {user.isActive ? 'Live' : 'Locked'}
-                                            </span>
+                                        <div className="flex items-center justify-end gap-3">
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon"
+                                            onClick={() => setResettingUser(user)}
+                                            className="h-10 w-10 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                            title="Reset Password"
+                                          >
+                                            <Key className="h-4 w-4" />
+                                          </Button>
+
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon"
+                                            onClick={() => toggleUserStatus(user)}
+                                            className={`h-10 w-10 rounded-xl transition-colors ${user.isActive ? 'hover:bg-rose-50 hover:text-rose-600' : 'hover:bg-emerald-50 hover:text-emerald-600'}`}
+                                            title={user.isActive ? "Deactivate Account" : "Activate Account"}
+                                          >
+                                            {user.isActive ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                                          </Button>
+
+                                          <div className="inline-flex items-center gap-3 bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100 group-hover:border-blue-100 group-hover:bg-blue-50/30 transition-all ml-2">
+                                              <div className={`h-2 w-2 rounded-full animate-pulse ${user.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                              <span className={`text-[10px] font-black uppercase tracking-widest ${user.isActive ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                                  {user.isActive ? 'Live' : 'Locked'}
+                                              </span>
+                                          </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -358,6 +448,65 @@ export default function TeamManagementPage() {
 
         </div>
       </main>
+
+      {/* Password Reset Dialog */}
+      <Dialog open={!!resettingUser} onOpenChange={(open) => !open && setResettingUser(null)}>
+        <DialogContent className="max-w-md bg-white rounded-[32px] p-0 overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="p-8 bg-slate-50/50 border-b border-slate-100">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                <ShieldAlert className="h-5 w-5" />
+              </div>
+              <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">Security Protocol</p>
+            </div>
+            <DialogTitle className="text-2xl font-black text-slate-900 tracking-tighter">
+              Reset Access Key
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium">
+              Assign a new temporary password for <span className="text-slate-900 font-bold">{resettingUser?.firstName} {resettingUser?.lastName}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleResetPassword} className="p-8 space-y-6">
+            <div className="space-y-3">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">New Password</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input 
+                  required 
+                  type="text" 
+                  value={newPassword} 
+                  onChange={e => setNewPassword(e.target.value)} 
+                  className="bg-slate-50 border-none rounded-2xl py-6 pl-12 font-bold focus-visible:ring-blue-600"
+                  placeholder="Enter new password"
+                  autoFocus
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium">
+                The user will be able to log in immediately with this new key.
+              </p>
+            </div>
+
+            <DialogFooter className="pt-4 gap-3 bg-transparent border-none p-0">
+              <Button 
+                type="button" 
+                variant="ghost" 
+                onClick={() => setResettingUser(null)}
+                className="rounded-xl font-bold text-slate-500"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isResetting || !newPassword}
+                className="bg-blue-600 text-white rounded-xl font-black px-8 shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all"
+              >
+                {isResetting ? "Updating..." : "Update Key"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

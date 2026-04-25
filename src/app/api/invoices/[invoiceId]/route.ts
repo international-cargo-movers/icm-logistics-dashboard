@@ -32,7 +32,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ invo
         const session = await getServerSession(authOptions);
         
         // If they are not logged in, OR they are a Viewer/Operations/Sales, block the request!
-        if (!session || !["SuperAdmin", "Finance"].includes(session.user.role)) {
+        if (!session || !["SuperAdmin", "Finance", "Operations"].includes(session.user.role)) {
             return NextResponse.json({ 
                 success: false, 
                 error: "Security Violation: You do not have clearance to modify financial records." 

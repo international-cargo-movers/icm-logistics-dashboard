@@ -33,7 +33,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ quot
         const session = await getServerSession(authOptions);
 
         // Block if not logged in, or if role is NOT SuperAdmin or Sales
-        if (!session?.user?.role || !["SuperAdmin", "Sales"].includes(session.user.role)) {
+        if (!session?.user?.role || !["SuperAdmin", "Sales", "Operations"].includes(session.user.role)) {
             return NextResponse.json({
                 success: false,
                 error: "Security Violation: You do not have clearance to modify quotes."

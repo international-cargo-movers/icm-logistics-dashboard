@@ -333,7 +333,7 @@ export default function EditQuotePage() {
     return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials & Hydrating Data...</div>
   }
 
-  if (session && !["SuperAdmin", "Sales"].includes(session?.user?.role || "")) {
+  if (session && !["SuperAdmin", "Sales", "Operations"].includes(session?.user?.role || "")) {
     return (
         <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
             <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
