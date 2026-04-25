@@ -39,6 +39,7 @@ interface ICompany {
   country?: string;
   contactName?: string;
   contactEmail?: string;
+  contactPhone?: string;
 }
 
 export default function MasterDirectoryPage() {
@@ -335,7 +336,9 @@ export default function MasterDirectoryPage() {
                                             <td className="px-8 py-6">
                                                 <div className="flex items-center gap-2">
                                                     <MapPin className="h-3 w-3 text-slate-300" />
-                                                    <span className="text-xs font-bold text-slate-600">{company.city || "TBD"}, {company.country || "TBD"}</span>
+                                                    <span className="text-xs font-bold text-slate-600">
+                                                        {company.city || "TBD"}{company.state ? `, ${company.state}` : ""}, {company.country || "TBD"}
+                                                    </span>
                                                 </div>
                                             </td>
                                             <td className="px-8 py-6">
@@ -446,6 +449,18 @@ export default function MasterDirectoryPage() {
                                 placeholder="City"
                             />
                             <Input
+                                value={editForm.state || ""}
+                                onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+                                className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-bold"
+                                placeholder="State / Province"
+                            />
+                            <Input
+                                value={editForm.zipCode || ""}
+                                onChange={(e) => setEditForm({ ...editForm, zipCode: e.target.value })}
+                                className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-bold"
+                                placeholder="Zip / Postal Code"
+                            />
+                            <Input
                                 value={editForm.country || ""}
                                 onChange={(e) => setEditForm({ ...editForm, country: e.target.value })}
                                 className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-bold"
@@ -463,13 +478,22 @@ export default function MasterDirectoryPage() {
                                 className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-bold"
                                 placeholder="Assigned Liaison Name"
                             />
-                            <Input
-                                value={editForm.contactEmail || ""}
-                                onChange={(e) => setEditForm({ ...editForm, contactEmail: e.target.value })}
-                                className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-bold"
-                                placeholder="liaison@entity.com"
-                                type="email"
-                            />
+                            <div className="grid grid-cols-2 gap-4">
+                                <Input
+                                    value={editForm.contactEmail || ""}
+                                    onChange={(e) => setEditForm({ ...editForm, contactEmail: e.target.value })}
+                                    className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-bold"
+                                    placeholder="liaison@entity.com"
+                                    type="email"
+                                />
+                                <Input
+                                    value={editForm.contactPhone || ""}
+                                    onChange={(e) => setEditForm({ ...editForm, contactPhone: e.target.value })}
+                                    className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-bold"
+                                    placeholder="Contact Phone"
+                                    type="tel"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>

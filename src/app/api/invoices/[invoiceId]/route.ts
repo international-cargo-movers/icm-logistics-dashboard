@@ -43,9 +43,32 @@ export async function PUT(request: Request, { params }: { params: Promise<{ invo
         const body = await request.json();
         const resolvedParams  = await params;
         
+        // 1. Fetch existing invoice to get current payment status
+        const existingInvoice = await Invoice.findOne({ invoiceNo: resolvedParams.invoiceId });
+        if (!existingInvoice) return NextResponse.json({ success: false, error: "Invoice not found" }, { status: 404 });
+
+        // 2. Recalculate Balance Due
+        const amountPaid = existingInvoice.amountPaid || 0;
+        const newNetAmount = body.totals?.netAmount || existingInvoice.totals.netAmount;
+        const newBalanceDue = Math.max(0, newNetAmount - amountPaid);
+
+        // 3. Determine New Status based on payment truth
+        let newStatus = body.status || existingInvoice.status;
+        if (amountPaid > 0) {
+            newStatus = newBalanceDue <= 0.5 ? "Paid" : "Partially Paid";
+        } else if (newStatus !== "Draft") {
+            newStatus = "Unpaid";
+        }
+
+        // 4. Update with recalculated fields
         const updatedInvoice = await Invoice.findOneAndUpdate(
             { invoiceNo: resolvedParams.invoiceId },
-            body,
+            { 
+                ...body, 
+                balanceDue: newBalanceDue, 
+                status: newStatus,
+                amountPaid: amountPaid // Safeguard to ensure amountPaid isn't wiped
+            },
             { new: true, runValidators: true }
         );
 

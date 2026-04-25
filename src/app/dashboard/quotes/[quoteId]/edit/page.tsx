@@ -16,6 +16,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 
+import { LineItemDescriptionInput } from "@/components/dashboard/financials/LineItemDescriptionInput"
+
 export default function EditQuotePage() {
   const params = useParams() as { quoteId: string }
   const router = useRouter()
@@ -661,7 +663,7 @@ export default function EditQuotePage() {
                       return (
                         <tr key={index} className="group hover:bg-surface-container-low/30 transition-colors">
                           <td className="py-2 px-3">
-                            <input type="text" value={item.chargeName} onChange={(e) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="e.g. Origin Handling" />
+                            <LineItemDescriptionInput value={item.chargeName} onChange={(e: any) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="e.g. Origin Handling" />
                           </td>
                           <td className="py-2 px-3">
                             <input type="text" value={item.currency} onChange={(e) => updateLineItem(index, 'currency', e.target.value.toUpperCase())} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none uppercase placeholder:text-gray-400" placeholder="INR" maxLength={3} />

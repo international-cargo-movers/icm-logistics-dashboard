@@ -28,7 +28,17 @@ export interface IInvoice extends Document {
     shipmentSnapshot: {
         origin?: string; destination?: string; pol?: string; pod?: string;
         oblMawb?: string; hblHawb?: string; vesselFlight?: string; 
-        commodity?: string; grossWeight?: number; volumetricWeight?: number; 
+        commodity?: string; 
+        items?: {
+            description?: string;
+            noOfPackages?: number;
+            packageUnit?: string;
+            grossWeight?: number;
+            netWeight?: number;
+            volumetricWeight?: number;
+            dimensions?: string;
+        }[];
+        grossWeight?: number; volumetricWeight?: number; 
         chargeableWeight?: number; noOfPackages?: number; containerNo?: string;  
         egm?: string; igm?: string; sbNo?: string;         
     };
@@ -58,7 +68,17 @@ export const InvoiceSchema = new Schema<IInvoice>({
     shipmentSnapshot: {
         origin: { type: String }, destination: { type: String }, pol: { type: String },
         pod: { type: String }, oblMawb: { type: String }, hblHawb: { type: String },
-        vesselFlight: { type: String }, commodity: { type: String }, grossWeight: { type: Number },
+        vesselFlight: { type: String }, commodity: { type: String }, 
+        items: [{
+            description: String,
+            noOfPackages: Number,
+            packageUnit: String,
+            grossWeight: Number,
+            netWeight: Number,
+            volumetricWeight: Number,
+            dimensions: String,
+        }],
+        grossWeight: { type: Number },
         volumetricWeight: { type: Number }, chargeableWeight: { type: Number }, noOfPackages: { type: Number },
         containerNo: { type: String }, egm: { type: String }, igm: { type: String }, sbNo: { type: String },
     },

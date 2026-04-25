@@ -41,6 +41,7 @@ export async function POST(request:Request){
             // THE FIX: Catch 'email' from frontend and save it as 'contactEmail'
             contactEmail: body.email || body.contactEmail, 
             contactName:body.contactName,
+            contactPhone: body.contactPhone,
             defaultSalesPerson: body.defaultSalesPerson || body.salesPerson, 
             taxId: body.taxId,
             streetAddress: body.streetAddress,

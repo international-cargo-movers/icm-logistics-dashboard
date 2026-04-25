@@ -16,6 +16,8 @@ import { toast } from "sonner"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
+import { LineItemDescriptionInput } from "@/components/dashboard/financials/LineItemDescriptionInput"
+
 export default function NewQuotePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -608,7 +610,7 @@ export default function NewQuotePage() {
                       return (
                         <tr key={index} className="group hover:bg-surface-container-low/30 transition-colors">
                           <td className="py-2 px-3">
-                            <input type="text" value={item.chargeName} onChange={(e) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="e.g. Origin Handling" />
+                            <LineItemDescriptionInput value={item.chargeName} onChange={(e: any) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="e.g. Origin Handling" />
                           </td>
                           <td className="py-2 px-3">
                             <input type="text" value={item.currency} onChange={(e) => updateLineItem(index, 'currency', e.target.value.toUpperCase())} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none uppercase placeholder:text-gray-400" placeholder="USD" maxLength={3} />

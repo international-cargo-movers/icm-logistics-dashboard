@@ -111,24 +111,32 @@ export default function InvoicePDF({ data }: { data: any }) {
 
           {/* SHIPMENT PARTICULARS (3 Column Grid) */}
           <View style={styles.rowBorderBottom}>
-            <View style={[styles.colBorderRight, { width: '33.3%' }]}>
-              <View style={styles.flexRow}><Text style={{ width: '40%' }}>Origin:</Text><Text style={{ width: '60%' }}>{snapshot.origin || "—"}</Text></View>
-              <View style={styles.flexRow}><Text style={{ width: '40%' }}>POL:</Text><Text style={{ width: '60%' }}>{snapshot.pol || "—"}</Text></View>
-              <View style={styles.flexRow}><Text style={{ width: '40%' }}>POD:</Text><Text style={{ width: '60%' }}>{snapshot.pod || "—"}</Text></View>
-              <View style={styles.flexRow}><Text style={{ width: '40%' }}>Destination:</Text><Text style={{ width: '60%' }}>{snapshot.destination || "—"}</Text></View>
-              <View style={styles.flexRow}><Text style={{ width: '40%' }}>Commodity:</Text><Text style={{ width: '60%' }}>{snapshot.commodity || "—"}</Text></View>
+            <View style={[styles.colBorderRight, { width: '40%' }]}>
+              <Text style={{ fontWeight: 'bold', marginBottom: 2, fontSize: 7 }}>Cargo Description & Details:</Text>
+              {snapshot.items && snapshot.items.length > 0 ? (
+                snapshot.items.map((item: any, i: number) => (
+                  <View key={i} style={{ marginBottom: 3 }}>
+                    <Text style={{ fontWeight: 'bold' }}>{item.description}</Text>
+                    <Text style={{ fontSize: 6.5, color: '#333' }}>
+                      {item.noOfPackages} {item.packageUnit} | GW: {item.grossWeight} KGS | {item.dimensions || ""}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text>{snapshot.commodity || "General Cargo"}</Text>
+              )}
             </View>
-            <View style={[styles.colBorderRight, { width: '33.3%' }]}>
-              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Pkgs:</Text><Text style={{ width: '50%' }}>{snapshot.noOfPackages || "—"}</Text></View>
-              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Gross Wt:</Text><Text style={{ width: '50%' }}>{snapshot.grossWeight || "—"} KGS</Text></View>
-              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Volumn Wt:</Text><Text style={{ width: '50%' }}>{snapshot.volumetricWeight || "—"}</Text></View>
-              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Chargeable Wt:</Text><Text style={{ width: '50%' }}>{snapshot.chargeableWeight || "—"}</Text></View>
-              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Container No:</Text><Text style={{ width: '50%' }}>{snapshot.containerNo || "—"}</Text></View>
+            <View style={[styles.colBorderRight, { width: '30%' }]}>
+              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Total Pkgs:</Text><Text style={{ width: '50%' }}>{snapshot.noOfPackages || "—"}</Text></View>
+              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Total GW:</Text><Text style={{ width: '50%' }}>{snapshot.grossWeight || "—"} KGS</Text></View>
+              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Total VW:</Text><Text style={{ width: '50%' }}>{snapshot.volumetricWeight || "—"} CBM</Text></View>
+              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Ch. Wt:</Text><Text style={{ width: '50%' }}>{snapshot.chargeableWeight || "—"} KGS</Text></View>
+              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Cont. No:</Text><Text style={{ width: '50%', fontSize: 7 }}>{snapshot.containerNo || "—"}</Text></View>
             </View>
-            <View style={[styles.colNoBorder, { width: '33.3%' }]}>
-              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Vessel/Flight:</Text><Text style={{ width: '50%' }}>{snapshot.vesselFlight || "—"}</Text></View>
-              <View style={styles.flexRow}><Text style={{ width: '50%' }}>EGM:</Text><Text style={{ width: '50%' }}>{snapshot.egm || "—"}</Text></View>
-              <View style={styles.flexRow}><Text style={{ width: '50%' }}>IGM:</Text><Text style={{ width: '50%' }}>{snapshot.igm || "—"}</Text></View>
+            <View style={[styles.colNoBorder, { width: '30%' }]}>
+              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Origin:</Text><Text style={{ width: '50%' }}>{snapshot.origin || "—"}</Text></View>
+              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Destination:</Text><Text style={{ width: '50%' }}>{snapshot.destination || "—"}</Text></View>
+              <View style={styles.flexRow}><Text style={{ width: '50%' }}>Vessel/Flt:</Text><Text style={{ width: '50%' }}>{snapshot.vesselFlight || "—"}</Text></View>
               <View style={styles.flexRow}><Text style={{ width: '50%' }}>SB No:</Text><Text style={{ width: '50%' }}>{snapshot.sbNo || "—"}</Text></View>
             </View>
           </View>

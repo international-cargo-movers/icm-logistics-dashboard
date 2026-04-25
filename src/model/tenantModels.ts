@@ -7,6 +7,7 @@ import { ReceiptSchema } from "./ReceiptModel";
 import { VendorInvoiceSchema } from "./VendorInvoiceModel";
 import { PortSchema } from "./PortModel";
 import { UserSchema } from "./UserModel";
+import { FinancialItemSchema } from "./FinancialItemModel";
 
 export async function getTenantModels() {
   return {
@@ -23,5 +24,6 @@ export async function getAdminModels() {
   return {
     User: await getAdminModel("User", UserSchema),
     Port: await getAdminModel("Port", PortSchema),
+    FinancialItem: await getAdminModel("FinancialItem", FinancialItemSchema),
   };
 }

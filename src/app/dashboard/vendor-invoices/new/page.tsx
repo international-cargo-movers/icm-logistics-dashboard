@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
 
+import { LineItemDescriptionInput } from "@/components/dashboard/financials/LineItemDescriptionInput"
+
 // --- UTILITY: Number to Words ---
 function numberToWords(num: number): string {
     if (num === 0) return "Zero";
@@ -421,7 +423,7 @@ export default function SmartVendorInvoiceGenerator() {
                                 <div key={field.id} className="grid grid-cols-7 gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
                                     <div className="col-span-2 space-y-1">
                                         <label className="text-[9px] font-bold text-slate-600 uppercase">Description</label>
-                                        <input {...register(`lineItems.${index}.description`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
+                                        <LineItemDescriptionInput {...register(`lineItems.${index}.description`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
                                     </div>
                                     <div className="space-y-1">
                                         <label className="text-[9px] font-bold text-slate-600 uppercase">SAC</label>

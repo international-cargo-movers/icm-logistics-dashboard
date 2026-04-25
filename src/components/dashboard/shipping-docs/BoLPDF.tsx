@@ -182,10 +182,22 @@ export default function BolPDF({ data }: { data: any }) {
                     <View style={[styles.cargoBody, { borderBottom: '1px solid #000' }]}>
                         <Text style={styles.wMarks}>{bol.marksAndNumbers || "N/M"}</Text>
                         <Text style={styles.wPkgs}>{cargo.totalNoOfPackages || cargo.noOfPackages || "1"}</Text>
-                        <Text style={styles.wDesc}>
-                            {cargo.commodity || "GENERAL CARGO"}{"\n\n"}
-                            {cargo.description || ""}
-                        </Text>
+                        <View style={styles.wDesc}>
+                            <Text style={{ fontWeight: 'bold', marginBottom: 5 }}>{cargo.commodity || "GENERAL CARGO"}</Text>
+                            
+                            {cargo.items && cargo.items.length > 0 ? (
+                                cargo.items.map((item: any, i: number) => (
+                                    <View key={i} style={{ marginBottom: 4 }}>
+                                        <Text style={{ fontSize: 7, fontWeight: 'bold' }}>{item.description}</Text>
+                                        <Text style={{ fontSize: 6.5 }}>
+                                            {item.noOfPackages} {item.packageUnit} | {item.grossWeight} KGS | {item.dimensions || "N/A"}
+                                        </Text>
+                                    </View>
+                                ))
+                            ) : (
+                                <Text>{cargo.description || ""}</Text>
+                            )}
+                        </View>
                         <Text style={styles.wWeight}>{(cargo.totalGrossWeight || cargo.grossWeight) ? `${cargo.totalGrossWeight || cargo.grossWeight} KGS` : "—"}</Text>
                         <Text style={styles.wMeas}>{cargo.totalVolumetricWeight || cargo.volumetricWeight || "—"}</Text>
                     </View>

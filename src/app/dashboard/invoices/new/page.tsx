@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
 
+import { LineItemDescriptionInput } from "@/components/dashboard/financials/LineItemDescriptionInput"
+
 // --- UTILITY: Number to Words ---
 function numberToWords(num: number): string {
     if (num === 0) return "Zero";
@@ -58,6 +60,15 @@ const invoiceSchema = z.object({
     grossWeight: z.coerce.number().optional(),
     volumetricWeight: z.coerce.number().optional(),
     chargeableWeight: z.coerce.number().optional(),
+    items: z.array(z.object({
+        description: z.string().optional(),
+        noOfPackages: z.number().optional(),
+        packageUnit: z.string().optional(),
+        grossWeight: z.number().optional(),
+        netWeight: z.number().optional(),
+        volumetricWeight: z.number().optional(),
+        dimensions: z.string().optional(),
+    })).optional(),
 
     lineItems: z.array(z.object({
         description: z.string().min(1),
@@ -142,6 +153,7 @@ export default function SmartInvoiceGenerator() {
         setValue("grossWeight", gw)
         setValue("volumetricWeight", vw)
         setValue("chargeableWeight", Math.max(gw, vw))
+        setValue("items", job.cargoDetails?.items || [])
 
         // Pull Shipping Document details
         const hawb = job.shippingDocuments?.awbDetails?.hawbNumber || ""
@@ -227,7 +239,9 @@ export default function SmartInvoiceGenerator() {
                 shipmentSnapshot: {
                     origin: data.origin, destination: data.destination, pol: data.origin, pod: data.destination,
                     oblMawb: data.oblMawb, hblHawb: data.hblHawb, containerNo: data.containerNo, vesselFlight: data.vesselFlight,
-                    commodity: data.commodity, egm: data.egm, igm: data.igm, sbNo: data.sbNo,
+                    commodity: data.commodity, 
+                    items: data.items,
+                    egm: data.egm, igm: data.igm, sbNo: data.sbNo,
                     noOfPackages: data.noOfPackages, grossWeight: data.grossWeight, volumetricWeight: data.volumetricWeight, chargeableWeight: data.chargeableWeight
                 },
                 lineItems: processedLineItems,
@@ -365,7 +379,7 @@ export default function SmartInvoiceGenerator() {
                                         const lineTaxable = lineRate * lineRoe;
                                         return (
                                             <tr key={field.id} className="hover:bg-slate-50/50 transition-colors group">
-                                                <td className="px-6 py-4"><input {...register(`lineItems.${index}.description`)} className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none" placeholder="Description..." /></td>
+                                                <td className="px-6 py-4"><LineItemDescriptionInput {...register(`lineItems.${index}.description`)} className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none" placeholder="Description..." /></td>
                                                 <td className="px-4 py-4"><input {...register(`lineItems.${index}.sacCode`)} className="w-full bg-transparent border-none text-xs text-slate-500 font-mono focus:ring-0 p-0 outline-none" placeholder="996511" /></td>
                                                 <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.rate`)} className="w-full bg-transparent border-none text-sm font-semibold tabular-nums focus:ring-0 p-0 outline-none" /></td>
                                                 <td className="px-4 py-4 text-center"><select {...register(`lineItems.${index}.currency`)} className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-1 rounded-full outline-none uppercase cursor-pointer appearance-none"><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option></select></td>

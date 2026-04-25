@@ -209,9 +209,24 @@ export default function AwbPDF({ data }: { data: any }) {
                         <View style={styles.cwRate}><Text>AS AGREED</Text></View>
                         <View style={styles.cwTotal}><Text>AS AGREED</Text></View>
                         <View style={styles.cwDesc}>
-                            <Text style={styles.value}>{cargo.commodity || "GENERAL CARGO"}</Text>
-                            <Text style={{ marginTop: 10 }}>{cargo.description || ""}</Text>
-                            <Text style={{ marginTop: 10 }}>DIMENSIONS: AS PER ATTACHED PL</Text>
+                            <View style={{ marginBottom: 5 }}>
+                                <Text style={[styles.value, { fontWeight: 'bold' }]}>{cargo.commodity || "GENERAL CARGO"}</Text>
+                            </View>
+                            
+                            {cargo.items && cargo.items.length > 0 ? (
+                                cargo.items.map((item: any, i: number) => (
+                                    <View key={i} style={{ marginBottom: 4 }}>
+                                        <Text style={{ fontSize: 7, fontWeight: 'bold' }}>{item.description}</Text>
+                                        <Text style={{ fontSize: 6.5 }}>
+                                            {item.noOfPackages} {item.packageUnit} | {item.grossWeight} KGS | {item.dimensions || "N/A"}
+                                        </Text>
+                                    </View>
+                                ))
+                            ) : (
+                                <Text style={styles.value}>{cargo.description || ""}</Text>
+                            )}
+                            
+                            <Text style={{ marginTop: 5, fontSize: 7, fontWeight: 'bold' }}>DIMENSIONS: AS PER ATTACHED PL</Text>
                         </View>
                     </View>
 
