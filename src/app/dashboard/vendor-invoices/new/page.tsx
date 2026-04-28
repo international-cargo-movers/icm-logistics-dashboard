@@ -65,6 +65,8 @@ const vendorInvoiceSchema = z.object({
         description: z.string().min(1),
         sacCode: z.string(),
         rate: z.coerce.number().min(0),
+        quantity: z.coerce.number().min(0.01).default(1),
+        unit: z.string().default("SET"),
         currency: z.string(),
         roe: z.coerce.number().min(1),
         gstPercent: z.coerce.number().min(0),
@@ -176,16 +178,18 @@ export default function SmartVendorInvoiceGenerator() {
                     const vendorInvoiceReadyLines = (quoteJson.data.financials?.lineItems || []).map((item: any) => ({
                         description: item.chargeName || "Freight Charge",
                         sacCode: "996511",
-                        rate: Number(item.buyPrice) || 0,  // <-- USES BUY PRICE FOR VENDOR
+                        rate: Number(item.buyPrice) || 0,
+                        quantity: Number(item.quantity) || 1,
+                        unit: item.notes?.includes("per") ? item.notes.split("per ")[1] : "SET",
                         currency: item.currency || "USD",
                         roe: item.roe || 1,
                         gstPercent: 18 
                     }))
-                    replace(vendorInvoiceReadyLines.length > 0 ? vendorInvoiceReadyLines : [{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
+                    replace(vendorInvoiceReadyLines.length > 0 ? vendorInvoiceReadyLines : [{ description: "Freight Charges", sacCode: "996511", rate: 0, quantity: 1, unit: "SET", currency: "USD", roe: 1, gstPercent: 18 }])
                 }
             } catch (error) { toast.error("Failed to fetch linked quote financials.") }
         } else {
-            replace([{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
+            replace([{ description: "Freight Charges", sacCode: "996511", rate: 0, quantity: 1, unit: "SET", currency: "USD", roe: 1, gstPercent: 18 }])
         }
     }
 
@@ -203,7 +207,7 @@ export default function SmartVendorInvoiceGenerator() {
 
     const lineItems = watch("lineItems") || []
     const totals = lineItems.reduce((acc, item) => {
-        const taxableValue = (item.rate || 0) * (item.roe || 1)
+        const taxableValue = (item.rate || 0) * (item.quantity || 1) * (item.roe || 1)
         const gstAmount = taxableValue * ((item.gstPercent || 0) / 100)
         return {
             taxable: acc.taxable + taxableValue,
@@ -220,7 +224,7 @@ export default function SmartVendorInvoiceGenerator() {
             const vendorId = vendor?._id || linkedJob?.vendorDetails?.[0]?.vendorId;
 
             const processedLineItems = data.lineItems.map(item => {
-                const taxableValue = (item.rate || 0) * (item.roe || 1);
+                const taxableValue = (item.rate || 0) * (item.quantity || 1) * (item.roe || 1);
                 const gstAmount = taxableValue * ((item.gstPercent || 0) / 100);
                 return { ...item, taxableValue, gstAmount };
             });
@@ -412,7 +416,7 @@ export default function SmartVendorInvoiceGenerator() {
                             </div>
                             <button
                                 type="button"
-                                onClick={() => append({ description: "", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 })}
+                                onClick={() => append({ description: "", sacCode: "996511", rate: 0, quantity: 1, unit: "SET", currency: "USD", roe: 1, gstPercent: 18 })}
                                 className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors"
                             >
                                 <PlusCircle className="w-4 h-4" /> Add Line
@@ -420,34 +424,57 @@ export default function SmartVendorInvoiceGenerator() {
                         </div>
                         <div className="p-8 space-y-4 max-h-96 overflow-y-auto">
                             {fields.map((field, index) => (
-                                <div key={field.id} className="grid grid-cols-7 gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                                    <div className="col-span-2 space-y-1">
+                                <div key={field.id} className="grid grid-cols-12 gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                    <div className="col-span-3 space-y-1">
                                         <label className="text-[9px] font-bold text-slate-600 uppercase">Description</label>
                                         <LineItemDescriptionInput {...register(`lineItems.${index}.description`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="col-span-1 space-y-1">
                                         <label className="text-[9px] font-bold text-slate-600 uppercase">SAC</label>
                                         <input {...register(`lineItems.${index}.sacCode`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="col-span-1 space-y-1">
+                                        <label className="text-[9px] font-bold text-slate-600 uppercase">Qty</label>
+                                        <input type="number" step="0.01" {...register(`lineItems.${index}.quantity`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
+                                    </div>
+                                    <div className="col-span-1 space-y-1">
+                                        <label className="text-[9px] font-bold text-slate-600 uppercase">Unit</label>
+                                        <input {...register(`lineItems.${index}.unit`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
+                                    </div>
+                                    <div className="col-span-1 space-y-1">
                                         <label className="text-[9px] font-bold text-slate-600 uppercase">Rate</label>
-                                        <input type="number" {...register(`lineItems.${index}.rate`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
+                                        <input type="number" step="0.01" {...register(`lineItems.${index}.rate`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="col-span-1 space-y-1 text-center">
                                         <label className="text-[9px] font-bold text-slate-600 uppercase">Curr</label>
-                                        <input {...register(`lineItems.${index}.currency`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
+                                        <select {...register(`lineItems.${index}.currency`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs outline-none">
+                                            <option value="USD">USD</option>
+                                            <option value="EUR">EUR</option>
+                                            <option value="INR">INR</option>
+                                        </select>
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="col-span-1 space-y-1">
                                         <label className="text-[9px] font-bold text-slate-600 uppercase">ROE</label>
-                                        <input type="number" {...register(`lineItems.${index}.roe`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
+                                        <input type="number" step="0.01" {...register(`lineItems.${index}.roe`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="col-span-1 space-y-1">
                                         <label className="text-[9px] font-bold text-slate-600 uppercase">GST%</label>
-                                        <input type="number" {...register(`lineItems.${index}.gstPercent`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
+                                        <select {...register(`lineItems.${index}.gstPercent`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs outline-none">
+                                            <option value="18">18%</option>
+                                            <option value="12">12%</option>
+                                            <option value="5">5%</option>
+                                            <option value="0">0%</option>
+                                        </select>
                                     </div>
-                                    <button type="button" onClick={() => remove(index)} className="col-span-1 flex items-end justify-center pb-1">
-                                        <Trash2 className="w-4 h-4 text-red-500 hover:text-red-700 cursor-pointer" />
-                                    </button>
+                                    <div className="col-span-1 flex items-end justify-center pb-1">
+                                        <button type="button" onClick={() => remove(index)} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors">
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <div className="col-span-12 text-right">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase mr-2">Line Total (INR):</span>
+                                        <span className="text-xs font-bold text-slate-700">₹{((watch(`lineItems.${index}.rate`) || 0) * (watch(`lineItems.${index}.quantity`) || 1) * (watch(`lineItems.${index}.roe`) || 1)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -461,7 +488,7 @@ export default function SmartVendorInvoiceGenerator() {
                                 <p className="text-2xl font-bold text-slate-900">₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                             </div>
                             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
-                                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">GST Amount (18%)</p>
+                                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">GST Amount</p>
                                 <p className="text-2xl font-bold text-orange-600">₹{totals.gst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                             </div>
                             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100">

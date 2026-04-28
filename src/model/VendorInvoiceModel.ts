@@ -4,6 +4,8 @@ export interface IVendorLineItem {
     description: string;
     sacCode: string;
     rate: number;
+    quantity: number;
+    unit?: string;
     currency: string;
     roe: number;
     gstPercent: number;
@@ -64,7 +66,10 @@ export const VendorInvoiceSchema = new Schema<IVendorInvoice>({
     },
     lineItems: [{
         description: { type: String, required: true }, sacCode: { type: String },
-        rate: { type: Number, required: true }, currency: { type: String, default: "INR" },
+        rate: { type: Number, required: true }, 
+        quantity: { type: Number, required: true, default: 1 },
+        unit: { type: String, default: "SET" },
+        currency: { type: String, default: "INR" },
         roe: { type: Number, default: 1 }, gstPercent: { type: Number, required: true },
         taxableValue: { type: Number, required: true }, gstAmount: { type: Number, required: true }
     }],
@@ -81,5 +86,28 @@ export const VendorInvoiceSchema = new Schema<IVendorInvoice>({
         type: String, enum: ["Draft", "Unpaid", "Paid", "Overdue", "Partially Paid"], default: "Draft"
     }
 }, { timestamps: true });
+
+VendorInvoiceSchema.pre("save", function (this: IVendorInvoice, next) {
+    let totalTaxable = 0;
+    let totalGst = 0;
+
+    this.lineItems.forEach(item => {
+        // Enforce ROE multiplication: taxableValue = rate * quantity * roe
+        const roe = item.roe || 1;
+        const qty = item.quantity || 1;
+        item.taxableValue = item.rate * qty * roe;
+        item.gstAmount = item.taxableValue * (item.gstPercent / 100);
+
+        totalTaxable += item.taxableValue;
+        totalGst += item.gstAmount;
+    });
+
+    this.totals.totalTaxable = totalTaxable;
+    this.totals.totalGst = totalGst;
+    this.totals.netAmount = Math.round(totalTaxable + totalGst + (this.totals.roundOff || 0));
+    this.balanceDue = this.totals.netAmount - (this.amountPaid || 0);
+
+    next();
+});
 
 export default models.VendorInvoice || mongoose.model<IVendorInvoice>("VendorInvoice", VendorInvoiceSchema);

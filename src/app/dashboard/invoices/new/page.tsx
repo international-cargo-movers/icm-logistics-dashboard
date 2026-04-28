@@ -15,6 +15,7 @@ import { toast } from "sonner"
 import { useSession } from "next-auth/react"
 
 import { LineItemDescriptionInput } from "@/components/dashboard/financials/LineItemDescriptionInput"
+import { getAutoUnitAndQty } from "@/lib/utils"
 
 // --- UTILITY: Number to Words ---
 function numberToWords(num: number): string {
@@ -74,6 +75,8 @@ const invoiceSchema = z.object({
         description: z.string().min(1),
         sacCode: z.string(),
         rate: z.coerce.number().min(0),
+        quantity: z.coerce.number().min(0.01).default(1),
+        unit: z.string().default("SET"),
         currency: z.string(),
         roe: z.coerce.number().min(1),
         gstPercent: z.coerce.number().min(0),
@@ -166,6 +169,8 @@ export default function SmartInvoiceGenerator() {
         setValue("vesselFlight", job.cargoDetails?.carrier || "")
         setValue("containerNo", job.shippingDocuments?.bolDetails?.bookingReference || "")
 
+        const { unit: defaultUnit, qty: defaultQty } = getAutoUnitAndQty(job);
+
         if (job.quoteReference) {
             toast.message(`Fetching Financials from Quote: ${job.quoteReference}`)
             try {
@@ -173,19 +178,24 @@ export default function SmartInvoiceGenerator() {
                 const quoteJson = await quoteRes.json()
 
                 if (quoteJson.success && quoteJson.data) {
-                    const invoiceReadyLines = (quoteJson.data.financials?.lineItems || []).map((item: any) => ({
-                        description: item.chargeName || "Freight Charge",
-                        sacCode: "996511",
-                        rate: Number(item.sellPrice) || 0,
-                        currency: item.currency || "USD",
-                        roe: item.roe || 1,
-                        gstPercent: 18 
-                    }))
-                    replace(invoiceReadyLines.length > 0 ? invoiceReadyLines : [{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
+                    const invoiceReadyLines = (quoteJson.data.financials?.lineItems || []).map((item: any) => {
+                        const isFreight = item.chargeType === "Freight" || (item.chargeName || "").toLowerCase().includes("freight");
+                        return {
+                            description: item.chargeName || "Freight Charge",
+                            sacCode: "996511",
+                            rate: Number(item.sellPrice) || 0,
+                            quantity: isFreight ? (item.quantity || defaultQty) : 1,
+                            unit: isFreight ? (item.notes || defaultUnit) : "SET",
+                            currency: item.currency || "USD",
+                            roe: item.roe || 1,
+                            gstPercent: 18 
+                        };
+                    })
+                    replace(invoiceReadyLines.length > 0 ? invoiceReadyLines : [{ description: "Freight Charges", sacCode: "996511", rate: 0, quantity: defaultQty, unit: defaultUnit, currency: "USD", roe: 1, gstPercent: 18 }])
                 }
             } catch (error) { toast.error("Failed to fetch linked quote financials.") }
         } else {
-            replace([{ description: "Freight Charges", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 }])
+            replace([{ description: "Freight Charges", sacCode: "996511", rate: 0, quantity: defaultQty, unit: defaultUnit, currency: "USD", roe: 1, gstPercent: 18 }])
         }
     }
 
@@ -203,7 +213,7 @@ export default function SmartInvoiceGenerator() {
 
     const lineItems = watch("lineItems") || []
     const totals = lineItems.reduce((acc, item) => {
-        const taxableValue = (item.rate || 0) * (item.roe || 1)
+        const taxableValue = (item.rate || 0) * (item.quantity || 1) * (item.roe || 1)
         const gstAmount = taxableValue * ((item.gstPercent || 0) / 100)
         return {
             taxable: acc.taxable + taxableValue,
@@ -219,7 +229,7 @@ export default function SmartInvoiceGenerator() {
             const companyId = linkedJob?.customerDetails?.companyId?._id || linkedJob?.customerDetails?.companyId;
 
             const processedLineItems = data.lineItems.map(item => {
-                const taxableValue = (item.rate || 0) * (item.roe || 1);
+                const taxableValue = (item.rate || 0) * (item.quantity || 1) * (item.roe || 1);
                 const gstAmount = taxableValue * ((item.gstPercent || 0) / 100);
                 return { ...item, taxableValue, gstAmount };
             });
@@ -356,14 +366,16 @@ export default function SmartInvoiceGenerator() {
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center">
                             <h2 className="text-sm font-extrabold text-slate-900">Billing Items</h2>
-                            <button type="button" onClick={() => append({ description: "", sacCode: "996511", rate: 0, currency: "USD", roe: 1, gstPercent: 18 })} className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"><PlusCircle className="w-4 h-4" /> Add Charge Line</button>
+                            <button type="button" onClick={() => append({ description: "", sacCode: "996511", rate: 0, quantity: 1, unit: "SET", currency: "USD", roe: 1, gstPercent: 18 })} className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"><PlusCircle className="w-4 h-4" /> Add Charge Line</button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-slate-50/80 border-b border-slate-100">
-                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest w-[30%]">Description</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest w-[25%]">Description</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">SAC/HSN</th>
+                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Qty</th>
+                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Unit</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rate</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Cur</th>
                                         <th className="px-4 py-4 text-[10px] font-bold text-slate-500 text-center uppercase tracking-widest">ROE</th>
@@ -375,12 +387,15 @@ export default function SmartInvoiceGenerator() {
                                 <tbody className="divide-y divide-slate-100">
                                     {fields.map((field, index) => {
                                         const lineRate = watch(`lineItems.${index}.rate`) || 0;
+                                        const lineQty = watch(`lineItems.${index}.quantity`) || 1;
                                         const lineRoe = watch(`lineItems.${index}.roe`) || 1;
-                                        const lineTaxable = lineRate * lineRoe;
+                                        const lineTaxable = lineRate * lineQty * lineRoe;
                                         return (
                                             <tr key={field.id} className="hover:bg-slate-50/50 transition-colors group">
                                                 <td className="px-6 py-4"><LineItemDescriptionInput {...register(`lineItems.${index}.description`)} className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none" placeholder="Description..." /></td>
                                                 <td className="px-4 py-4"><input {...register(`lineItems.${index}.sacCode`)} className="w-full bg-transparent border-none text-xs text-slate-500 font-mono focus:ring-0 p-0 outline-none" placeholder="996511" /></td>
+                                                <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.quantity`)} className="w-full bg-transparent border-none text-sm font-semibold tabular-nums focus:ring-0 p-0 outline-none" /></td>
+                                                <td className="px-4 py-4"><input {...register(`lineItems.${index}.unit`)} className="w-full bg-transparent border-none text-xs text-slate-500 focus:ring-0 p-0 outline-none" placeholder="per KG" /></td>
                                                 <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.rate`)} className="w-full bg-transparent border-none text-sm font-semibold tabular-nums focus:ring-0 p-0 outline-none" /></td>
                                                 <td className="px-4 py-4 text-center"><select {...register(`lineItems.${index}.currency`)} className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-1 rounded-full outline-none uppercase cursor-pointer appearance-none"><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option></select></td>
                                                 <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.roe`)} className="w-full bg-transparent border-none text-xs font-mono text-slate-500 text-center focus:ring-0 p-0 outline-none" /></td>

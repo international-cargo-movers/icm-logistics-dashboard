@@ -53,7 +53,7 @@ export default function MasterDirectoryPage() {
   const [selectedCompany, setSelectedCompany] = React.useState<ICompany | null>(null)
   const [editForm, setEditForm] = React.useState<Partial<ICompany>>({})
   
-  const canEditMasterData = session && ["SuperAdmin", "Finance", "Sales"].includes(session?.user?.role || "")
+  const canEditMasterData = session && ["SuperAdmin", "Finance", "Sales", "Operations"].includes(session?.user?.role || "")
   
   React.useEffect(() => {
     async function fetchCompanies() {
@@ -76,6 +76,7 @@ export default function MasterDirectoryPage() {
         if (activeTab === "Customers") matchesTab = company.type?.includes("Customer");
         if (activeTab === "Vendors") matchesTab = company.type?.includes("Vendor");
         if (activeTab === "Shippers/Consignees") matchesTab = company.type?.includes("Shipper") || company.type?.includes("Consignee");
+        if (activeTab === "Ports & Locations") return false;
 
         const matchesSearch = company.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (company.taxId && company.taxId.toLowerCase().includes(searchQuery.toLowerCase()))

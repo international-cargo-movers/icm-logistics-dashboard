@@ -13,8 +13,8 @@ const styles = StyleSheet.create({
     col25: { width: '25%', borderRight: '1px solid #000', padding: 4 },
 
     // Boxes
-    box: { padding: 4, borderBottom: '1px solid #000', minHeight: 65 },
-    boxNoBorder: { padding: 4, minHeight: 65 },
+    box: { padding: 4, borderBottom: '1px solid #000', flex: 1 },
+    boxNoBorder: { padding: 4, flex: 1 },
 
     // Typography
     label: { fontSize: 6, color: '#333', marginBottom: 2, textTransform: 'uppercase' },
@@ -47,19 +47,16 @@ export default function BolPDF({ data }: { data: any }) {
     const cargo = data?.cargoDetails || {};
     const vendors = data?.vendorDetails || [];
 
-    // Resolve Delivery Agent (Fallback to Vendor if Overseas Agent is missing)
-    let deliveryAgent = party.overseasAgentId;
-    if (!deliveryAgent || !deliveryAgent.name) {
-        const fallbackVendor = vendors.find((v: any) => 
-            v.assignedTask && 
-            (v.assignedTask.toLowerCase().includes("delivery agent") || 
-             v.assignedTask.toLowerCase().includes("destination agent") ||
-             v.assignedTask.toLowerCase().includes("overseas agent"))
-        );
-        if (fallbackVendor && fallbackVendor.vendorId) {
-            deliveryAgent = fallbackVendor.vendorId;
-        }
-    }
+    const grossWeight = Number(cargo.totalGrossWeight || cargo.grossWeight || 0);
+    const volumetricWeight = Number(cargo.totalVolumetricWeight || cargo.volumetricWeight || 0);
+    const chargeableWeight = Math.max(grossWeight, volumetricWeight).toFixed(2);
+
+    // Resolve Delivery Agent (Strictly Overseas Agent if available as per user request)
+    const deliveryAgent = party.overseasAgentId;
+
+    // Resolve Notify Party
+    const notifyParty = party.notifyPartyId;
+    const hasNotifyParty = !!(notifyParty && notifyParty.name);
 
     // Helper to convert number to words for packages (simplified)
     const totalPkgs = cargo.totalNoOfPackages || cargo.noOfPackages || "1";
@@ -69,7 +66,9 @@ export default function BolPDF({ data }: { data: any }) {
         <Document>
             <Page size="A4" style={styles.page}>
                 <View style={styles.outerBorder}>
-
+                    <View>
+                        {bol.mtuNumber ? ` / MTU: ${bol.mtuNumber}` : ""}
+                    </View>
                     {/* TOP SECTION: Parties & Header */}
                     <View style={styles.row}>
                         {/* Left Column: Parties */}
@@ -77,28 +76,41 @@ export default function BolPDF({ data }: { data: any }) {
                             <View style={styles.box}>
                                 <Text style={styles.label}>1. Shipper (Name and Address)</Text>
                                 <Text style={styles.value}>{cust.companyId?.name || "As Per Order"}</Text>
-                                <Text style={styles.address}>{cust.companyId?.streetAddress || ""}</Text>
-                                <Text style={styles.address}>{cust.companyId?.city || ""}, {cust.companyId?.state || ""} -  {cust.companyId?.zipCode || ""}</Text>
-                                <Text style={styles.address}>{cust.companyId?.country || ""}</Text>
+                                {cust.companyId?.streetAddress && <Text style={styles.address}>{cust.companyId.streetAddress}</Text>}
+                                {(cust.companyId?.city || cust.companyId?.state || cust.companyId?.zipCode) && (
+                                    <Text style={styles.address}>
+                                        {cust.companyId.city || ""}{cust.companyId.state ? `, ${cust.companyId.state}` : ""} {cust.companyId.zipCode ? `- ${cust.companyId.zipCode}` : ""}
+                                    </Text>
+                                )}
+                                {cust.companyId?.country && <Text style={styles.address}>{cust.companyId.country}</Text>}
                             </View>
                             <View style={styles.box}>
                                 <Text style={styles.label}>2. Consignee (Name and Address)</Text>
                                 <Text style={styles.value}>{party.consigneeId?.name || "AS PER INVOICE"}</Text>
-                                <Text style={styles.address}>{party.consigneeId?.streetAddress || ""}</Text>
-                                <Text style={styles.address}>{party.consigneeId?.city || ""}, {party.consigneeId?.state || ""} -  {party.consigneeId?.zipCode || ""}</Text>
-                                <Text style={styles.address}>{party.consigneeId?.country || ""} </Text>
-
+                                {party.consigneeId?.streetAddress && <Text style={styles.address}>{party.consigneeId.streetAddress}</Text>}
+                                {(party.consigneeId?.city || party.consigneeId?.state || party.consigneeId?.zipCode) && (
+                                    <Text style={styles.address}>
+                                        {party.consigneeId.city || ""}{party.consigneeId.state ? `, ${party.consigneeId.state}` : ""} {party.consigneeId.zipCode ? `- ${party.consigneeId.zipCode}` : ""}
+                                    </Text>
+                                )}
+                                {party.consigneeId?.country && <Text style={styles.address}>{party.consigneeId.country}</Text>}
                             </View>
-                            <View style={styles.box}>
+                            <View style={[styles.boxNoBorder, { flex: 1 }]}>
                                 <Text style={styles.label}>3. Notify Party (Name and Address)</Text>
-                                <Text style={styles.value}>SAME AS CONSIGNEE</Text>
-                            </View>
-                            <View style={[styles.boxNoBorder, { flexGrow: 1 }]}>
-                                <Text style={styles.label}>4. Delivery Agent (Name and Address)</Text>
-                                <Text style={styles.value}>{deliveryAgent?.name || ""}</Text>
-                                <Text style={styles.address}>{deliveryAgent?.streetAddress || ""}</Text>
-                                <Text style={styles.address}>{deliveryAgent?.city || ""}{deliveryAgent?.state ? `, ${deliveryAgent.state}` : ""} {deliveryAgent?.zipCode ? `- ${deliveryAgent.zipCode}` : ""}</Text>
-                                <Text style={styles.address}>{deliveryAgent?.country || ""}</Text>
+                                {hasNotifyParty ? (
+                                    <>
+                                        <Text style={styles.value}>{notifyParty.name}</Text>
+                                        {notifyParty.streetAddress && <Text style={styles.address}>{notifyParty.streetAddress}</Text>}
+                                        {(notifyParty.city || notifyParty.state || notifyParty.zipCode) && (
+                                            <Text style={styles.address}>
+                                                {notifyParty.city || ""}{notifyParty.state ? `, ${notifyParty.state}` : ""} {notifyParty.zipCode ? `- ${notifyParty.zipCode}` : ""}
+                                            </Text>
+                                        )}
+                                        {notifyParty.country && <Text style={styles.address}>{notifyParty.country}</Text>}
+                                    </>
+                                ) : (
+                                    <Text style={styles.value}>SAME AS CONSIGNEE</Text>
+                                )}
                             </View>
                         </View>
 
@@ -122,13 +134,30 @@ export default function BolPDF({ data }: { data: any }) {
                                 <Text style={{ fontSize: 7, textAlign: 'center' }}>MOBILE: +91-9810213336 || Email: ravinder@internationalcargo.com</Text>
                             </View>
                             <View>
-                                <Text style={{ fontSize: 5, textAlign: 'center',margin:2 }}>
+                                <Text style={{ fontSize: 5, textAlign: 'center', margin: 2 }}>
                                     Received by the Carrier. Goods as specified below in apparent good order and condition unless otherwise stated, to be transported to such place as agreed, authorised or permitted herein and subject to all the terms and conditions appearing on the front and reverse of this Bill of Lading to which the Merchant agrees by accepting this Bill of Lading, local privileges and customs notwithstanding. The particulars below as stated by the shipper and the weight, measure, quantity, condition, contents and value of the Goods are unknown to the Carrier. In WITNESS, whereof one (1) original Bill of Lading has been signed if not otherwise stated below, the same being accomplished the other(s), if any to be void. Required by the Carrier one (1) original Bill of Lading must be surrendered duly endorsed in exchange for the Goods or Delivery Order.
                                 </Text>
                             </View>
-                            <View style={{ flexGrow: 1, padding: 4, justifyContent: 'center' }}>
+                            <View style={{ borderTop: '1px solid #000', padding: 4, justifyContent: 'center' }}>
                                 <Text style={styles.documentTitle}>BILL OF LADING</Text>
                                 <Text style={{ fontSize: 6, textAlign: 'center', marginTop: 4 }}>ORIGINAL</Text>
+                            </View>
+                            <View style={{ borderTop: '1px solid #000', padding: 4, flexGrow: 1 }}>
+                                <Text style={styles.label}>4. Delivery Agent (Name and Address)</Text>
+                                {deliveryAgent && deliveryAgent.name ? (
+                                    <>
+                                        <Text style={styles.value}>{deliveryAgent.name}</Text>
+                                        {deliveryAgent.streetAddress && <Text style={styles.address}>{deliveryAgent.streetAddress}</Text>}
+                                        {(deliveryAgent.city || deliveryAgent.state || deliveryAgent.zipCode) && (
+                                            <Text style={styles.address}>
+                                                {deliveryAgent.city || ""}{deliveryAgent.state ? `, ${deliveryAgent.state}` : ""} {deliveryAgent.zipCode ? `- ${deliveryAgent.zipCode}` : ""}
+                                            </Text>
+                                        )}
+                                        {deliveryAgent.country && <Text style={styles.address}>{deliveryAgent.country}</Text>}
+                                    </>
+                                ) : (
+                                    <Text style={styles.value}>—</Text>
+                                )}
                             </View>
                         </View>
                     </View>
@@ -163,9 +192,11 @@ export default function BolPDF({ data }: { data: any }) {
                             <Text style={styles.value}>{ship.portOfDischarge || "—"}</Text>
                         </View>
                         <View style={{ width: '50%', padding: 4 }}>
-                            <Text style={styles.label}>Container / Seal No. / MTU</Text>
                             <Text style={styles.value}>
-                                {bol.sealNumber || "—"} {bol.mtuNumber ? `/ MTU: ${bol.mtuNumber}` : ""}
+                                {bol.containerNumber || bol.sealNumber || "—"}
+                                {bol.lineSealNumber ? ` / L.S: ${bol.lineSealNumber}` : ""}
+                                {bol.customSealNumber ? ` / C.S: ${bol.customSealNumber}` : ""}
+                                {/* {bol.mtuNumber ? ` / MTU: ${bol.mtuNumber}` : ""} */}
                             </Text>
                         </View>
                     </View>
@@ -176,22 +207,20 @@ export default function BolPDF({ data }: { data: any }) {
                         <Text style={[styles.wPkgs, styles.label]}>No. of Pkgs</Text>
                         <Text style={[styles.wDesc, styles.label]}>Description of Goods</Text>
                         <Text style={[styles.wWeight, styles.label]}>Gross Weight</Text>
-                        <Text style={[styles.wMeas, styles.label]}>Measurement</Text>
+                        <Text style={[styles.wMeas, styles.label]}>Chg. Weight</Text>
                     </View>
 
-                    <View style={[styles.cargoBody, { borderBottom: '1px solid #000' }]}>
+                    <View style={[styles.cargoBody, { borderBottom: '1px solid #000', minHeight: 180 }]}>
                         <Text style={styles.wMarks}>{bol.marksAndNumbers || "N/M"}</Text>
                         <Text style={styles.wPkgs}>{cargo.totalNoOfPackages || cargo.noOfPackages || "1"}</Text>
                         <View style={styles.wDesc}>
                             <Text style={{ fontWeight: 'bold', marginBottom: 5 }}>{cargo.commodity || "GENERAL CARGO"}</Text>
-                            
+
                             {cargo.items && cargo.items.length > 0 ? (
                                 cargo.items.map((item: any, i: number) => (
                                     <View key={i} style={{ marginBottom: 4 }}>
                                         <Text style={{ fontSize: 7, fontWeight: 'bold' }}>{item.description}</Text>
-                                        <Text style={{ fontSize: 6.5 }}>
-                                            {item.noOfPackages} {item.packageUnit} | {item.grossWeight} KGS | {item.dimensions || "N/A"}
-                                        </Text>
+                                        {item.hsnCode && <Text style={{ fontSize: 6, color: '#444' }}>HSN: {item.hsnCode}</Text>}
                                     </View>
                                 ))
                             ) : (
@@ -199,8 +228,18 @@ export default function BolPDF({ data }: { data: any }) {
                             )}
                         </View>
                         <Text style={styles.wWeight}>{(cargo.totalGrossWeight || cargo.grossWeight) ? `${cargo.totalGrossWeight || cargo.grossWeight} KGS` : "—"}</Text>
-                        <Text style={styles.wMeas}>{cargo.totalVolumetricWeight || cargo.volumetricWeight || "—"}</Text>
+                        <Text style={styles.wMeas}>{chargeableWeight} KGS</Text>
                     </View>
+
+                    {/* NEW: Container & Seal Details Horizontal Section */}
+                    <View style={{ borderBottom: '1px solid #000', padding: 4, display: 'flex', flexDirection: 'column' }}>
+                        <Text style={styles.value}>CONTAINER NO: {bol.containerNumber || "—"}</Text>
+                        <Text style={styles.value}>LINE SEAL NO: {bol.lineSealNumber || "—"}</Text>
+                        <Text style={styles.value}>CUSTOM SEAL NO: {bol.customSealNumber || "—"}</Text>
+                    </View>
+
+                    {/* NEW: Tiny full-width horizontal section */}
+                    <View style={{ borderBottom: '1px solid #000', height: 8, backgroundColor: '#f0f0f0' }} />
 
                     {/* TOTAL PACKAGES IN WORDS */}
                     <View style={styles.footerRow}>

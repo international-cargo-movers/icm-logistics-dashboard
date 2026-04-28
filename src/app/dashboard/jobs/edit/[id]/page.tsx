@@ -57,6 +57,7 @@ export default function EditJobPage() {
                 if (data.cargoDetails && (!data.cargoDetails.items || data.cargoDetails.items.length === 0)) {
                     data.cargoDetails.items = [{
                         description: data.cargoDetails.commodity || "Initial Item",
+                        hsnCode: "",
                         noOfPackages: data.cargoDetails.noOfPackages || 0,
                         grossWeight: data.cargoDetails.grossWeight || 0,
                         netWeight: data.cargoDetails.netWeight || 0,
@@ -122,7 +123,7 @@ export default function EditJobPage() {
     }
 
     return (
-        <div className="flex-1 bg-[#F8FAFC] min-h-screen overflow-y-auto px-12 py-10">
+        <div className="flex-1 bg-[#F8FAFC] min-h-screen px-12 py-10">
             <div className="max-w-6xl mx-auto space-y-10">
                 {/* Header */}
                 <div className="flex items-center justify-between sticky top-0 bg-[#F8FAFC]/80 backdrop-blur-sm z-10 pb-4">

@@ -6,6 +6,7 @@ import {
   Wallet, 
   ScrollText,
   Folders,
+  Anchor,
   UsersRound,
   HandCoins,
   Scale,
@@ -87,6 +88,7 @@ export default function Sidebar() {
             <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Workspace</p>
         </div>
         <NavItem href="/dashboard/directory/companies" pathname={pathname} icon={Folders} label="Directory" />
+        <NavItem href="/dashboard/directory/ports" pathname={pathname} icon={Anchor} label="Ports Hub" />
         <NavItem href="/dashboard/team" pathname={pathname} icon={UsersRound} label="Control Team" />
       </nav>
 

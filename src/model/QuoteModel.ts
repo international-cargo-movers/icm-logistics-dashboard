@@ -1,5 +1,4 @@
-import mongoose, { Schema, Document, Model } from "mongoose";
-
+import mongoose, { Schema, Document } from "mongoose";
 
 // 1. Interface for Financial Line Items
 export interface IQuoteLineItem {
@@ -8,40 +7,45 @@ export interface IQuoteLineItem {
     buyPrice: number;         // What you pay the vendor
     sellPrice: number;        // What you charge the customer
     currency: string;   
-    roe: number;      // e.g., "USD", "EUR"
+    roe: number;              // e.g., "USD", "EUR"
+    quantity: number;         // Multiplier for the price
     notes?: string;           // Optional remarks for this specific charge
 }
 
-// 2. Main Interface for the Quote Document
+// 2. Main Quote Interface
 export interface IQuote extends Document {
-    quoteId: string;          // Auto-generated like "QT-2026-001"
+    quoteId: string;
     customerDetails: {
-        companyId: mongoose.Types.ObjectId; // Links to CompanyModel
+        companyId: mongoose.Types.ObjectId;
         contactPerson?: string;
     };
     routingDetails: {
-        originCountry: string;      // NEW
+        originCountry: string;
         originPort: string;
-        destinationCountry: string; // NEW
+        destinationCountry: string;
         destinationPort: string;
         mode: string;
     };
     cargoSummary: {
         commodity: string;
+        equipment?: string;
+        containerCount?: number;
+        containerType?: string;
+        totalCBM?: number;
         items: {
             description?: string;
+            hsnCode?: string;
             noOfPackages?: number;
             grossWeight?: number;
             volumetricWeight?: number;
         }[];
-        totalNoOfPackages?: number;
-        totalGrossWeight?: number;
-        totalVolumetricWeight?: number;
-        equipment: string;        // e.g., "1x 40' HC" or "15 CBM"
+        totalNoOfPackages: number;
+        totalGrossWeight: number;
+        totalVolumetricWeight: number;
     };
     validity: {
         issueDate: Date;
-        expiryDate: Date;         // Critical for freight pricing
+        expiryDate: Date;
     };
     financials: {
         lineItems: IQuoteLineItem[];
@@ -50,94 +54,80 @@ export interface IQuote extends Document {
         profitMargin: number;
         baseCurrency: string;
     };
-    status: "Draft" | "Sent" | "Approved" | "Rejected";
+    status: "Draft" | "Sent" | "Accepted" | "Rejected" | "Expired" | "Approved";
 }
 
-// 3. Mongoose Schema Definition
-export const QuoteSchema: Schema<IQuote> = new Schema(
-    {
-        quoteId: {
-            type: String,
-            required: true,
-            unique: true,
-            uppercase: true,
-            trim: true
-        },
-        customerDetails: {
-            companyId: {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: "CompanyModel",
-                required: true
-            },
-            contactPerson: { type: String }
-        },
-        routingDetails: {
-            originCountry: { type: String, required: true },      // NEW
-            originPort: { type: String, required: true },
-            destinationCountry: { type: String, required: true }, // NEW
-            destinationPort: { type: String, required: true },
-            mode: { type: String, required: true }
-        },
-        cargoSummary: {
-            commodity: { type: String, default: "General Cargo" },
-            items: [{
-                description: String,
-                noOfPackages: Number,
-                grossWeight: Number,
-                volumetricWeight: Number,
-            }],
-            totalNoOfPackages: { type: Number, default: 0 },
-            totalGrossWeight: { type: Number, default: 0 },
-            totalVolumetricWeight: { type: Number, default: 0 },
-            equipment: { type: String, required: true },
-        },
-        validity: {
-            issueDate: { type: Date, default: Date.now },
-            expiryDate: { type: Date, required: true }
-        },
-        financials: {
-            lineItems: [
-                {
-                    chargeName: { type: String, required: true },
-                    chargeType: { type: String, default: "Freight" },
-                    buyPrice: { type: Number, required: true, default: 0 },
-                    sellPrice: { type: Number, required: true, default: 0 },
-                    currency: { type: String, default: "USD" },
-                    roe: { type: Number, required: true, default: 1 },
-                    notes: { type: String }
-                }
-            ],
-            totalBuy: { type: Number, default: 0 },
-            totalSell: { type: Number, default: 0 },
-            profitMargin: { type: Number, default: 0 },
-            baseCurrency: { type: String, default: "USD" }
-        },
-        status: {
-            type: String,
-            enum: ["Draft", "Sent", "Approved", "Rejected"],
-            default: "Draft"
-        }
+// 3. Schema Definition
+export const QuoteSchema = new Schema<IQuote>({
+    quoteId: { type: String, required: true, unique: true },
+    customerDetails: {
+        companyId: { type: Schema.Types.ObjectId, ref: "CompanyModel", required: true },
+        contactPerson: { type: String }
     },
-    {
-        timestamps: true
+    routingDetails: {
+        originCountry: { type: String, required: true },
+        originPort: { type: String, required: true },
+        destinationCountry: { type: String, required: true },
+        destinationPort: { type: String, required: true },
+        mode: { type: String, required: true }
+    },
+    cargoSummary: {
+        commodity: { type: String, default: "General Cargo" },
+        equipment: { type: String },
+        containerCount: { type: Number },
+        containerType: { type: String },
+        totalCBM: { type: Number },
+        items: [{
+            description: String,
+            hsnCode: String,
+            noOfPackages: Number,
+            grossWeight: Number,
+            volumetricWeight: Number
+        }],
+        totalNoOfPackages: { type: Number, default: 0 },
+        totalGrossWeight: { type: Number, default: 0 },
+        totalVolumetricWeight: { type: Number, default: 0 }
+    },
+    validity: {
+        issueDate: { type: Date, default: Date.now },
+        expiryDate: { type: Date }
+    },
+    financials: {
+        lineItems: [
+            {
+                chargeName: { type: String, required: true },
+                chargeType: { type: String, default: "Freight" },
+                buyPrice: { type: Number, required: true, default: 0 },
+                sellPrice: { type: Number, required: true, default: 0 },
+                currency: { type: String, default: "USD" },
+                roe: { type: Number, required: true, default: 1 },
+                quantity: { type: Number, required: true, default: 1 },
+                notes: { type: String }
+            }
+        ],
+        totalBuy: { type: Number, default: 0 },
+        totalSell: { type: Number, default: 0 },
+        profitMargin: { type: Number, default: 0 },
+        baseCurrency: { type: String, default: "USD" }
+    },
+    status: {
+        type: String,
+        enum: ["Draft", "Sent", "Accepted", "Rejected", "Expired", "Approved"],
+        default: "Draft"
     }
-);
+}, { timestamps: true });
 
-// 4. Pre-save Hook for Financial Calculation
-// This automatically calculates totals and margins before saving to the database
-// 4. Pre-save Hook for Financial Calculation
-// Updated for modern Mongoose + TypeScript compatibility
+// 4. Pre-save middleware to calculate totals
 QuoteSchema.pre("save", function (this: IQuote, next) {
     let calcTotalBuy = 0;
     let calcTotalSell = 0;
 
     if (this.financials && this.financials.lineItems) {
         this.financials.lineItems.forEach(item => {
-            console.log(item.roe);
-            // THE FIX: Multiply by ROE to get the base (INR) value
             const roe = item.roe || 1;
-            calcTotalBuy += (item.buyPrice || 0) * roe;
-            calcTotalSell += (item.sellPrice || 0) * roe;
+            const quantity = item.quantity || 1;
+            calcTotalBuy += (item.buyPrice || 0) * roe * quantity;
+            calcTotalSell += (item.sellPrice || 0) * roe * quantity;
         });
     }
 
@@ -148,6 +138,5 @@ QuoteSchema.pre("save", function (this: IQuote, next) {
     // Set base currency to INR since totals are now converted
     this.financials.baseCurrency = "INR"; 
 });
-const QuoteModel: Model<IQuote> = mongoose.models.Quote || mongoose.model<IQuote>("Quote", QuoteSchema);
 
-export default QuoteModel;
+export default mongoose.models.Quote || mongoose.model<IQuote>("Quote", QuoteSchema);

@@ -53,7 +53,14 @@ export default function AwbPDF({ data }: { data: any }) {
     const party = data?.partyDetails || {};
     const cargo = data?.cargoDetails || {};
 
+    const grossWeight = Number(cargo.totalGrossWeight || cargo.grossWeight || 0);
+    const volumetricWeight = Number(cargo.totalVolumetricWeight || cargo.volumetricWeight || 0);
+    const chargeableWeight = Math.max(grossWeight, volumetricWeight).toFixed(2);
+
     const fullAwbNumber = `${awb.awbPrefix || '000'}-${awb.awbSerialNumber || '00000000'}`;
+
+    // Delivery Agent / Overseas Agent
+    const deliveryAgent = party.overseasAgentId;
 
     return (
         <Document>
@@ -78,9 +85,13 @@ export default function AwbPDF({ data }: { data: any }) {
                                 <View style={{ flexDirection: 'row' }}>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.value}>{cust.companyId?.name || "AS PER INVOICE"}</Text>
-                                        <Text style={styles.address}>{cust.companyId?.streetAddress || ""}</Text>
-                                        <Text style={styles.address}>{cust.companyId?.city || ""}, {cust.companyId?.state || ""} -  {cust.companyId?.zipCode || ""}</Text>
-                                        <Text style={styles.address}>{cust.companyId?.country || ""}</Text>
+                                        {cust.companyId?.streetAddress && <Text style={styles.address}>{cust.companyId.streetAddress}</Text>}
+                                        {(cust.companyId?.city || cust.companyId?.state || cust.companyId?.zipCode) && (
+                                            <Text style={styles.address}>
+                                                {cust.companyId.city || ""}{cust.companyId.state ? `, ${cust.companyId.state}` : ""} {cust.companyId.zipCode ? `- ${cust.companyId.zipCode}` : ""}
+                                            </Text>
+                                        )}
+                                        {cust.companyId?.country && <Text style={styles.address}>{cust.companyId.country}</Text>}
                                     </View>
                                     <View style={{ width: 100 }}>
                                         <Text style={[styles.value, { fontSize: 7 }]}>{awb.shipperAccountNumber || ""}</Text>
@@ -95,9 +106,13 @@ export default function AwbPDF({ data }: { data: any }) {
                                 <View style={{ flexDirection: 'row' }}>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.value}>{party.consigneeId?.name || "AS PER INVOICE"}</Text>
-                                        <Text style={styles.address}>{party.consigneeId?.streetAddress || ""}</Text>
-                                        <Text style={styles.address}>{party.consigneeId?.city || ""}, {party.consigneeId?.state || ""} -  {party.consigneeId?.zipCode || ""}</Text>
-                                        <Text style={styles.address}>{party.consigneeId?.country || ""} </Text>
+                                        {party.consigneeId?.streetAddress && <Text style={styles.address}>{party.consigneeId.streetAddress}</Text>}
+                                        {(party.consigneeId?.city || party.consigneeId?.state || party.consigneeId?.zipCode) && (
+                                            <Text style={styles.address}>
+                                                {party.consigneeId.city || ""}{party.consigneeId.state ? `, ${party.consigneeId.state}` : ""} {party.consigneeId.zipCode ? `- ${party.consigneeId.zipCode}` : ""}
+                                            </Text>
+                                        )}
+                                        {party.consigneeId?.country && <Text style={styles.address}>{party.consigneeId.country}</Text>}
                                     </View>
                                     <View style={{ width: 100 }}>
                                         <Text style={[styles.value, { fontSize: 7 }]}>{awb.consigneeAccountNumber || ""}</Text>
@@ -131,7 +146,24 @@ export default function AwbPDF({ data }: { data: any }) {
                                     <Image src="/ICM logo.png" style={styles.logo} />
                                 </View>
                             </View>
-                            <View style={[styles.boxNoBorder, { minHeight: 110 }]}>
+                            <View style={[styles.box, { minHeight: 60, borderBottom: '1px solid #000' }]}>
+                                <Text style={styles.label}>Handling Information / Overseas Agent</Text>
+                                {deliveryAgent && deliveryAgent.name ? (
+                                    <>
+                                        <Text style={[styles.value, { fontSize: 7 }]}>DELIVERY AGENT: {deliveryAgent.name}</Text>
+                                        {deliveryAgent.streetAddress && <Text style={styles.address}>{deliveryAgent.streetAddress}</Text>}
+                                        {(deliveryAgent.city || deliveryAgent.state || deliveryAgent.zipCode) && (
+                                            <Text style={styles.address}>
+                                                {deliveryAgent.city || ""}{deliveryAgent.state ? `, ${deliveryAgent.state}` : ""} {deliveryAgent.zipCode ? `- ${deliveryAgent.zipCode}` : ""}
+                                            </Text>
+                                        )}
+                                        {deliveryAgent.country && <Text style={styles.address}>{deliveryAgent.country}</Text>}
+                                    </>
+                                ) : (
+                                    <Text style={styles.value}>—</Text>
+                                )}
+                            </View>
+                            <View style={[styles.boxNoBorder, { minHeight: 50 }]}>
                                 <Text style={{ fontSize: 6, lineHeight: 1.2 }}>
                                     It is agreed that the goods described herein are accepted in apparent good order and condition (except as noted) for carriage SUBJECT TO THE CONDITIONS OF CONTRACT ON THE REVERSE HEREOF. ALL GOODS MAY BE CARRIED BY ANY OTHER MEANS INCLUDING ROAD OR ANY OTHER CARRIER UNLESS SPECIFIC CONTRARY INSTRUCTIONS ARE GIVEN HEREON BY THE SHIPPER, AND SHIPPER AGREES THAT THE SHIPMENT MAY BE CARRIED VIA INTERMEDIATE STOPPING PLACES WHICH THE CARRIER DEEMS APPROPRIATE. THE SHIPPER’S ATTENTION IS DRAWN TO THE NOTICE CONCERNING CARRIER’S LIMITATION OF LIABILITY. Shipper may increase such limitation of liability by declaring a higher value for carriage and paying a supplemental charge if required.
                                 </Text>
@@ -205,7 +237,7 @@ export default function AwbPDF({ data }: { data: any }) {
                         <View style={styles.cwGross}><Text>{cargo.totalGrossWeight || cargo.grossWeight || "—"}</Text></View>
                         <View style={styles.cwKgLb}><Text>K</Text></View>
                         <View style={styles.cwClass}><Text>Q</Text></View>
-                        <View style={styles.cwChargeable}><Text>{cargo.totalVolumetricWeight || cargo.volumetricWeight || "—"}</Text></View>
+                        <View style={styles.cwChargeable}><Text>{chargeableWeight}</Text></View>
                         <View style={styles.cwRate}><Text>AS AGREED</Text></View>
                         <View style={styles.cwTotal}><Text>AS AGREED</Text></View>
                         <View style={styles.cwDesc}>
@@ -217,9 +249,7 @@ export default function AwbPDF({ data }: { data: any }) {
                                 cargo.items.map((item: any, i: number) => (
                                     <View key={i} style={{ marginBottom: 4 }}>
                                         <Text style={{ fontSize: 7, fontWeight: 'bold' }}>{item.description}</Text>
-                                        <Text style={{ fontSize: 6.5 }}>
-                                            {item.noOfPackages} {item.packageUnit} | {item.grossWeight} KGS | {item.dimensions || "N/A"}
-                                        </Text>
+                                        {item.hsnCode && <Text style={{ fontSize: 6, color: '#444' }}>HSN: {item.hsnCode}</Text>}
                                     </View>
                                 ))
                             ) : (
@@ -242,7 +272,7 @@ export default function AwbPDF({ data }: { data: any }) {
                             <Text style={styles.value}>AS AGREED</Text>
                         </View>
                         <View style={{ width: '38%', height: '100%', justifyContent: 'center', paddingLeft: 5 }}>
-                            <Text style={styles.value}>VOL IN KG: {cargo.totalVolumetricWeight || cargo.volumetricWeight || "0.00"} KG</Text>
+                            <Text style={styles.value}>VOL. WT IN KG: {volumetricWeight} KG</Text>
                         </View>
                     </View>
 

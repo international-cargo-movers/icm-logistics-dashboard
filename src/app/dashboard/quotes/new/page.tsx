@@ -4,7 +4,7 @@ import * as React from "react"
 import { useState, useEffect } from "react"
 import { pdf } from '@react-pdf/renderer'
 import QuotePDF from '@/components/dashboard/quotes/QuotePDF'
-import { Plus, Trash2, ArrowRight, Check, ChevronsUpDown, Download, Mail, Shield } from "lucide-react"
+import { Plus, Trash2, ArrowRight, Check, ChevronsUpDown, Download, Mail, Shield, Box, Container, Anchor } from "lucide-react"
 
 // Shadcn UI Imports
 import { cn } from "@/lib/utils"
@@ -48,18 +48,21 @@ export default function NewQuotePage() {
     originPort: "",
     destinationCountry: "",
     destinationPort: "",
-    mode: "",
+    mode: "Sea FCL Export",
     cargoSummary: {
       commodity: "",
       items: [
-        { description: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }
+        { description: "", hsnCode: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }
       ],
-      equipment: ""
+      // New structured fields
+      containerCount: 1,
+      containerType: "20' GP",
+      totalCBM: 0,
+      equipment: "" // for legacy/PDF compatibility
     },
-    // NEW: Updated default items to include 'roe' and 'notes'
     lineItems: [
-      { chargeName: "Ocean Freight", chargeType: "Freight", currency: "USD", roe: 83.5, buyPrice: 2800, sellPrice: 3250, notes: "PER CONTAINER" },
-      { chargeName: "Customs Clearance", chargeType: "Origin", currency: "INR", roe: 1, buyPrice: 3500, sellPrice: 5500, notes: "PER INVOICE" }
+      { chargeName: "Ocean Freight", chargeType: "Freight", currency: "USD", roe: 83.5, buyPrice: 2800, sellPrice: 3250, notes: "" },
+      { chargeName: "Customs Clearance", chargeType: "Origin", currency: "INR", roe: 1, buyPrice: 3500, sellPrice: 5500, notes: "" }
     ]
   })
 
@@ -71,12 +74,46 @@ export default function NewQuotePage() {
     return acc
   }, { pkgs: 0, gross: 0, vol: 0 })
 
+  const chargeableWeight = Math.max(cargoTotals.gross, cargoTotals.vol);
+
+  // --- DYNAMIC MULTIPLIER LOGIC ---
+  const getMultiplier = () => {
+    if (quoteData.mode.includes("Sea FCL")) return Number(quoteData.cargoSummary.containerCount) || 1;
+    if (quoteData.mode.includes("Sea LCL")) return Number(quoteData.cargoSummary.totalCBM) || 1;
+    if (quoteData.mode.includes("Air")) return chargeableWeight || 1;
+    return 1;
+  }
+
+  const multiplier = getMultiplier();
+  const unitLabel = quoteData.mode.includes("Sea FCL") ? "Containers" : (quoteData.mode.includes("Sea LCL") ? "CBM" : "KG");
+
+  // --- LIVE MATH ENGINE ---
+  const totalBuy = quoteData.lineItems.reduce((acc, item) => {
+    const qty = (item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight")) ? multiplier : 1;
+    return acc + ((Number(item.buyPrice) || 0) * (Number(item.roe) || 1) * qty);
+  }, 0)
+
+  const totalSell = quoteData.lineItems.reduce((acc, item) => {
+    const qty = (item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight")) ? multiplier : 1;
+    return acc + ((Number(item.sellPrice) || 0) * (Number(item.roe) || 1) * qty);
+  }, 0)
+
+  const profitMargin = totalSell - totalBuy
+
+  const addLineItem = () => setQuoteData({ ...quoteData, lineItems: [...quoteData.lineItems, { chargeName: "", chargeType: "Freight", currency: "INR", roe: 1, buyPrice: 0, sellPrice: 0, notes: "" }] })
+  const removeLineItem = (index: number) => setQuoteData({ ...quoteData, lineItems: quoteData.lineItems.filter((_, idx) => idx !== index) })
+  const updateLineItem = (index: number, field: string, value: string | number) => {
+    const newItems = [...quoteData.lineItems]
+    newItems[index] = { ...newItems[index], [field]: value } as any
+    setQuoteData({ ...quoteData, lineItems: newItems })
+  }
+
   const addCargoItem = () => {
     setQuoteData({
       ...quoteData,
       cargoSummary: {
         ...quoteData.cargoSummary,
-        items: [...quoteData.cargoSummary.items, { description: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }]
+        items: [...quoteData.cargoSummary.items, { description: "", hsnCode: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }]
       }
     })
   }
@@ -85,7 +122,7 @@ export default function NewQuotePage() {
     const newItems = quoteData.cargoSummary.items.filter((_, idx) => idx !== index)
     setQuoteData({
       ...quoteData,
-      cargoSummary: { ...quoteData.cargoSummary, items: newItems.length > 0 ? newItems : [{ description: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }] }
+      cargoSummary: { ...quoteData.cargoSummary, items: newItems.length > 0 ? newItems : [{ description: "", hsnCode: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }] }
     })
   }
 
@@ -186,37 +223,36 @@ export default function NewQuotePage() {
   const availableOriginPorts = ports.filter(p => p.countryCode === quoteData.originCountry && p.type.includes(requiredType))
   const availableDestPorts = ports.filter(p => p.countryCode === quoteData.destinationCountry && p.type.includes(requiredType))
 
-  // --- NEW: LIVE MATH ENGINE (WITH ROE) ---
-  const totalBuy = quoteData.lineItems.reduce((acc, item) => acc + ((Number(item.buyPrice) || 0) * (Number(item.roe) || 1)), 0)
-  const totalSell = quoteData.lineItems.reduce((acc, item) => acc + ((Number(item.sellPrice) || 0) * (Number(item.roe) || 1)), 0)
-  const profitMargin = totalSell - totalBuy
-
-  // NEW: Updated Add Line Item template
-  const addLineItem = () => setQuoteData({ ...quoteData, lineItems: [...quoteData.lineItems, { chargeName: "", chargeType: "Freight", currency: "INR", roe: 1, buyPrice: 0, sellPrice: 0, notes: "" }] })
-  const removeLineItem = (index: number) => setQuoteData({ ...quoteData, lineItems: quoteData.lineItems.filter((_, idx) => idx !== index) })
-  const updateLineItem = (index: number, field: string, value: string | number) => {
-    const newItems = [...quoteData.lineItems]
-    newItems[index] = { ...newItems[index], [field]: value } as any
-    setQuoteData({ ...quoteData, lineItems: newItems })
-  }
-
   const preparePayload = () => {
     if (!quoteData.customerId || !quoteData.originPort || !quoteData.destinationPort || !quoteData.mode) {
       toast.error("Please select a Customer and complete Routing details before saving.");
       return null;
     }
-    if (!quoteData.cargoSummary.equipment || quoteData.cargoSummary.equipment.trim() === "") {
-      toast.error("Please specify the Equipment / Volume in the Cargo Summary (e.g., 1x 40' HC).");
-      return null;
-    }
+
+    // Generate legacy equipment string for PDF/Display
+    let equipmentStr = "";
+    if (quoteData.mode.includes("Sea FCL")) equipmentStr = `${quoteData.cargoSummary.containerCount}x ${quoteData.cargoSummary.containerType}`;
+    else if (quoteData.mode.includes("Sea LCL")) equipmentStr = `${quoteData.cargoSummary.totalCBM} CBM`;
+    else equipmentStr = `${chargeableWeight} KG (Air)`;
+
+    const finalLineItems = quoteData.lineItems.map(item => {
+      const qty = (item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight")) ? multiplier : 1;
+      return { ...item, quantity: qty, notes: (item.chargeType === "Freight") ? `per ${unitLabel.slice(0,-1)}` : item.notes };
+    });
+
     return {
       ...quoteData,
+      cargoSummary: {
+        ...quoteData.cargoSummary,
+        equipment: equipmentStr,
+        totalNoOfPackages: cargoTotals.pkgs,
+        totalGrossWeight: cargoTotals.gross,
+        totalVolumetricWeight: cargoTotals.vol
+      },
+      lineItems: finalLineItems,
       totalBuy,
       totalSell,
       profitMargin,
-      totalNoOfPackages: cargoTotals.pkgs,
-      totalGrossWeight: cargoTotals.gross,
-      totalVolumetricWeight: cargoTotals.vol,
       date: new Date().toISOString().split('T')[0],
       validUntil: new Date(Date.now() + quoteData.validityDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     };
@@ -310,7 +346,7 @@ export default function NewQuotePage() {
         <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm border border-outline-variant/20">
           <div className="p-8 space-y-10">
 
-            {/* Top Row: Customer & Settings (Unchanged) */}
+            {/* Top Row: Customer & Settings */}
             <div className="grid grid-cols-2 gap-10">
               <section className="space-y-6">
                 <div className="flex items-center gap-2 border-l-4 border-primary pl-4">
@@ -377,7 +413,7 @@ export default function NewQuotePage() {
               </section>
             </div>
 
-            {/* Middle Row: Routing (Unchanged) */}
+            {/* Middle Row: Routing */}
             <section className="space-y-6 pt-6 border-t border-outline-variant/10">
               <div className="flex items-center justify-between border-l-4 border-primary pl-4">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Routing Data</h2>
@@ -515,32 +551,81 @@ export default function NewQuotePage() {
               </div>
             </section>
 
-            {/* Cargo Summary (Updated for Multiple Items) */}
+            {/* DYNAMIC Cargo Summary */}
             <section className="space-y-6 pt-6 border-t border-outline-variant/10">
               <div className="flex items-center justify-between border-l-4 border-primary pl-4">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Cargo Summary</h2>
                 <button onClick={addCargoItem} className="text-xs font-bold bg-primary/10 text-primary px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-primary/20 transition-colors">
-                  <Plus className="w-3.5 h-3.5" /> Add Line
+                  <Plus className="w-3.5 h-3.5" /> Add Package Line
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-6 bg-surface-container-low p-6 rounded-xl border border-outline-variant/10">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-on-surface-variant block">Commodity Group</label>
                   <input type="text" value={quoteData.cargoSummary.commodity} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, commodity: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" placeholder="e.g. Furniture" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-on-surface-variant block">Equipment / Volume</label>
-                  <input type="text" placeholder="e.g. 1x 40' HC or 15 CBM" value={quoteData.cargoSummary.equipment} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, equipment: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                </div>
+                
+                {/* DYNAMIC FIELDS BASED ON MODE */}
+                {quoteData.mode.includes("Sea FCL") && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-on-surface-variant block">No. of Containers</label>
+                      <div className="flex items-center gap-2 bg-surface-container-highest rounded-lg px-3 h-11">
+                        <Container className="w-4 h-4 text-primary" />
+                        <input type="number" min="1" value={quoteData.cargoSummary.containerCount} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, containerCount: parseInt(e.target.value) || 0 } })} className="w-full bg-transparent border-none text-sm outline-none focus:ring-0" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-on-surface-variant block">Container Size</label>
+                      <Select value={quoteData.cargoSummary.containerType} onValueChange={(val) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, containerType: val } })}>
+                        <SelectTrigger className="w-full bg-surface-container-highest border-none h-11 text-sm">
+                          <SelectValue placeholder="Size" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="20' GP">20' GP (Standard)</SelectItem>
+                          <SelectItem value="40' GP">40' GP (Standard)</SelectItem>
+                          <SelectItem value="40' HC">40' HC (High Cube)</SelectItem>
+                          <SelectItem value="20' RF">20' Reefer</SelectItem>
+                          <SelectItem value="40' RF">40' Reefer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+
+                {quoteData.mode.includes("Sea LCL") && (
+                  <div className="space-y-2 col-span-2">
+                    <label className="text-xs font-semibold text-on-surface-variant block">Total Volume (CBM)</label>
+                    <div className="flex items-center gap-2 bg-surface-container-highest rounded-lg px-3 h-11">
+                      <Box className="w-4 h-4 text-primary" />
+                      <input type="number" step="0.01" value={quoteData.cargoSummary.totalCBM} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, totalCBM: parseFloat(e.target.value) || 0 } })} className="w-full bg-transparent border-none text-sm outline-none focus:ring-0" placeholder="0.00" />
+                    </div>
+                  </div>
+                )}
+
+                {quoteData.mode.includes("Air") && (
+                  <div className="space-y-2 col-span-2">
+                    <label className="text-xs font-semibold text-on-surface-variant block">Shipment Metric (Weight)</label>
+                    <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 h-11 border border-primary/10">
+                      <span className="text-xs font-bold text-primary uppercase">Using Chargeable Weight:</span>
+                      <span className="text-sm font-black">{chargeableWeight} KG</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* Package Grid */}
               <div className="space-y-3">
                 {quoteData.cargoSummary.items.map((item, index) => (
                   <div key={index} className="grid grid-cols-12 gap-3 items-end bg-surface-container-low p-4 rounded-xl border border-outline-variant/10 group">
-                    <div className="col-span-5 space-y-1.5">
+                    <div className="col-span-3 space-y-1.5">
                       <label className="text-[10px] font-bold text-on-surface-variant uppercase">Description</label>
                       <input type="text" value={item.description} onChange={(e) => updateCargoItem(index, 'description', e.target.value)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" placeholder="e.g. Wooden Tables" />
+                    </div>
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase">HSN Code</label>
+                      <input type="text" value={item.hsnCode} onChange={(e) => updateCargoItem(index, 'hsnCode', e.target.value)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" placeholder="HSN Code" />
                     </div>
                     <div className="col-span-2 space-y-1.5">
                       <label className="text-[10px] font-bold text-on-surface-variant uppercase">Pkgs</label>
@@ -554,7 +639,7 @@ export default function NewQuotePage() {
                       <label className="text-[10px] font-bold text-on-surface-variant uppercase">Vol Wt (kg)</label>
                       <input type="number" value={item.volumetricWeight} onChange={(e) => updateCargoItem(index, 'volumetricWeight', parseFloat(e.target.value) || 0)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" />
                     </div>
-                    <div className="col-span-1 pb-1">
+                    <div className="col-span-1 pb-1 text-right">
                       <button onClick={() => removeCargoItem(index)} className="p-2 text-on-surface-variant hover:bg-error-container hover:text-error rounded-md opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </div>
@@ -577,10 +662,10 @@ export default function NewQuotePage() {
               </div>
             </section>
 
-            {/* NEW: Financial Line Items (WITH CURRENCY & ROE & REMARKS) */}
+            {/* Financial Line Items (HIDDEN QTY, AUTO CALCULATED) */}
             <section className="space-y-6 pt-6 border-t border-outline-variant/10">
               <div className="flex items-center justify-between border-l-4 border-primary pl-4">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Financial Builder (Multi-Currency)</h2>
+                <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Financial Builder (Base Currency: INR)</h2>
                 <button onClick={addLineItem} className="text-xs font-bold bg-primary/10 text-primary px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-primary/20 transition-colors">
                   <Plus className="w-3.5 h-3.5" /> Add Charge
                 </button>
@@ -590,36 +675,43 @@ export default function NewQuotePage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low">
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[20%]">Charge Name</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[25%]">Charge Name</th>
                       <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[10%]">Curr</th>
                       <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[10%]">ROE</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[20%]">Remarks</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Buy Rate</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Sell Rate</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Base Margin</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[20%]">Remarks / Units</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Rate (Buy)</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Rate (Sell)</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Total Sell (₹)</th>
                       <th className="py-3 px-3 text-right w-10"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/10">
                     {quoteData.lineItems.map((item, index) => {
-                      // Calculate Base amounts instantly using ROE
-                      const baseBuy = (Number(item.buyPrice) || 0) * (Number(item.roe) || 1);
-                      const baseSell = (Number(item.sellPrice) || 0) * (Number(item.roe) || 1);
-                      const itemMargin = baseSell - baseBuy;
+                      const isFreight = item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight");
+                      const itemMultiplier = isFreight ? multiplier : 1;
+                      
+                      const baseBuy = (Number(item.buyPrice) || 0) * (Number(item.roe) || 1) * itemMultiplier;
+                      const baseSell = (Number(item.sellPrice) || 0) * (Number(item.roe) || 1) * itemMultiplier;
 
                       return (
                         <tr key={index} className="group hover:bg-surface-container-low/30 transition-colors">
                           <td className="py-2 px-3">
-                            <LineItemDescriptionInput value={item.chargeName} onChange={(e: any) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="e.g. Origin Handling" />
+                            <LineItemDescriptionInput value={item.chargeName} onChange={(e: any) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="e.g. Ocean Freight" />
                           </td>
                           <td className="py-2 px-3">
-                            <input type="text" value={item.currency} onChange={(e) => updateLineItem(index, 'currency', e.target.value.toUpperCase())} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none uppercase placeholder:text-gray-400" placeholder="USD" maxLength={3} />
+                            <input type="text" value={item.currency} onChange={(e) => updateLineItem(index, 'currency', e.target.value.toUpperCase())} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none uppercase" placeholder="USD" maxLength={3} />
                           </td>
                           <td className="py-2 px-3">
                             <input type="number" step="0.01" value={item.roe} onChange={(e) => updateLineItem(index, 'roe', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="1.00" />
                           </td>
                           <td className="py-2 px-3">
-                            <input type="text" value={item.notes} onChange={(e) => updateLineItem(index, 'notes', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-gray-500 font-medium outline-none" placeholder="e.g. PER SET" />
+                            <div className="flex flex-col">
+                              {isFreight ? (
+                                <span className="text-[10px] font-black text-primary uppercase">x {multiplier} {unitLabel}</span>
+                              ) : (
+                                <input type="text" value={item.notes} onChange={(e) => updateLineItem(index, 'notes', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-[10px] text-gray-500 font-bold outline-none" placeholder="REMARKS" />
+                              )}
+                            </div>
                           </td>
                           <td className="py-2 px-3 text-right border-l border-outline-variant/10">
                             <input type="number" value={item.buyPrice} onChange={(e) => updateLineItem(index, 'buyPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right text-error font-medium outline-none" />
@@ -628,8 +720,8 @@ export default function NewQuotePage() {
                             <input type="number" value={item.sellPrice} onChange={(e) => updateLineItem(index, 'sellPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right font-bold text-primary outline-none" />
                           </td>
                           <td className="py-2 px-3 text-right border-l border-outline-variant/10">
-                            <span className={`text-sm font-bold ${itemMargin >= 0 ? 'text-emerald-600' : 'text-error'}`}>
-                              ₹{itemMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <span className="text-sm font-black text-on-surface">
+                              ₹{baseSell.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </td>
                           <td className="py-2 px-3 text-right">
@@ -644,7 +736,7 @@ export default function NewQuotePage() {
             </section>
           </div>
 
-          {/* Footer Metrics (UPDATED TO REFLECT BASE CURRENCY/ROE MATH) */}
+          {/* Footer Metrics */}
           <div className="bg-surface-container-low p-8 flex items-center justify-between border-t border-outline-variant/20">
             <div className="flex gap-12">
               <div className="space-y-1">

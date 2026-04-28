@@ -50,8 +50,12 @@ export async function POST(request: Request) {
             cargoSummary: {
                 commodity: quoteData.cargoSummary?.commodity || "General Cargo",
                 equipment: quoteData.cargoSummary?.equipment,
+                containerCount: Number(quoteData.cargoSummary?.containerCount) || undefined,
+                containerType: quoteData.cargoSummary?.containerType,
+                totalCBM: Number(quoteData.cargoSummary?.totalCBM) || undefined,
                 items: quoteData.cargoSummary?.items?.map((item: any) => ({
                     description: item.description,
+                    hsnCode: item.hsnCode,
                     noOfPackages: Number(item.noOfPackages) || 0,
                     grossWeight: Number(item.grossWeight) || 0,
                     volumetricWeight: Number(item.volumetricWeight) || 0,
@@ -72,6 +76,7 @@ export async function POST(request: Request) {
                     sellPrice: Number(item.sellPrice),
                     currency: item.currency || "USD",
                     roe: Number(item.roe) || 1,
+                    quantity: Number(item.quantity) || 1,
                     notes: item.notes || ""
                 }))
             },

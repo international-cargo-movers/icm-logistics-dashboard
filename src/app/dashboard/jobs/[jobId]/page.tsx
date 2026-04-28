@@ -31,6 +31,7 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
         .populate("vendorDetails.vendorId", "name taxId streetAddress city state zipCode country")
         .populate("partyDetails.shipperId","name taxId streetAddress city state zipCode country")
         .populate("partyDetails.consigneeId","name taxId streetAddress city state zipCode country")
+        .populate("partyDetails.notifyPartyId","name taxId streetAddress city state zipCode country")
         .populate("partyDetails.overseasAgentId","name taxId streetAddress city state zipCode country")
         .lean()
 

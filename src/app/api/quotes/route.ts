@@ -10,7 +10,7 @@ export async function GET() {
         console.log("Registered Schema: ", Company.modelName)
         // Fetch all quotes, newest first, and dynamically pull the Company Name
         const quotes = await Quote.find()
-            .populate('customerDetails.companyId', 'name')
+            .populate({ path: 'customerDetails.companyId', select: 'name', strictPopulate: false })
             .sort({ createdAt: -1 })
             .lean();
             

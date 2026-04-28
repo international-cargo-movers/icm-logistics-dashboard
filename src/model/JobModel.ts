@@ -34,8 +34,13 @@ export interface IJob extends Document {
     };
     cargoDetails: {
         commodity?: string;
+        equipment?: string;
+        containerCount?: number;
+        containerType?: string;
+        totalCBM?: number;
         items: {
             description?: string;
+            hsnCode?: string;
             noOfPackages?: number;
             packageUnit?: string;
             grossWeight?: number;
@@ -67,7 +72,9 @@ export interface IJob extends Document {
       freightPayableAt?: string; // e.g., "AS ARRANGED" [cite: 14]
       freightTerms?: "Prepaid" | "Collect"; // [cite: 14]
       marksAndNumbers?: string; // e.g., Container/Seal details [cite: 14]
-      sealNumber?: string; // [cite: 14]
+      containerNumber?: string;
+      lineSealNumber?: string;
+      customSealNumber?: string;
       noOfOriginalBl?: string; // e.g., "THREE (3)" [cite: 14]
       placeAndDateOfIssue?: string; // e.g., "MUMBAI - 27/02/2026" [cite: 14]
       shippedOnBoardDate?: string;
@@ -127,8 +134,13 @@ export const JobSchema = new Schema<IJob>({
     },
     cargoDetails: {
         commodity: { type: String },
+        equipment: { type: String },
+        containerCount: { type: Number },
+        containerType: { type: String },
+        totalCBM: { type: Number },
         items: [{
             description: String,
+            hsnCode: String,
             noOfPackages: Number,
             packageUnit: String,
             grossWeight: Number,
@@ -162,17 +174,20 @@ export const JobSchema = new Schema<IJob>({
     shippingDocuments: {
         // Ocean Bill of Lading Specifics
         bolDetails: {
-            bolNumber: String,
-            freightPayableAt: String,
-            bookingReference:{type:String},
+            bolNumber: { type: String },
+            freightPayableAt: { type: String },
+            bookingReference: { type: String },
             freightTerms: { type: String, enum: ["Prepaid", "Collect"], default: "Prepaid" },
-            marksAndNumbers: String,
-            sealNumber: String,
+            marksAndNumbers: { type: String },
+            containerNumber: { type: String },
+            lineSealNumber: { type: String },
+            customSealNumber: { type: String },
+            sealNumber: { type: String }, // Keep for backward compatibility if needed
             noOfOriginalBl: { type: String, default: "THREE (3)" },
-            placeAndDateOfIssue: String,
-            shippedOnBoardDate: String,
-            handlingInformation: String,
-            mtuNumber: String,
+            placeAndDateOfIssue: { type: String },
+            shippedOnBoardDate: { type: String },
+            handlingInformation: { type: String },
+            mtuNumber: { type: String },
         },
         // Airway Bill Specifics
         awbDetails: {

@@ -36,18 +36,6 @@ export default function DocumentWorkshop() {
               <input {...register("shippingDocuments.awbDetails.hawbNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="ICMICN064" />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase">Agent IATA Code</label>
-              <input {...register("shippingDocuments.awbDetails.iataCode")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="14-3 0825" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase">Shipper Account No.</label>
-              <input {...register("shippingDocuments.awbDetails.shipperAccountNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="A1234567" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase">Consignee Account No.</label>
-              <input {...register("shippingDocuments.awbDetails.consigneeAccountNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="C9876543" />
-            </div>
-            <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase">Accounting Information</label>
               <input {...register("shippingDocuments.awbDetails.accountingInformation")} defaultValue="FREIGHT PREPAID" className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" />
             </div>
@@ -74,8 +62,16 @@ export default function DocumentWorkshop() {
               <input {...register("shippingDocuments.bolDetails.bookingReference")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="e.g. ICMPLDEL/UGKLA/169" />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase">Container Seal No.</label>
-              <input {...register("shippingDocuments.bolDetails.sealNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="e.g. MLIN3226520" />
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Container No.</label>
+              <input {...register("shippingDocuments.bolDetails.containerNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="e.g. MSKU1234567" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Line Seal No.</label>
+              <input {...register("shippingDocuments.bolDetails.lineSealNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="e.g. MLIN3226520" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Custom Seal No.</label>
+              <input {...register("shippingDocuments.bolDetails.customSealNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="e.g. CUST654321" />
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase">MTU Number</label>

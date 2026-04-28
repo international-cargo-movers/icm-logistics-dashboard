@@ -10,12 +10,20 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Button } from "@/components/ui/button"
 import { CalendarIcon, Plus, Trash2 } from "lucide-react"
 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Box, Container } from "lucide-react"
+
 export default function CargoSection({ isReadOnly }: { isReadOnly?: boolean }) {
   const { control, register } = useFormContext()
   const { fields, append, remove } = useFieldArray({
     control,
     name: "cargoDetails.items"
   })
+
+  const mode = useWatch({
+    control,
+    name: "shipmentDetails.mode"
+  }) || ""
 
   // useWatch ensures the component re-renders on every keystroke in these fields
   const items = useWatch({
@@ -76,6 +84,86 @@ export default function CargoSection({ isReadOnly }: { isReadOnly?: boolean }) {
           />
         </div>
 
+        {/* DYNAMIC FIELDS BASED ON MODE */}
+        <div className="grid md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-xl border border-slate-100">
+          {mode.includes("Sea FCL") && (
+            <>
+              <FormField
+                control={control}
+                name="cargoDetails.containerCount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>No. of Containers</FormLabel>
+                    <FormControl>
+                      <div className="flex items-center gap-2 bg-white rounded-lg px-3 h-10 border border-slate-200">
+                        <Container className="w-4 h-4 text-primary" />
+                        <Input type="number" min="1" {...field} className="border-none focus-visible:ring-0 h-9" />
+                      </div>
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={control}
+                name="cargoDetails.containerType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Container Size</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="bg-white border-slate-200 h-10">
+                          <SelectValue placeholder="Select Size" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="20' GP">20' GP (Standard)</SelectItem>
+                        <SelectItem value="40' GP">40' GP (Standard)</SelectItem>
+                        <SelectItem value="40' HC">40' HC (High Cube)</SelectItem>
+                        <SelectItem value="20' RF">20' Reefer</SelectItem>
+                        <SelectItem value="40' RF">40' Reefer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+            </>
+          )}
+
+          {mode.includes("Sea LCL") && (
+            <FormField
+              control={control}
+              name="cargoDetails.totalCBM"
+              render={({ field }) => (
+                <FormItem className="col-span-2">
+                  <FormLabel>Total Volume (CBM)</FormLabel>
+                  <FormControl>
+                    <div className="flex items-center gap-2 bg-white rounded-lg px-3 h-10 border border-slate-200">
+                      <Box className="w-4 h-4 text-primary" />
+                      <Input type="number" step="0.01" {...field} className="border-none focus-visible:ring-0 h-9" placeholder="0.00" />
+                    </div>
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          )}
+
+          {mode.includes("Air") && (
+            <div className="col-span-2 space-y-2">
+               <label className="text-xs font-semibold text-slate-500 block">Shipment Metric (Weight)</label>
+               <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 h-10 border border-primary/10">
+                 <span className="text-[10px] font-bold text-primary uppercase">Using Chargeable Weight:</span>
+                 <span className="text-sm font-black text-primary">{Math.max(totals.gross, totals.vol)} KG</span>
+               </div>
+            </div>
+          )}
+          
+          {!mode.includes("Sea FCL") && !mode.includes("Sea LCL") && !mode.includes("Air") && (
+            <div className="col-span-2 text-center py-2 text-slate-400 text-xs italic">
+              Select a transport mode to see specific cargo options
+            </div>
+          )}
+        </div>
+
         {/* ITEMS ARRAY */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -85,7 +173,7 @@ export default function CargoSection({ isReadOnly }: { isReadOnly?: boolean }) {
                 type="button" 
                 variant="outline" 
                 size="sm" 
-                onClick={() => append({ description: "", noOfPackages: 0, grossWeight: 0, netWeight: 0, volumetricWeight: 0, dimensions: "" })}
+                onClick={() => append({ description: "", hsnCode: "", noOfPackages: 0, grossWeight: 0, netWeight: 0, volumetricWeight: 0, dimensions: "" })}
               >
                 <Plus className="w-4 h-4 mr-2" /> Add Item
               </Button>
@@ -94,10 +182,14 @@ export default function CargoSection({ isReadOnly }: { isReadOnly?: boolean }) {
 
           <div className="space-y-4">
             {fields.map((field, index) => (
-              <div key={field.id} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50/50 relative group">
+              <div key={field.id} className="grid grid-cols-1 md:grid-cols-7 gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50/50 relative group">
                 <div className="md:col-span-2 space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Description</label>
                   <Input {...register(`cargoDetails.items.${index}.description` as const)} placeholder="Item name..." className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">HSN Code</label>
+                  <Input {...register(`cargoDetails.items.${index}.hsnCode` as const)} placeholder="HSN Code..." className="h-9" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Pkgs</label>
@@ -124,7 +216,7 @@ export default function CargoSection({ isReadOnly }: { isReadOnly?: boolean }) {
                     </button>
                   )}
                 </div>
-                <div className="md:col-span-6 space-y-1.5">
+                <div className="md:col-span-7 space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Dimensions (L x W x H)</label>
                   <Input {...register(`cargoDetails.items.${index}.dimensions` as const)} placeholder="e.g. 120x80x100 cm" className="h-9" />
                 </div>

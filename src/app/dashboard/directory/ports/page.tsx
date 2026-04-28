@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import {
-  Bell,
   Plus,
   Search,
   Anchor,
@@ -13,9 +12,19 @@ import {
   FileSpreadsheet,
   AlertCircle,
   Download,
-  CheckCircle2
+  CheckCircle2,
+  Activity,
+  Globe,
+  ChevronRight
 } from "lucide-react"
 import { useSession } from "next-auth/react";
+import Sidebar from "@/components/dashboard/Sidebar"
+import TopNav from "@/components/dashboard/TopNav"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import Link from "next/link"
 
 interface IPort {
   _id?: string;
@@ -31,7 +40,8 @@ export default function MasterPortsPage() {
   const { data: session } = useSession()
   const [ports, setPorts] = React.useState<IPort[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
-  const canEditMasterData = session && ["SuperAdmin", "Finance","Sales"].includes(session?.user?.role || "")
+  const [isLoading, setIsLoading] = React.useState(true)
+  const canEditMasterData = session && ["SuperAdmin", "Finance", "Sales", "Operations"].includes(session?.user?.role || "")
 
   // Single Add State
   const [isAddOpen, setIsAddOpen] = React.useState(false)
@@ -53,6 +63,8 @@ export default function MasterPortsPage() {
         if (json.success) setPorts(json.data)
       } catch (error) {
         console.error("Failed to fetch ports:", error)
+      } finally {
+        setIsLoading(false)
       }
     }
     fetchPorts()
@@ -64,6 +76,14 @@ export default function MasterPortsPage() {
       port.locode.toLowerCase().includes(query) ||
       port.country.toLowerCase().includes(query)
   })
+
+  const stats = React.useMemo(() => {
+    const total = ports.length;
+    const sea = ports.filter(p => p.type.includes("Sea")).length;
+    const air = ports.filter(p => p.type.includes("Air")).length;
+    const countries = new Set(ports.map(p => p.countryCode)).size;
+    return { total, sea, air, countries };
+  }, [ports]);
 
   // --- SINGLE SAVE HANDLER ---
   const handleSave = async () => {
@@ -95,7 +115,6 @@ export default function MasterPortsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check if it's a CSV
     if (file.type !== "text/csv" && !file.name.endsWith('.csv')) {
       setBulkError("Please upload a valid .csv file.");
       return;
@@ -105,7 +124,6 @@ export default function MasterPortsPage() {
     reader.onload = (event) => {
       const text = event.target?.result as string;
       try {
-        // Split by lines and remove completely empty ones
         const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
 
         if (lines.length <= 1) {
@@ -114,13 +132,9 @@ export default function MasterPortsPage() {
         }
 
         const newPorts: IPort[] = [];
-
-        // Start at index 1 to skip the header row
         for (let i = 1; i < lines.length; i++) {
           const cols = lines[i].split(",");
-
           if (cols.length >= 4) {
-            // Determine type. Accept "Sea", "Air", or "Sea|Air" for both.
             let typeInput = cols[4] ? cols[4].trim() : "Sea";
             let types = ["Sea"];
             if (typeInput.includes("|")) types = typeInput.split("|");
@@ -136,7 +150,6 @@ export default function MasterPortsPage() {
             });
           }
         }
-
         setParsedData(newPorts);
         setBulkError("");
       } catch (err) {
@@ -203,260 +216,402 @@ export default function MasterPortsPage() {
     })
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <Activity className="h-12 w-12 text-blue-600 animate-spin" />
+          <p className="text-slate-500 font-bold animate-pulse">Syncing Global LOCODEs...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-surface text-on-surface antialiased overflow-hidden min-h-screen">
+    <div className="bg-[#F8FAFC] text-slate-900 antialiased font-body min-h-screen">
+      <Sidebar />
 
-      {/* Header */}
-      <header className="fixed top-0 w-full z-50 bg-slate-50/80 backdrop-blur-xl shadow-sm flex justify-between items-center px-6 h-16">
-        <div className="flex items-center gap-8">
-          <span className="text-xl font-bold tracking-tight text-slate-900">International Cargo Movers</span>
-          <div className="hidden md:flex gap-6">
-            <a className="text-slate-500 hover:text-slate-900 transition-colors" href="/dashboard/jobs">Shipments</a>
-            <a className="text-slate-500 hover:text-slate-900 transition-colors" href="/dashboard/directory/companies">Companies</a>
-            <a className="text-blue-700 border-b-2 border-blue-700 transition-colors" href="/dashboard/directory/ports">Ports Hub</a>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <button className="p-2 hover:bg-slate-100 transition-colors rounded-lg">
-            <Bell className="w-5 h-5 text-on-surface-variant" />
-          </button>
-          <div className="h-8 w-8 rounded-full overflow-hidden bg-slate-200"></div>
-        </div>
-      </header>
+      <main className="min-h-screen flex flex-col">
+        <TopNav searchTerm={searchQuery} onSearchChange={setSearchQuery} />
 
-      <main className="pt-16 min-h-screen bg-surface flex transition-all duration-300">
-        <div className="flex-1 px-10 py-12">
-
-          <div className="flex justify-between items-end mb-12">
-            <div>
-              <h1 className="text-4xl font-extrabold tracking-tight text-on-surface mb-2">Ports & Locations</h1>
-              <p className="text-on-surface-variant text-lg">Manage global UN/LOCODEs for routing validation.</p>
+        <div className="pt-24 px-8 lg:px-12 pb-12 space-y-12">
+          
+          {/* Header */}
+          <div className="flex flex-col md:flex-row justify-between items-end gap-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="h-1 w-8 bg-blue-600 rounded-full"></span>
+                <span className="text-[10px] font-black tracking-[0.3em] text-blue-600 uppercase">
+                  Logistics Master Data
+                </span>
+              </div>
+              <h2 className="text-5xl font-black text-slate-900 tracking-tighter mb-4 leading-none">
+                Ports & Locations
+              </h2>
+              <p className="text-slate-500 text-lg font-medium">
+                Managing <span className="text-blue-600 font-bold">{stats.total}</span> UN/LOCODEs across <span className="text-blue-600 font-bold">{stats.countries}</span> countries.
+              </p>
             </div>
+
             <div className="flex gap-4">
-              {canEditMasterData && <button
-                onClick={() => setIsBulkOpen(true)}
-                className="bg-surface-container-low border border-outline-variant/20 text-on-surface font-semibold px-5 py-3 rounded-lg flex items-center gap-2 hover:bg-surface-container transition-colors"
-              >
-                <Upload className="w-4 h-4" /> Bulk Import (CSV)
-              </button>}
-
-              {canEditMasterData && <button
-                onClick={() => setIsAddOpen(true)}
-                className="bg-primary text-on-primary px-6 py-3 rounded-lg font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity"
-              >
-                <Plus className="w-4 h-4" /> Add Port
-              </button>}
+              {canEditMasterData && (
+                <Button 
+                    onClick={() => setIsBulkOpen(true)}
+                    variant="outline"
+                    className="group flex items-center gap-3 px-8 py-7 rounded-2xl font-bold border-slate-200 hover:bg-white transition-all text-slate-600"
+                >
+                    <Upload className="h-5 w-5" />
+                    Bulk Import
+                </Button>
+              )}
+              {canEditMasterData && (
+                <Button 
+                  onClick={() => setIsAddOpen(true)} 
+                  className="group flex items-center gap-3 px-8 py-7 rounded-2xl font-bold shadow-2xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white border-none"
+                >
+                  <Plus className="h-5 w-5" />
+                  Add Port
+                </Button>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-12 gap-8">
-            <div className="col-span-12">
-              {/* Search Bar */}
-              <div className="flex flex-col gap-6 mb-8">
-                <div className="flex items-center justify-between">
-                  <div className="w-[40%] relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
-                    <input
-                      value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-highest rounded-lg border-none focus:ring-2 focus:ring-primary/20 text-sm outline-none"
-                      placeholder="Search by name, LOCODE, or country..." type="text"
-                    />
-                  </div>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white group hover:translate-y-[-4px] transition-all">
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  <Anchor className="h-6 w-6" />
                 </div>
+                <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-none font-bold">
+                    Global
+                </Badge>
               </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Locations</p>
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stats.total} <span className="text-sm text-slate-400">Codes</span></h3>
+              <div className="mt-4 flex items-center gap-2 text-blue-600 font-bold text-xs">
+                <Activity className="h-4 w-4" />
+                <span>UN/LOCODE Standard</span>
+              </div>
+            </Card>
 
-              {/* Data Table */}
-              <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-[0_12px_40px_rgba(25,28,30,0.04)]">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-surface-container-low">
-                        <th className="px-6 py-4 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Port / Location</th>
-                        <th className="px-6 py-4 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">UN / LOCODE</th>
-                        <th className="px-6 py-4 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Country</th>
-                        <th className="px-6 py-4 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Transport Mode</th>
-                        <th className="px-6 py-4 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-transparent">
-                      {filteredPorts.length === 0 && (
-                        <tr><td colSpan={5} className="px-6 py-12 text-center text-on-surface-variant">No ports found matching your search.</td></tr>
-                      )}
-                      {filteredPorts.map((port) => (
-                        <tr key={port._id} className="group hover:bg-surface-container-low/50 transition-colors">
-                          <td className="px-6 py-5"><span className="font-bold text-on-surface">{port.name}</span></td>
-                          <td className="px-6 py-5">
-                            <span className="px-2.5 py-1 rounded bg-surface-container-highest text-primary font-mono text-xs font-bold tracking-widest">{port.locode}</span>
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium text-on-surface">{port.country}</span>
-                              <span className="text-xs text-on-surface-variant">{port.countryCode}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className="flex gap-2">
-                              {port.type.includes("Sea") && <div title="Sea Port" className="p-1.5 bg-blue-100 text-blue-700 rounded-md"><Anchor className="w-3.5 h-3.5" /></div>}
-                              {port.type.includes("Air") && <div title="Airport" className="p-1.5 bg-sky-100 text-sky-700 rounded-md"><Plane className="w-3.5 h-3.5" /></div>}
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 text-right">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${port.isActive ? 'bg-tertiary-fixed text-on-tertiary-fixed-variant' : 'bg-error-container text-on-error-container'}`}>
-                              {port.isActive ? "Active" : "Inactive"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white group hover:translate-y-[-4px] transition-all">
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                  <Anchor className="h-6 w-6" />
                 </div>
               </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Sea Ports</p>
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stats.sea} <span className="text-sm text-slate-400">Terminals</span></h3>
+              <div className="mt-4 flex items-center gap-2 text-emerald-600 font-bold text-xs">
+                <Activity className="h-4 w-4" />
+                <span>Ocean Freight</span>
+              </div>
+            </Card>
+
+            <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white group hover:translate-y-[-4px] transition-all">
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                  <Plane className="h-6 w-6" />
+                </div>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Airports</p>
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stats.air} <span className="text-sm text-slate-400">Hubs</span></h3>
+              <div className="mt-4 flex items-center gap-2 text-indigo-600 font-bold text-xs">
+                <Activity className="h-4 w-4" />
+                <span>Air Cargo</span>
+              </div>
+            </Card>
+
+            <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white group hover:translate-y-[-4px] transition-all">
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 bg-amber-50 rounded-2xl text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                  <Globe className="h-6 w-6" />
+                </div>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Coverage</p>
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stats.countries} <span className="text-sm text-slate-400">Countries</span></h3>
+              <div className="mt-4 flex items-center gap-2 text-amber-600 font-bold text-xs">
+                <Activity className="h-4 w-4" />
+                <span>Global Reach</span>
+              </div>
+            </Card>
+          </div>
+
+          {/* Table Section */}
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-100">
+                        <Link href="/dashboard/directory/companies">
+                            <button className="px-4 py-2 text-[10px] font-black uppercase tracking-tighter rounded-lg transition-all text-slate-400 hover:text-slate-600">
+                                Companies
+                            </button>
+                        </Link>
+                        <button className="px-4 py-2 text-[10px] font-black uppercase tracking-tighter rounded-lg transition-all bg-blue-600 text-white shadow-lg shadow-blue-500/20">
+                            Ports & Locations
+                        </button>
+                    </div>
+                    <div className="relative w-full md:w-72">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input 
+                            placeholder="Search by name or LOCODE..." 
+                            className="pl-12 py-5 bg-white border-none shadow-sm rounded-xl focus-visible:ring-blue-600"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {filteredPorts.length} Locations Found
+                </div>
+            </div>
+
+            <Card className="border-none shadow-2xl shadow-slate-200/50 bg-white overflow-hidden rounded-3xl">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-50/50 border-b border-slate-50">
+                            <tr>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Port / Location</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">UN / LOCODE</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Country</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Transport Mode</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {filteredPorts.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-8 py-16 text-center text-slate-400 font-bold">
+                                        No ports found matching your search.
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredPorts.map((port) => (
+                                    <tr key={port._id} className="group hover:bg-slate-50/50 transition-all border-slate-50">
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-blue-600">
+                                                    {port.type.includes("Sea") ? <Anchor className="w-5 h-5" /> : <Plane className="w-5 h-5" />}
+                                                </div>
+                                                <p className="font-black text-slate-900">{port.name}</p>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className="px-3 py-1.5 rounded-xl bg-slate-50 text-blue-600 font-mono text-[10px] font-black tracking-widest border border-slate-100">
+                                                {port.locode}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div>
+                                                <p className="text-xs font-black text-slate-900 uppercase tracking-tighter">{port.country}</p>
+                                                <p className="text-[10px] text-slate-400 font-bold">{port.countryCode}</p>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex gap-2">
+                                                {port.type.includes("Sea") && <Badge className="bg-blue-50 text-blue-700 border-none text-[8px] font-black uppercase px-2 py-0">Sea</Badge>}
+                                                {port.type.includes("Air") && <Badge className="bg-sky-50 text-sky-700 border-none text-[8px] font-black uppercase px-2 py-0">Air</Badge>}
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6 text-right">
+                                            <Badge className={`border-none text-[8px] font-black uppercase px-3 py-1 ${port.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                                {port.isActive ? "Active" : "Inactive"}
+                                            </Badge>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+          </div>
+
+        </div>
+      </main>
+
+      {/* Bulk Import Slide-over */}
+      {isBulkOpen && (
+        <div className="fixed inset-0 z-[100] flex justify-end bg-slate-900/20 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="w-full max-w-lg bg-white shadow-2xl h-full flex flex-col animate-in slide-in-from-right duration-500">
+            <div className="p-10 border-b border-slate-50 flex justify-between items-center">
+                <div>
+                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-2">Mass Deployment</p>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Bulk Import</h2>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => { setIsBulkOpen(false); setBulkError(""); setParsedData(null); }} className="rounded-xl h-12 w-12 hover:bg-rose-50 hover:text-rose-600">
+                    <X className="w-6 h-6" />
+                </Button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
+                <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 bg-blue-600 text-white flex items-center justify-center rounded-2xl shadow-lg shadow-blue-500/20">
+                            <FileSpreadsheet className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <p className="font-black text-blue-900">Import Template</p>
+                            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-tight">Standard CSV Format</p>
+                        </div>
+                    </div>
+                    <Button onClick={downloadTemplate} className="bg-white text-blue-600 font-bold rounded-xl shadow-sm hover:bg-white/80 border-none">
+                        <Download className="w-4 h-4 mr-2" /> Template
+                    </Button>
+                </div>
+
+                {bulkError && (
+                    <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-700 text-xs font-bold flex gap-3">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        {bulkError}
+                    </div>
+                )}
+
+                <div className="relative border-4 border-dashed border-slate-100 rounded-[40px] p-12 flex flex-col items-center justify-center text-center group hover:border-blue-100 transition-colors">
+                    <input type="file" accept=".csv" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                    
+                    {!parsedData ? (
+                        <>
+                            <div className="h-16 w-16 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-400 mb-6 group-hover:bg-blue-50 group-hover:text-blue-600 transition-all">
+                                <Upload className="w-8 h-8" />
+                            </div>
+                            <p className="font-black text-slate-900 text-lg tracking-tight">Drop your CSV here</p>
+                            <p className="text-slate-400 font-medium mt-1">or click to browse local files</p>
+                        </>
+                    ) : (
+                        <div className="flex flex-col items-center">
+                            <div className="h-16 w-16 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center mb-6">
+                                <CheckCircle2 className="w-8 h-8" />
+                            </div>
+                            <p className="font-black text-slate-900 text-lg tracking-tight">Data Parsed Successfully</p>
+                            <Badge className="mt-4 bg-emerald-600 text-white font-black border-none px-4 py-1.5 rounded-xl">
+                                {parsedData.length} Records Detected
+                            </Badge>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="p-10 bg-slate-50 border-t border-slate-100 flex gap-4">
+                <Button variant="outline" onClick={() => { setIsBulkOpen(false); setBulkError(""); setParsedData(null); }} className="flex-1 py-7 rounded-2xl font-bold border-slate-200 hover:bg-white transition-all text-slate-500">
+                    Cancel
+                </Button>
+                <Button 
+                    onClick={handleBulkSave} 
+                    disabled={!parsedData || parsedData.length === 0 || isSubmitting}
+                    className="flex-1 py-7 rounded-2xl font-bold bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-500/20 text-white transition-all border-none"
+                >
+                    {isSubmitting ? "Processing..." : "Commit Import"}
+                </Button>
             </div>
           </div>
         </div>
+      )}
 
-        {/* --- BULK IMPORT SLIDE-OVER (EXCEL/CSV) --- */}
-        {isBulkOpen && (
-          <div className="w-[500px] min-w-[500px] bg-surface-container-lowest border-l border-outline-variant/20 shadow-2xl z-[60] flex flex-col transition-all">
-            <div className="p-8 border-b border-outline-variant/10">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold tracking-tight text-on-surface">Import Data</h2>
-                <button onClick={() => { setIsBulkOpen(false); setBulkError(""); setParsedData(null); }} className="p-2 hover:bg-surface-container rounded-full text-on-surface-variant">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-primary/10 rounded-xl border border-primary/20">
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 bg-primary text-white flex items-center justify-center rounded-lg shrink-0">
-                    <FileSpreadsheet className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-primary">Excel / CSV Upload</p>
-                    <p className="text-xs text-primary/70">Upload your master data sheet.</p>
-                  </div>
+      {/* Single Add Slide-over */}
+      {isAddOpen && (
+        <div className="fixed inset-0 z-[100] flex justify-end bg-slate-900/20 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="w-full max-w-lg bg-white shadow-2xl h-full flex flex-col animate-in slide-in-from-right duration-500">
+            <div className="p-10 border-b border-slate-50 flex justify-between items-center">
+                <div>
+                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-2">Manual Entry</p>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Add New Port</h2>
                 </div>
-                <button
-                  onClick={downloadTemplate}
-                  className="flex items-center gap-1.5 text-xs font-bold bg-white text-primary px-3 py-2 rounded-lg shadow-sm hover:shadow transition-all border border-primary/10"
-                >
-                  <Download className="w-3.5 h-3.5" /> Template
-                </button>
-              </div>
+                <Button variant="ghost" size="sm" onClick={() => setIsAddOpen(false)} className="rounded-xl h-12 w-12 hover:bg-rose-50 hover:text-rose-600">
+                    <X className="w-6 h-6" />
+                </Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8 no-scrollbar flex flex-col gap-6">
-
-              {bulkError && (
-                <div className="p-4 bg-error-container text-on-error-container rounded-xl text-sm flex gap-3 items-start border border-error/20">
-                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                  <p className="font-medium">{bulkError}</p>
-                </div>
-              )}
-
-              <div className="flex flex-col flex-1 h-full">
-                <label className="block text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Upload File</label>
-
-                <div className="flex-1 border-2 border-dashed border-outline-variant/50 rounded-xl bg-surface-container-lowest flex flex-col items-center justify-center p-8 text-center relative group hover:border-primary/50 transition-colors">
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={handleFileUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  />
-
-                  {!parsedData ? (
-                    <>
-                      <div className="h-12 w-12 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant mb-4 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                        <Upload className="w-6 h-6" />
-                      </div>
-                      <p className="text-sm font-bold text-on-surface">Click or drag CSV file to upload</p>
-                      <p className="text-xs text-on-surface-variant mt-2">Maximum file size: 5MB</p>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center">
-                      <div className="h-12 w-12 rounded-full bg-tertiary-fixed flex items-center justify-center text-on-tertiary-fixed-variant mb-4">
-                        <CheckCircle2 className="w-6 h-6" />
-                      </div>
-                      <p className="text-sm font-bold text-on-surface">File parsed successfully!</p>
-                      <span className="mt-3 px-3 py-1 bg-surface-container-highest text-primary font-bold text-xs rounded-full">
-                        {parsedData.length} valid records found
-                      </span>
+            <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
+                <div className="space-y-6">
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Port / Location Name *</label>
+                        <Input 
+                            value={newPort.name} 
+                            onChange={(e) => setNewPort({ ...newPort, name: e.target.value })} 
+                            className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-bold" 
+                            placeholder="e.g. Port of Mumbai" 
+                        />
                     </div>
-                  )}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">UN/LOCODE *</label>
+                        <Input 
+                            value={newPort.locode} 
+                            onChange={(e) => setNewPort({ ...newPort, locode: e.target.value.toUpperCase() })} 
+                            maxLength={5} 
+                            className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-mono font-bold uppercase" 
+                            placeholder="INBOM" 
+                        />
+                        <p className="text-[10px] text-slate-400 font-medium mt-2 ml-1">Must be exactly 5 characters.</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Country Name *</label>
+                            <Input 
+                                value={newPort.country} 
+                                onChange={(e) => setNewPort({ ...newPort, country: e.target.value })} 
+                                className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-bold" 
+                                placeholder="India" 
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Country Code *</label>
+                            <Input 
+                                value={newPort.countryCode} 
+                                onChange={(e) => setNewPort({ ...newPort, countryCode: e.target.value.toUpperCase() })} 
+                                maxLength={2} 
+                                className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-blue-600 font-mono font-bold uppercase" 
+                                placeholder="IN" 
+                            />
+                        </div>
+                    </div>
+                    
+                    <div className="pt-8 border-t border-slate-50">
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6 block">Capabilities</label>
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={() => toggleType("Sea")} 
+                                className={`flex-1 py-5 flex flex-col items-center gap-3 rounded-2xl border-2 transition-all ${
+                                    newPort.type.includes("Sea") 
+                                        ? 'border-blue-600 bg-blue-50 text-blue-600' 
+                                        : 'border-slate-50 bg-slate-50 text-slate-400 hover:bg-slate-100'
+                                }`}
+                            >
+                                <Anchor className="w-6 h-6" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Sea Port</span>
+                            </button>
+                            <button 
+                                onClick={() => toggleType("Air")} 
+                                className={`flex-1 py-5 flex flex-col items-center gap-3 rounded-2xl border-2 transition-all ${
+                                    newPort.type.includes("Air") 
+                                        ? 'border-blue-600 bg-blue-50 text-blue-600' 
+                                        : 'border-slate-50 bg-slate-50 text-slate-400 hover:bg-slate-100'
+                                }`}
+                            >
+                                <Plane className="w-6 h-6" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Airport</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-              </div>
             </div>
 
-            <div className="p-8 bg-surface-container-low border-t border-outline-variant/10 flex gap-4">
-              <button onClick={() => { setIsBulkOpen(false); setBulkError(""); setParsedData(null); }} className="flex-1 px-6 py-3 border border-outline-variant text-on-surface-variant font-semibold rounded-lg hover:bg-white transition-colors">Cancel</button>
-              <button
-                onClick={handleBulkSave}
-                disabled={!parsedData || parsedData.length === 0 || isSubmitting}
-                className="flex-1 px-6 py-3 bg-primary text-on-primary font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-              >
-                {isSubmitting ? "Importing..." : "Run Import"}
-              </button>
+            <div className="p-10 bg-slate-50 border-t border-slate-100 flex gap-4">
+                <Button variant="outline" onClick={() => setIsAddOpen(false)} className="flex-1 py-7 rounded-2xl font-bold border-slate-200 hover:bg-white transition-all text-slate-500">
+                    Cancel
+                </Button>
+                <Button 
+                    onClick={handleSave} 
+                    disabled={!newPort.name || newPort.locode.length !== 5 || newPort.countryCode.length !== 2} 
+                    className="flex-1 py-7 rounded-2xl font-bold bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-500/20 text-white transition-all border-none"
+                >
+                    Save Port
+                </Button>
             </div>
           </div>
-        )}
-
-        {/* --- SINGLE ADD SLIDE-OVER --- */}
-        {isAddOpen && (
-          <div className="w-[450px] min-w-[450px] bg-surface-container-lowest border-l border-outline-variant/20 shadow-2xl z-[60] flex flex-col transition-all">
-            <div className="p-8 border-b border-outline-variant/10">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold tracking-tight text-on-surface">Add Port</h2>
-                <button onClick={() => setIsAddOpen(false)} className="p-2 hover:bg-surface-container rounded-full text-on-surface-variant">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="flex items-center gap-4 p-4 bg-primary/10 rounded-xl border border-primary/20">
-                <div className="h-10 w-10 bg-primary text-white flex items-center justify-center rounded-lg shrink-0">
-                  <MapPin className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="font-bold text-primary">Master Data Entry</p>
-                  <p className="text-xs text-primary/70">Requires exact UN/LOCODE details.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-8 no-scrollbar space-y-6">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Port / Location Name *</label>
-                <input value={newPort.name} onChange={(e) => setNewPort({ ...newPort, name: e.target.value })} className="w-full bg-surface-container-highest border-none rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none" type="text" placeholder="e.g. Jebel Ali Port" />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">UN/LOCODE *</label>
-                <input value={newPort.locode} onChange={(e) => setNewPort({ ...newPort, locode: e.target.value.toUpperCase() })} maxLength={5} className="w-full bg-surface-container-highest border-none rounded-lg p-3 text-sm font-mono focus:ring-2 focus:ring-primary/20 outline-none uppercase placeholder:normal-case" placeholder="e.g. AEJEA" type="text" />
-                <p className="text-[10px] text-on-surface-variant mt-1.5 ml-1">Must be exactly 5 alphanumeric characters.</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Country Name *</label>
-                  <input value={newPort.country} onChange={(e) => setNewPort({ ...newPort, country: e.target.value })} className="w-full bg-surface-container-highest border-none rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none" type="text" placeholder="United Arab Emirates" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">ISO Country Code *</label>
-                  <input value={newPort.countryCode} onChange={(e) => setNewPort({ ...newPort, countryCode: e.target.value.toUpperCase() })} maxLength={2} className="w-full bg-surface-container-highest border-none rounded-lg p-3 text-sm font-mono focus:ring-2 focus:ring-primary/20 outline-none uppercase placeholder:normal-case" type="text" placeholder="AE" />
-                </div>
-              </div>
-              <div className="pt-4 border-t border-outline-variant/10">
-                <label className="block text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-3">Transport Capabilities</label>
-                <div className="flex gap-4">
-                  <button onClick={() => toggleType("Sea")} className={`flex-1 py-3 flex flex-col items-center gap-2 rounded-xl border-2 transition-all ${newPort.type.includes("Sea") ? 'border-primary bg-primary/5 text-primary' : 'border-surface-container-highest bg-surface-container-highest text-on-surface-variant hover:bg-surface-container'}`}><Anchor className="w-5 h-5" /><span className="text-xs font-bold">Sea Port</span></button>
-                  <button onClick={() => toggleType("Air")} className={`flex-1 py-3 flex flex-col items-center gap-2 rounded-xl border-2 transition-all ${newPort.type.includes("Air") ? 'border-primary bg-primary/5 text-primary' : 'border-surface-container-highest bg-surface-container-highest text-on-surface-variant hover:bg-surface-container'}`}><Plane className="w-5 h-5" /><span className="text-xs font-bold">Airport</span></button>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-8 bg-surface-container-low border-t border-outline-variant/10 flex gap-4">
-              <button onClick={() => setIsAddOpen(false)} className="flex-1 px-6 py-3 border border-outline-variant text-on-surface-variant font-semibold rounded-lg hover:bg-white transition-colors">Cancel</button>
-              <button onClick={handleSave} disabled={!newPort.name || newPort.locode.length !== 5 || newPort.countryCode.length !== 2} className="flex-1 px-6 py-3 bg-primary text-on-primary font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">Save Port</button>
-            </div>
-          </div>
-        )}
-      </main>
+        </div>
+      )}
     </div>
   )
 }

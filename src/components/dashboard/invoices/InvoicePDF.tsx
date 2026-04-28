@@ -158,20 +158,24 @@ export default function InvoicePDF({ data }: { data: any }) {
             </View>
 
             {/* Rows */}
-            {lineItems.map((item: any, i: number) => (
-              <View key={i} style={styles.tableRow}>
-                <Text style={styles.wSno}>{i + 1}</Text>
-                <Text style={styles.wDesc}>{item.description}</Text>
-                <Text style={styles.wSac}>{item.sacCode}</Text>
-                <Text style={styles.wUnit}>1</Text>
-                <Text style={styles.wRate}>{item.rate?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-                <Text style={styles.wCurr}>{item.currency}</Text>
-                <Text style={styles.wRoe}>{item.roe}</Text>
-                <Text style={styles.wGstP}>{item.gstPercent}%</Text>
-                <Text style={styles.wTaxable}>{item.taxableValue?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-                <Text style={styles.wGstAmt}>{item.gstAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-              </View>
-            ))}
+            {lineItems.map((item: any, i: number) => {
+              const qty = Number(item.quantity) || 1;
+              const rate = Number(item.rate) || 0;
+              return (
+                <View key={i} style={styles.tableRow}>
+                  <Text style={styles.wSno}>{i + 1}</Text>
+                  <Text style={styles.wDesc}>{item.description}</Text>
+                  <Text style={styles.wSac}>{item.sacCode}</Text>
+                  <Text style={styles.wUnit}>{qty} {item.unit || "SET"}</Text>
+                  <Text style={styles.wRate}>{rate?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                  <Text style={styles.wCurr}>{item.currency}</Text>
+                  <Text style={styles.wRoe}>{item.roe}</Text>
+                  <Text style={styles.wGstP}>{item.gstPercent}%</Text>
+                  <Text style={styles.wTaxable}>{item.taxableValue?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                  <Text style={styles.wGstAmt}>{item.gstAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                </View>
+              );
+            })}
           </View>
 
           {/* SUBTOTAL ROW */}

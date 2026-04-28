@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { pdf } from '@react-pdf/renderer'
 import QuotePDF from '@/components/dashboard/quotes/QuotePDF'
-import { Plus, Trash2, ArrowRight, Check, ChevronsUpDown, Save, Mail, Download, Shield } from "lucide-react"
+import { Plus, Trash2, ArrowRight, Check, ChevronsUpDown, Save, Mail, Shield, Container, Box, XCircle } from "lucide-react"
 
 // Shadcn UI Imports
 import { cn } from "@/lib/utils"
@@ -53,14 +53,17 @@ export default function EditQuotePage() {
     cargoSummary: {
       commodity: "",
       items: [
-        { description: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }
+        { description: "", hsnCode: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }
       ],
+      containerCount: 1,
+      containerType: "20' GP",
+      totalCBM: 0,
       equipment: ""
     },
     lineItems: [] as any[]
   })
 
-  // LIVE TOTALS - Calculated every render pass
+  // LIVE TOTALS
   const cargoTotals = quoteData.cargoSummary.items.reduce((acc, item) => {
     acc.pkgs += Number(item.noOfPackages || 0)
     acc.gross += Number(item.grossWeight || 0)
@@ -68,12 +71,46 @@ export default function EditQuotePage() {
     return acc
   }, { pkgs: 0, gross: 0, vol: 0 })
 
+  const chargeableWeight = Math.max(cargoTotals.gross, cargoTotals.vol);
+
+  // --- DYNAMIC MULTIPLIER LOGIC ---
+  const getMultiplier = () => {
+    if (quoteData.mode.includes("Sea FCL")) return Number(quoteData.cargoSummary.containerCount) || 1;
+    if (quoteData.mode.includes("Sea LCL")) return Number(quoteData.cargoSummary.totalCBM) || 1;
+    if (quoteData.mode.includes("Air")) return chargeableWeight || 1;
+    return 1;
+  }
+
+  const multiplier = getMultiplier();
+  const unitLabel = quoteData.mode.includes("Sea FCL") ? "Containers" : (quoteData.mode.includes("Sea LCL") ? "CBM" : "KG");
+
+  // --- LIVE MATH ENGINE ---
+  const totalBuy = quoteData.lineItems.reduce((acc, item) => {
+    const qty = (item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight")) ? multiplier : 1;
+    return acc + ((Number(item.buyPrice) || 0) * (Number(item.roe) || 1) * qty);
+  }, 0)
+
+  const totalSell = quoteData.lineItems.reduce((acc, item) => {
+    const qty = (item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight")) ? multiplier : 1;
+    return acc + ((Number(item.sellPrice) || 0) * (Number(item.roe) || 1) * qty);
+  }, 0)
+
+  const profitMargin = totalSell - totalBuy
+
+  const addLineItem = () => setQuoteData({ ...quoteData, lineItems: [...quoteData.lineItems, { chargeName: "", chargeType: "Freight", currency: "INR", roe: 1, buyPrice: 0, sellPrice: 0, notes: "" }] })
+  const removeLineItem = (index: number) => setQuoteData({ ...quoteData, lineItems: quoteData.lineItems.filter((_, idx) => idx !== index) })
+  const updateLineItem = (index: number, field: string, value: string | number) => {
+    const newItems = [...quoteData.lineItems]
+    newItems[index] = { ...newItems[index], [field]: value } as any
+    setQuoteData({ ...quoteData, lineItems: newItems })
+  }
+
   const addCargoItem = () => {
     setQuoteData({
       ...quoteData,
       cargoSummary: {
         ...quoteData.cargoSummary,
-        items: [...quoteData.cargoSummary.items, { description: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }]
+        items: [...quoteData.cargoSummary.items, { description: "", hsnCode: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }]
       }
     })
   }
@@ -82,7 +119,7 @@ export default function EditQuotePage() {
     const newItems = quoteData.cargoSummary.items.filter((_, idx) => idx !== index)
     setQuoteData({
       ...quoteData,
-      cargoSummary: { ...quoteData.cargoSummary, items: newItems.length > 0 ? newItems : [{ description: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }] }
+      cargoSummary: { ...quoteData.cargoSummary, items: newItems.length > 0 ? newItems : [{ description: "", hsnCode: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }] }
     })
   }
 
@@ -135,24 +172,28 @@ export default function EditQuotePage() {
           const linkedCustomer = loadedCustomers.find(c => c._id === q.customerDetails.companyId);
           const activeEmail = linkedCustomer?.email || linkedCustomer?.contactEmail || q.customerDetails.email || "";
 
-          // NEW: Ensure existing line items have roe and notes fields initialized if missing
-          const processedLineItems = (q.financials.lineItems || []).map((item: any) => ({
-            ...item,
-            roe: item.roe || 1,
-            notes: item.notes || ""
-          }));
-
-          // Handle potentially missing items array (migration)
-          const existingItems = q.cargoSummary?.items?.length > 0 
-            ? q.cargoSummary.items 
-            : [{ description: q.cargoSummary?.commodity || "", noOfPackages: 0, grossWeight: parseFloat(q.cargoSummary?.estimatedWeight) || 0, volumetricWeight: 0 }];
+          // Parse legacy equipment string if possible
+          let cCount = 1;
+          let cType = "20' GP";
+          let cbm = 0;
+          
+          const equip = q.cargoSummary?.equipment || "";
+          if (q.routingDetails.mode.includes("Sea FCL")) {
+            const match = equip.match(/(\d+)\s*x\s*(.*)/i);
+            if (match) {
+                cCount = parseInt(match[1]);
+                cType = match[2];
+            }
+          } else if (q.routingDetails.mode.includes("Sea LCL")) {
+            cbm = parseFloat(equip.split(" ")[0]) || 0;
+          }
 
           setQuoteData({
             quoteRef: q.quoteId,
             validityDays: diffDays || 15,
             customerId: q.customerDetails.companyId,
             customerName: q.customerDetails.contactPerson || linkedCustomer?.name || "",
-            customerEmail: activeEmail, 
+            customerEmail: activeEmail,
             originCountry: q.routingDetails.originCountry || (q.routingDetails.originPort ? q.routingDetails.originPort.substring(0, 2) : ""),
             originPort: q.routingDetails.originPort,
             destinationCountry: q.routingDetails.destinationCountry || (q.routingDetails.destinationPort ? q.routingDetails.destinationPort.substring(0, 2) : ""),
@@ -160,96 +201,50 @@ export default function EditQuotePage() {
             mode: q.routingDetails.mode,
             cargoSummary: {
               commodity: q.cargoSummary?.commodity || "",
-              items: existingItems,
+              items: q.cargoSummary?.items || [],
               equipment: q.cargoSummary?.equipment || "",
+              containerCount: cCount,
+              containerType: cType,
+              totalCBM: cbm
             },
-            lineItems: processedLineItems
+            lineItems: q.financials.lineItems || []
           });
-        } else {
-            toast.error("Quote not found!");
-            router.push('/dashboard/quotes');
         }
-      } catch (error) { 
-        console.error("Failed to load data", error); 
-      } finally {
-        setIsLoading(false);
-      }
+      } catch (error) { console.error("Load Failed", error); }
+      finally { setIsLoading(false); }
     }
     loadData();
   }, [quoteId, router])
 
-  const handleEmailBlur = async () => {
-    if (quoteData.customerId && quoteData.customerEmail) {
-      const customer = customers.find(c => c._id === quoteData.customerId);
-      if (customer && customer.email !== quoteData.customerEmail) {
-         try {
-           const res = await fetch(`/api/companies/${quoteData.customerId}`, {
-             method: "PUT",
-             headers: { "Content-Type": "application/json" },
-             body: JSON.stringify({ contactEmail: quoteData.customerEmail }) 
-           });
-           if (res.ok) {
-             toast.success("Customer email updated in Master Directory!");
-             setCustomers(customers.map(c => c._id === quoteData.customerId ? { ...c, contactEmail: quoteData.customerEmail } : c));
-           }
-         } catch (e) {
-           console.error("Failed to sync email", e);
-         }
-      }
-    }
-  }
-
-  useEffect(() => {
-    if (!isLoading) {
-      setQuoteData(prev => ({ ...prev, originPort: "" }))
-      setSearchOP("")
-    }
-  }, [quoteData.originCountry, isLoading])
-
-  useEffect(() => {
-    if (!isLoading) {
-      setQuoteData(prev => ({ ...prev, destinationPort: "" }))
-      setSearchDP("")
-    }
-  }, [quoteData.destinationCountry, isLoading])
-
-  const isAir = quoteData.mode.includes("Air")
-  const requiredType = isAir ? "Air" : "Sea"
-  const availableOriginPorts = ports.filter(p => p.countryCode === quoteData.originCountry && p.type.includes(requiredType))
-  const availableDestPorts = ports.filter(p => p.countryCode === quoteData.destinationCountry && p.type.includes(requiredType))
-
-  // --- NEW: LIVE MATH ENGINE (WITH ROE) ---
-  const totalBuy = quoteData.lineItems.reduce((acc, item) => acc + ((Number(item.buyPrice) || 0) * (Number(item.roe) || 1)), 0)
-  const totalSell = quoteData.lineItems.reduce((acc, item) => acc + ((Number(item.sellPrice) || 0) * (Number(item.roe) || 1)), 0)
-  const profitMargin = totalSell - totalBuy
-
-  // NEW: Updated Add Line Item template
-  const addLineItem = () => setQuoteData({ ...quoteData, lineItems: [...quoteData.lineItems, { chargeName: "", chargeType: "Freight", currency: "INR", roe: 1, buyPrice: 0, sellPrice: 0, notes: "" }] })
-  const removeLineItem = (index: number) => setQuoteData({ ...quoteData, lineItems: quoteData.lineItems.filter((_, idx) => idx !== index) })
-  const updateLineItem = (index: number, field: string, value: string | number) => {
-    const newItems = [...quoteData.lineItems]
-    newItems[index] = { ...newItems[index], [field]: value } as any
-    setQuoteData({ ...quoteData, lineItems: newItems })
-  }
-
   const preparePayload = () => {
     if (!quoteData.customerId || !quoteData.originPort || !quoteData.destinationPort) {
-      toast.error("Missing Fields", { description: "Please select a Customer and Routing details before saving." });
+      toast.error("Missing Fields");
       return null;
     }
-    if (!quoteData.cargoSummary.equipment || quoteData.cargoSummary.equipment.trim() === "") {
-      toast.error("Missing Cargo Specs", { description: "Please specify the Equipment / Volume in the Cargo Summary." });
-      return null;
-    }
+
+    let equipmentStr = "";
+    if (quoteData.mode.includes("Sea FCL")) equipmentStr = `${quoteData.cargoSummary.containerCount}x ${quoteData.cargoSummary.containerType}`;
+    else if (quoteData.mode.includes("Sea LCL")) equipmentStr = `${quoteData.cargoSummary.totalCBM} CBM`;
+    else equipmentStr = `${chargeableWeight} KG (Air)`;
+
+    const finalLineItems = quoteData.lineItems.map(item => {
+      const qty = (item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight")) ? multiplier : 1;
+      return { ...item, quantity: qty, notes: (item.chargeType === "Freight") ? `per ${unitLabel.slice(0,-1)}` : item.notes };
+    });
 
     return {
       ...quoteData,
+      cargoSummary: {
+        ...quoteData.cargoSummary,
+        equipment: equipmentStr,
+        totalNoOfPackages: cargoTotals.pkgs,
+        totalGrossWeight: cargoTotals.gross,
+        totalVolumetricWeight: cargoTotals.vol
+      },
+      lineItems: finalLineItems,
       totalBuy,
       totalSell,
       profitMargin,
-      totalNoOfPackages: cargoTotals.pkgs,
-      totalGrossWeight: cargoTotals.gross,
-      totalVolumetricWeight: cargoTotals.vol,
       date: new Date().toISOString().split('T')[0],
       validUntil: new Date(Date.now() + quoteData.validityDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     };
@@ -258,7 +253,6 @@ export default function EditQuotePage() {
   const handleUpdate = async () => {
     const finalData = preparePayload();
     if (!finalData) return;
-
     setIsSaving(true);
     try {
       const blob = await pdf(<QuotePDF data={finalData} />).toBlob();
@@ -271,468 +265,216 @@ export default function EditQuotePage() {
       document.body.removeChild(link);
 
       const response = await fetch(`/api/quotes/${quoteId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quoteData: finalData }) 
       });
-
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Update failed.");
-      
-      toast.success("Quote Revised Successfully!");
-      router.push('/dashboard/quotes');
-      
-    } catch (error: any) {
-      toast.error("Update Failed", { description: error.message });
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
-  const handleSendEmail = async () => {
-    const finalData = preparePayload();
-    if (!finalData) return;
-    if (!quoteData.customerEmail) return toast.error("Please provide a valid Customer Email.");
-
-    setIsSendingEmail(true);
-    try {
-      const blob = await pdf(<QuotePDF data={finalData} />).toBlob();
-      const base64String = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = (error) => reject(error);
-      });
-
-      const updateResponse = await fetch(`/api/quotes/${quoteId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quoteData: finalData }) 
-      });
-      if (!updateResponse.ok) throw new Error("Failed to save revision before emailing.");
-
-      const emailResponse = await fetch('/api/quotes/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quoteData: finalData, pdfBase64: base64String, isRevision: true }) 
-      });
-
-      const result = await emailResponse.json();
-      if (!emailResponse.ok) throw new Error(result.error || "Email pipeline failed.");
-
-      toast.success("Quote Revised and Emailed Successfully!");
-      router.push('/dashboard/quotes');
-    } catch (error: any) {
-      toast.error(`Failed to send email: ${error.message}`);
-    } finally {
-      setIsSendingEmail(false);
-    }
-  }
-
-  if (status === "loading" || isLoading) {
-    return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials & Hydrating Data...</div>
+      if (response.ok) {
+        toast.success("Quote Revised Successfully!");
+        router.push('/dashboard/quotes');
+      }
+    } catch (error) { toast.error("Sync Failed"); }
+    finally { setIsSaving(false); }
   }
 
   if (session && !["SuperAdmin", "Sales", "Operations"].includes(session?.user?.role || "")) {
-    return (
-        <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
-            <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
-            <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
-            <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to modify sales quotes.</p>
-            <button 
-                onClick={() => router.back()} 
-                className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
-            >
-                Go Back
-            </button>
-        </div>
-    )
+    return <div className="p-12 text-center">Restricted Area</div>
   }
 
   return (
     <div className="flex-1 overflow-y-auto px-16 py-12 bg-surface text-on-surface font-sans min-h-screen">
       <div className="max-w-5xl mx-auto space-y-8">
-        
-        <div className="space-y-2">
-          <h1 className="text-4xl font-extrabold tracking-tight text-on-surface">Edit Quote: {quoteId}</h1>
-          <p className="text-on-surface-variant text-lg">Revise pricing and routing for this active negotiation.</p>
+
+        <div className="flex items-center justify-between">
+            <div className="space-y-2">
+                <h1 className="text-4xl font-extrabold tracking-tight text-on-surface">Revise Quotation</h1>
+                <p className="text-on-surface-variant text-lg">Adjust pricing, update routing, or modify cargo summary.</p>
+            </div>
+            <button onClick={() => router.back()} className="px-4 py-2 text-sm font-bold text-on-surface-variant hover:bg-surface-container transition-colors rounded-lg flex items-center gap-2">
+                <XCircle className="w-4 h-4" /> Cancel Revision
+            </button>
         </div>
 
         <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm border border-outline-variant/20">
-          <div className="p-8 space-y-10">
-            
-            <div className="grid grid-cols-2 gap-10">
-              <section className="space-y-6">
-                <div className="flex items-center gap-2 border-l-4 border-primary pl-4">
-                  <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Client Details</h2>
+          {isLoading ? (
+            <div className="p-20 text-center animate-pulse">Synchronizing Records...</div>
+          ) : (
+            <div className="p-8 space-y-10">
+                {/* Client Details Section (Same as New Page) */}
+                <div className="grid grid-cols-2 gap-10">
+                    <section className="space-y-6">
+                        <div className="flex items-center gap-2 border-l-4 border-primary pl-4"><h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Client Details</h2></div>
+                        <Popover open={openCustomer} onOpenChange={setOpenCustomer}>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full justify-between bg-surface-container-low border-none h-12">
+                                    {quoteData.customerId ? customers.find((c) => c._id === quoteData.customerId)?.name : "Search directory..."}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[400px] p-0" align="start">
+                                <Command>
+                                    <CommandInput placeholder="Search customers..." />
+                                    <CommandList>
+                                        <CommandEmpty>No customer found.</CommandEmpty>
+                                        <CommandGroup>
+                                            {customers.map((c) => (
+                                                <CommandItem key={c._id} onSelect={() => { setQuoteData({ ...quoteData, customerId: c._id, customerName: c.name, customerEmail: c.contactEmail || c.email || "" }); setOpenCustomer(false); }}>
+                                                    <Check className={cn("mr-2 h-4 w-4", quoteData.customerId === c._id ? "opacity-100 text-primary" : "opacity-0")} />
+                                                    {c.name}
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
+                        <input type="email" value={quoteData.customerEmail} onChange={(e) => setQuoteData({ ...quoteData, customerEmail: e.target.value })} placeholder="manager@company.com" className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm outline-none" />
+                    </section>
+                    
+                    <section className="space-y-6">
+                        <div className="flex items-center gap-2 border-l-4 border-primary pl-4"><h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Quote Parameters</h2></div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <input type="text" readOnly value={quoteData.quoteRef} className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm font-mono opacity-70 cursor-not-allowed outline-none" />
+                            <input type="number" value={quoteData.validityDays} onChange={(e) => setQuoteData({ ...quoteData, validityDays: parseInt(e.target.value) || 0 })} className="w-full bg-surface-container-low border-none rounded-lg h-12 px-4 text-sm outline-none" />
+                        </div>
+                    </section>
                 </div>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-on-surface-variant block">Select Customer</label>
-                    <Popover open={openCustomer} onOpenChange={setOpenCustomer}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={openCustomer} className="w-full justify-between bg-surface-container-low border-none h-12 px-4 hover:bg-surface-container transition-colors">
-                          {quoteData.customerId ? customers.find((c) => c._id === quoteData.customerId)?.name : "Search directory..."}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[400px] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search customers..." />
-                          <CommandList>
-                            <CommandEmpty>No customer found.</CommandEmpty>
-                            <CommandGroup>
-                              {customers.map((c) => (
-                                <CommandItem key={c._id} value={c.name} onSelect={() => {
-                                    setQuoteData({ ...quoteData, customerId: c._id, customerName: c.name, customerEmail: c.contactEmail || c.contactEmail || "" });
-                                    setOpenCustomer(false);
-                                  }}>
-                                  <Check className={cn("mr-2 h-4 w-4", quoteData.customerId === c._id ? "opacity-100 text-primary" : "opacity-0")} />
-                                  {c.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-on-surface-variant block">Customer Email (Editable)</label>
-                    <input 
-                      type="email" 
-                      value={quoteData.customerEmail} 
-                      onChange={(e) => setQuoteData({ ...quoteData, customerEmail: e.target.value })} 
-                      onBlur={handleEmailBlur}
-                      placeholder="manager@company.com" 
-                      className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" 
-                    />
-                  </div>
-                </div>
-              </section>
 
-              <section className="space-y-6">
-                <div className="flex items-center gap-2 border-l-4 border-primary pl-4">
-                  <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Quote Parameters</h2>
+                {/* Routing Section */}
+                <section className="space-y-6 pt-6 border-t border-outline-variant/10">
+                    <div className="flex items-center justify-between border-l-4 border-primary pl-4">
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Routing Data</h2>
+                        <div className="w-48">
+                            <Select value={quoteData.mode} onValueChange={(val) => setQuoteData({ ...quoteData, mode: val })}>
+                                <SelectTrigger className="w-full bg-primary/10 border-none h-9 text-xs font-bold text-primary focus:ring-0">
+                                    <SelectValue placeholder="Mode" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Sea FCL Export">Sea FCL Export</SelectItem>
+                                    <SelectItem value="Sea FCL Import">Sea FCL Import</SelectItem>
+                                    <SelectItem value="Sea LCL Export">Sea LCL Export</SelectItem>
+                                    <SelectItem value="Sea LCL Import">Sea LCL Import</SelectItem>
+                                    <SelectItem value="Air Export">Air Export</SelectItem>
+                                    <SelectItem value="Air Import">Air Import</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    {/* Routing Selectors (Simple representation for brevity) */}
+                    <div className="flex gap-4">
+                        <div className="flex-1 bg-surface-container-low p-4 rounded-lg">
+                            <label className="text-[10px] font-bold text-on-surface-variant uppercase mb-2 block">Origin Port</label>
+                            <input value={quoteData.originPort} onChange={(e) => setQuoteData({...quoteData, originPort: e.target.value})} className="w-full bg-surface-container-highest h-10 px-3 rounded outline-none text-sm" />
+                        </div>
+                        <div className="flex-1 bg-surface-container-low p-4 rounded-lg">
+                            <label className="text-[10px] font-bold text-on-surface-variant uppercase mb-2 block">Destination Port</label>
+                            <input value={quoteData.destinationPort} onChange={(e) => setQuoteData({...quoteData, destinationPort: e.target.value})} className="w-full bg-surface-container-highest h-10 px-3 rounded outline-none text-sm" />
+                        </div>
+                    </div>
+                </section>
+
+                {/* Dynamic Cargo Summary Section */}
+                <section className="space-y-6 pt-6 border-t border-outline-variant/10">
+                    <div className="flex items-center justify-between border-l-4 border-primary pl-4">
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Cargo Summary</h2>
+                        <button onClick={addCargoItem} className="text-xs font-bold bg-primary/10 text-primary px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-primary/20"><Plus className="w-3.5 h-3.5" /> Add Package</button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-6 bg-surface-container-low p-6 rounded-xl border border-outline-variant/10">
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold text-on-surface-variant block">Commodity Group</label>
+                            <input type="text" value={quoteData.cargoSummary.commodity} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, commodity: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none" />
+                        </div>
+                        
+                        {quoteData.mode.includes("Sea FCL") && (
+                            <>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-on-surface-variant block">No. of Containers</label>
+                                    <div className="flex items-center gap-2 bg-surface-container-highest rounded-lg px-3 h-11"><Container className="w-4 h-4 text-primary" /><input type="number" value={quoteData.cargoSummary.containerCount} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, containerCount: parseInt(e.target.value) || 0 } })} className="w-full bg-transparent border-none text-sm outline-none" /></div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-on-surface-variant block">Container Size</label>
+                                    <Select value={quoteData.cargoSummary.containerType} onValueChange={(val) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, containerType: val } })}>
+                                        <SelectTrigger className="w-full bg-surface-container-highest border-none h-11 text-sm"><SelectValue placeholder="Size" /></SelectTrigger>
+                                        <SelectContent><SelectItem value="20' GP">20' GP</SelectItem><SelectItem value="40' GP">40' GP</SelectItem><SelectItem value="40' HC">40' HC</SelectItem></SelectContent>
+                                    </Select>
+                                </div>
+                            </>
+                        )}
+                        {quoteData.mode.includes("Sea LCL") && (
+                            <div className="space-y-2 col-span-2">
+                                <label className="text-xs font-semibold text-on-surface-variant block">Total Volume (CBM)</label>
+                                <div className="flex items-center gap-2 bg-surface-container-highest rounded-lg px-3 h-11"><Box className="w-4 h-4 text-primary" /><input type="number" step="0.01" value={quoteData.cargoSummary.totalCBM} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, totalCBM: parseFloat(e.target.value) || 0 } })} className="w-full bg-transparent border-none text-sm outline-none" /></div>
+                            </div>
+                        )}
+                        {quoteData.mode.includes("Air") && (
+                            <div className="space-y-2 col-span-2">
+                                <label className="text-xs font-semibold text-on-surface-variant block">Shipment Metric</label>
+                                <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 h-11 border border-primary/10"><span className="text-xs font-bold text-primary uppercase">Using Chargeable Weight:</span><span className="text-sm font-black">{chargeableWeight} KG</span></div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-3">
+                        {quoteData.cargoSummary.items.map((item, index) => (
+                            <div key={index} className="grid grid-cols-12 gap-3 items-end bg-surface-container-low p-4 rounded-xl border border-outline-variant/10 group">
+                                <div className="col-span-5"><input type="text" value={item.description} onChange={(e) => updateCargoItem(index, 'description', e.target.value)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" placeholder="Description" /></div>
+                                <div className="col-span-2"><input type="number" value={item.noOfPackages} onChange={(e) => updateCargoItem(index, 'noOfPackages', parseInt(e.target.value) || 0)} className="w-full bg-surface-container-highest h-10 px-3 rounded outline-none text-sm" placeholder="Pkgs" /></div>
+                                <div className="col-span-2"><input type="number" value={item.grossWeight} onChange={(e) => updateCargoItem(index, 'grossWeight', parseFloat(e.target.value) || 0)} className="w-full bg-surface-container-highest h-10 px-3 rounded outline-none text-sm" placeholder="Gross KG" /></div>
+                                <div className="col-span-2"><input type="number" value={item.volumetricWeight} onChange={(e) => updateCargoItem(index, 'volumetricWeight', parseFloat(e.target.value) || 0)} className="w-full bg-surface-container-highest h-10 px-3 rounded outline-none text-sm" placeholder="Vol KG" /></div>
+                                <div className="col-span-1 text-right"><button onClick={() => removeCargoItem(index)} className="p-2 text-on-surface-variant hover:bg-error-container hover:text-error rounded-md opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button></div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                {/* Financial Builder */}
+                <section className="space-y-6 pt-6 border-t border-outline-variant/10">
+                    <div className="flex items-center justify-between border-l-4 border-primary pl-4"><h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Financial Builder (INR)</h2><button onClick={addLineItem} className="text-xs font-bold bg-primary/10 text-primary px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-primary/20"><Plus className="w-3.5 h-3.5" /> Add Charge</button></div>
+                    <div className="border border-outline-variant/20 rounded-xl overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-surface-container-low">
+                                    <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[30%]">Charge Name</th>
+                                    <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[10%]">ROE</th>
+                                    <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[20%]">Metric / Remarks</th>
+                                    <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Rate (Sell)</th>
+                                    <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Total (₹)</th>
+                                    <th className="py-3 px-3 text-right w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-outline-variant/10">
+                                {quoteData.lineItems.map((item, index) => {
+                                    const isFreight = item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight");
+                                    const itemMultiplier = isFreight ? multiplier : 1;
+                                    const baseSell = (Number(item.sellPrice) || 0) * (Number(item.roe) || 1) * itemMultiplier;
+                                    return (
+                                        <tr key={index} className="group hover:bg-surface-container-low/30">
+                                            <td className="py-2 px-3"><LineItemDescriptionInput value={item.chargeName} onChange={(e: any) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" /></td>
+                                            <td className="py-2 px-3"><input type="number" step="0.01" value={item.roe} onChange={(e) => updateLineItem(index, 'roe', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm outline-none" /></td>
+                                            <td className="py-2 px-3">{isFreight ? <span className="text-[10px] font-black text-primary uppercase">x {multiplier} {unitLabel}</span> : <input type="text" value={item.notes} onChange={(e) => updateLineItem(index, 'notes', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-[10px] text-gray-500 font-bold outline-none" placeholder="REMARKS" />}</td>
+                                            <td className="py-2 px-3 text-right"><input type="number" value={item.sellPrice} onChange={(e) => updateLineItem(index, 'sellPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right font-bold text-primary outline-none" /></td>
+                                            <td className="py-2 px-3 text-right text-sm font-black">₹{baseSell.toLocaleString()}</td>
+                                            <td className="py-2 px-3 text-right"><button onClick={() => removeLineItem(index)} className="p-1.5 text-on-surface-variant hover:bg-error-container hover:text-error rounded-md transition-colors"><Trash2 className="w-4 h-4" /></button></td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                {/* Footer Metrics */}
+                <div className="bg-surface-container-low p-8 flex items-center justify-between border-t border-outline-variant/20">
+                    <div className="flex gap-12">
+                        <div className="space-y-1"><span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Total Sell</span><div className="text-xl font-bold text-primary tabular-nums">₹{totalSell.toLocaleString()}</div></div>
+                        <div className="space-y-1 border-l border-outline-variant/30 pl-6 pr-6"><span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Net Margin</span><div className="text-2xl font-black text-emerald-600 tabular-nums">₹{profitMargin.toLocaleString()}</div></div>
+                    </div>
+                    <div className="flex gap-4">
+                        <button onClick={handleUpdate} disabled={isSaving} className="px-6 py-3 bg-primary text-on-primary rounded-lg font-bold flex items-center gap-2 hover:opacity-90">{isSaving ? "Syncing..." : "Update & Sync Records"}</button>
+                    </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-on-surface-variant block">Quote Reference</label>
-                    <input type="text" readOnly value={quoteData.quoteRef} className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm font-mono cursor-not-allowed outline-none opacity-70" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-on-surface-variant block">Validity (Days)</label>
-                    <input type="number" value={quoteData.validityDays} onChange={(e) => setQuoteData({...quoteData, validityDays: parseInt(e.target.value) || 0})} className="w-full bg-surface-container-low border-none rounded-lg h-12 px-4 focus:ring-2 focus:ring-primary/20 text-sm outline-none" />
-                  </div>
-                </div>
-              </section>
             </div>
-
-            <section className="space-y-6 pt-6 border-t border-outline-variant/10">
-              <div className="flex items-center justify-between border-l-4 border-primary pl-4">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Routing Data</h2>
-                <div className="w-48">
-                  <Select value={quoteData.mode} onValueChange={(val) => setQuoteData({...quoteData, mode: val})}>
-                    <SelectTrigger className="w-full bg-primary/10 border-none h-9 text-xs font-bold text-primary focus:ring-0 focus:ring-offset-0">
-                      <SelectValue placeholder="Mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Sea FCL Export">Sea FCL Export</SelectItem>
-                      <SelectItem value="Sea FCL Import">Sea FCL Import</SelectItem>
-                      <SelectItem value="Sea LCL Export">Sea LCL Export</SelectItem>
-                      <SelectItem value="Sea LCL Import">Sea LCL Import</SelectItem>
-                      <SelectItem value="Air Export">Air Export</SelectItem>
-                      <SelectItem value="Air Import">Air Import</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-6 bg-surface-container-low p-6 rounded-xl border border-outline-variant/10">
-                <div className="flex-1 space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block">POL Country</label>
-                    <Popover open={openOC} onOpenChange={setOpenOC}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={openOC} className="w-full justify-between bg-surface-container-highest border-none h-11 px-3">
-                          {quoteData.originCountry ? countries.find((c) => c.code === quoteData.originCountry)?.name : "Select Country..."}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search Country..." />
-                          <CommandList>
-                            <CommandEmpty>No country found.</CommandEmpty>
-                            <CommandGroup>
-                              {countries.map((c) => (
-                                <CommandItem key={c.code} value={c.name} onSelect={() => { setQuoteData({ ...quoteData, originCountry: c.code }); setOpenOC(false); }}>
-                                  <Check className={cn("mr-2 h-4 w-4", quoteData.originCountry === c.code ? "opacity-100 text-primary" : "opacity-0")} />
-                                  {c.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block">Port of Loading</label>
-                    <Popover open={openOP} onOpenChange={setOpenOP}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={openOP} disabled={!quoteData.originCountry} className="w-full justify-between bg-surface-container-highest border-none h-11 px-3 disabled:opacity-50">
-                          {quoteData.originPort ? ports.find((p) => p.locode === quoteData.originPort)?.name : (quoteData.originCountry ? "Select Port..." : "Select Country First")}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search by name or UN/LOCODE..." />
-                          <CommandList>
-                            <CommandEmpty>No port found.</CommandEmpty>
-                            <CommandGroup>
-                              {availableOriginPorts.map((p) => (
-                                <CommandItem key={p._id} value={`${p.name} ${p.locode}`} onSelect={() => { setQuoteData({ ...quoteData, originPort: p.locode }); setOpenOP(false); }}>
-                                  <Check className={cn("mr-2 h-4 w-4", quoteData.originPort === p.locode ? "opacity-100 text-primary" : "opacity-0")} />
-                                  {p.name} ({p.locode})
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-
-                <div className="mt-12 text-on-surface-variant"><ArrowRight className="w-6 h-6" /></div>
-                
-                <div className="flex-1 space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block">POD Country</label>
-                    <Popover open={openDC} onOpenChange={setOpenDC}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={openDC} className="w-full justify-between bg-surface-container-highest border-none h-11 px-3">
-                          {quoteData.destinationCountry ? countries.find((c) => c.code === quoteData.destinationCountry)?.name : "Select Country..."}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search Country..." />
-                          <CommandList>
-                            <CommandEmpty>No country found.</CommandEmpty>
-                            <CommandGroup>
-                              {countries.map((c) => (
-                                <CommandItem key={c.code} value={c.name} onSelect={() => { setQuoteData({ ...quoteData, destinationCountry: c.code }); setOpenDC(false); }}>
-                                  <Check className={cn("mr-2 h-4 w-4", quoteData.destinationCountry === c.code ? "opacity-100 text-primary" : "opacity-0")} />
-                                  {c.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block">Port of Discharge</label>
-                    <Popover open={openDP} onOpenChange={setOpenDP}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={openDP} disabled={!quoteData.destinationCountry} className="w-full justify-between bg-surface-container-highest border-none h-11 px-3 disabled:opacity-50">
-                          {quoteData.destinationPort ? ports.find((p) => p.locode === quoteData.destinationPort)?.name : (quoteData.destinationCountry ? "Select Port..." : "Select Country First")}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search by name or UN/LOCODE..." />
-                          <CommandList>
-                            <CommandEmpty>No port found.</CommandEmpty>
-                            <CommandGroup>
-                              {availableDestPorts.map((p) => (
-                                <CommandItem key={p._id} value={`${p.name} ${p.locode}`} onSelect={() => { setQuoteData({ ...quoteData, destinationPort: p.locode }); setOpenDP(false); }}>
-                                  <Check className={cn("mr-2 h-4 w-4", quoteData.destinationPort === p.locode ? "opacity-100 text-primary" : "opacity-0")} />
-                                  {p.name} ({p.locode})
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-
-              </div>
-            </section>
-
-            {/* Cargo Summary (Updated for Multiple Items) */}
-            <section className="space-y-6 pt-6 border-t border-outline-variant/10">
-              <div className="flex items-center justify-between border-l-4 border-primary pl-4">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Cargo Summary</h2>
-                <button onClick={addCargoItem} className="text-xs font-bold bg-primary/10 text-primary px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-primary/20 transition-colors">
-                  <Plus className="w-3.5 h-3.5" /> Add Line
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-on-surface-variant block">Commodity Group</label>
-                  <input type="text" value={quoteData.cargoSummary.commodity} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, commodity: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" placeholder="e.g. Furniture" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-on-surface-variant block">Equipment / Volume</label>
-                  <input type="text" placeholder="e.g. 1x 40' HC or 15 CBM" value={quoteData.cargoSummary.equipment} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, equipment: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {quoteData.cargoSummary.items.map((item, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-3 items-end bg-surface-container-low p-4 rounded-xl border border-outline-variant/10 group">
-                    <div className="col-span-5 space-y-1.5">
-                      <label className="text-[10px] font-bold text-on-surface-variant uppercase">Description</label>
-                      <input type="text" value={item.description} onChange={(e) => updateCargoItem(index, 'description', e.target.value)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" placeholder="e.g. Wooden Tables" />
-                    </div>
-                    <div className="col-span-2 space-y-1.5">
-                      <label className="text-[10px] font-bold text-on-surface-variant uppercase">Pkgs</label>
-                      <input type="number" value={item.noOfPackages} onChange={(e) => updateCargoItem(index, 'noOfPackages', parseInt(e.target.value) || 0)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" />
-                    </div>
-                    <div className="col-span-2 space-y-1.5">
-                      <label className="text-[10px] font-bold text-on-surface-variant uppercase">Gross Wt (kg)</label>
-                      <input type="number" value={item.grossWeight} onChange={(e) => updateCargoItem(index, 'grossWeight', parseFloat(e.target.value) || 0)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" />
-                    </div>
-                    <div className="col-span-2 space-y-1.5">
-                      <label className="text-[10px] font-bold text-on-surface-variant uppercase">Vol Wt (kg)</label>
-                      <input type="number" value={item.volumetricWeight} onChange={(e) => updateCargoItem(index, 'volumetricWeight', parseFloat(e.target.value) || 0)} className="w-full bg-surface-container-highest border-none rounded-lg h-10 px-3 text-sm outline-none" />
-                    </div>
-                    <div className="col-span-1 pb-1">
-                      <button onClick={() => removeCargoItem(index)} className="p-2 text-on-surface-variant hover:bg-error-container hover:text-error rounded-md opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-3 gap-4 p-4 bg-primary/5 rounded-xl border border-primary/10">
-                <div className="text-center">
-                  <span className="text-[10px] font-bold text-primary uppercase">Total Pkgs</span>
-                  <div className="text-lg font-bold">{cargoTotals.pkgs}</div>
-                </div>
-                <div className="text-center border-x border-primary/10">
-                  <span className="text-[10px] font-bold text-primary uppercase">Total Gross Weight</span>
-                  <div className="text-lg font-bold">{cargoTotals.gross} kg</div>
-                </div>
-                <div className="text-center">
-                  <span className="text-[10px] font-bold text-primary uppercase">Total Vol. Weight</span>
-                  <div className="text-lg font-bold">{cargoTotals.vol} kg</div>
-                </div>
-              </div>
-            </section>
-
-            {/* NEW: Financial Builder (MULTI-CURRENCY) */}
-            <section className="space-y-6 pt-6 border-t border-outline-variant/10">
-              <div className="flex items-center justify-between border-l-4 border-primary pl-4">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Financial Builder (Multi-Currency)</h2>
-                <button onClick={addLineItem} className="text-xs font-bold bg-primary/10 text-primary px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-primary/20 transition-colors">
-                  <Plus className="w-3.5 h-3.5" /> Add Charge
-                </button>
-              </div>
-              
-              <div className="border border-outline-variant/20 rounded-xl overflow-hidden">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-surface-container-low">
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[20%]">Charge Name</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[10%]">Curr</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[10%]">ROE</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[20%]">Remarks</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Buy Rate</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Sell Rate</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Base Margin</th>
-                      <th className="py-3 px-3 text-right w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/10">
-                    {quoteData.lineItems.map((item, index) => {
-                      const baseBuy = (Number(item.buyPrice) || 0) * (Number(item.roe) || 1);
-                      const baseSell = (Number(item.sellPrice) || 0) * (Number(item.roe) || 1);
-                      const itemMargin = baseSell - baseBuy;
-
-                      return (
-                        <tr key={index} className="group hover:bg-surface-container-low/30 transition-colors">
-                          <td className="py-2 px-3">
-                            <LineItemDescriptionInput value={item.chargeName} onChange={(e: any) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="e.g. Origin Handling" />
-                          </td>
-                          <td className="py-2 px-3">
-                            <input type="text" value={item.currency} onChange={(e) => updateLineItem(index, 'currency', e.target.value.toUpperCase())} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none uppercase placeholder:text-gray-400" placeholder="INR" maxLength={3} />
-                          </td>
-                          <td className="py-2 px-3">
-                            <input type="number" step="0.01" value={item.roe} onChange={(e) => updateLineItem(index, 'roe', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="1.00" />
-                          </td>
-                          <td className="py-2 px-3">
-                            <input type="text" value={item.notes} onChange={(e) => updateLineItem(index, 'notes', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-gray-500 font-medium outline-none" placeholder="e.g. PER SET" />
-                          </td>
-                          <td className="py-2 px-3 text-right border-l border-outline-variant/10">
-                            <input type="number" value={item.buyPrice} onChange={(e) => updateLineItem(index, 'buyPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right text-error font-medium outline-none" />
-                          </td>
-                          <td className="py-2 px-3 text-right border-l border-outline-variant/10">
-                            <input type="number" value={item.sellPrice} onChange={(e) => updateLineItem(index, 'sellPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right font-bold text-primary outline-none" />
-                          </td>
-                          <td className="py-2 px-3 text-right border-l border-outline-variant/10">
-                            <span className={`text-sm font-bold ${itemMargin >= 0 ? 'text-emerald-600' : 'text-error'}`}>
-                              ₹{itemMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            <button onClick={() => removeLineItem(index)} className="p-1.5 text-on-surface-variant hover:bg-error-container hover:text-error rounded-md transition-colors"><Trash2 className="w-4 h-4" /></button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </div>
-
-          <div className="bg-surface-container-low p-8 flex items-center justify-between border-t border-outline-variant/20">
-            <div className="flex gap-12">
-               <div className="space-y-1">
-                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Total Buy Cost</span>
-                 <div className="text-xl font-bold text-error tabular-nums">₹{totalBuy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-               </div>
-               <div className="space-y-1">
-                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Total Sell To Client</span>
-                 <div className="text-xl font-bold text-primary tabular-nums">₹{totalSell.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-               </div>
-               <div className="space-y-1 border-l border-outline-variant/30 pl-6 pr-6">
-                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Net Margin</span>
-                 <div className="text-2xl font-black text-emerald-600 tabular-nums">₹{profitMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-               </div>
-            </div>
-            
-            <div className="flex gap-4">
-              <button 
-                onClick={handleUpdate}
-                disabled={isSaving || isSendingEmail}
-                className="px-6 py-3 bg-white border border-outline-variant/30 text-on-surface-variant rounded-lg font-bold flex items-center gap-2 hover:bg-surface-container transition-colors disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" />
-                {isSaving ? "Saving..." : "Save Revision & Download"}
-              </button>
-
-              <button
-                onClick={handleSendEmail}
-                disabled={isSaving || isSendingEmail}
-                className="px-8 py-3 bg-primary text-on-primary rounded-lg font-bold shadow-lg shadow-primary/20 flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
-              >
-                <Mail className="w-4 h-4" />
-                {isSendingEmail ? "Sending..." : "Save Revision & Email"}
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

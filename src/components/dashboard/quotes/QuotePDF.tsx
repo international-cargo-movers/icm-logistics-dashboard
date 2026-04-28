@@ -30,10 +30,12 @@ const styles = StyleSheet.create({
   table: { width: '100%', border: '1px solid #c6c6cd', borderRadius: 4, marginBottom: 5 },
   tableHeader: { flexDirection: 'row', backgroundColor: '#add8e6', borderBottom: '1px solid #c6c6cd', padding: 6, fontWeight: 'bold' },
   tableRow: { flexDirection: 'row', borderBottom: '1px solid #e6e8ea', padding: 6 },
-  colSno: { width: '8%', textAlign: 'center' },
-  colDesc: { width: '42%' },
-  colAmount: { width: '25%', textAlign: 'center', fontWeight: 'bold' },
-  colRemarks: { width: '25%', color: '#54647a', fontSize: 7 },
+  colSno: { width: '5%', textAlign: 'center' },
+  colDesc: { width: '35%' },
+  colQty: { width: '10%', textAlign: 'center' },
+  colRate: { width: '20%', textAlign: 'center' },
+  colAmount: { width: '15%', textAlign: 'right', fontWeight: 'bold' },
+  colRemarks: { width: '15%', color: '#54647a', fontSize: 7, marginLeft: 5 },
   
   totalsBox: { alignSelf: 'flex-end', width: '40%', border: '2px solid #111c2d', padding: 8, borderRadius: 4, backgroundColor: '#f8fafc', marginBottom: 10 },
   totalsRow: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -137,15 +139,17 @@ export default function QuotePDF({ data }: { data: any }) {
         {cargo.items && cargo.items.length > 0 && (
           <View style={[styles.table, { marginBottom: 10 }]}>
             <View style={[styles.tableHeader, { backgroundColor: '#f0f4f8' }]}>
-              <Text style={{ width: '40%', padding: 4 }}>Description</Text>
-              <Text style={{ width: '20%', padding: 4, textAlign: 'center' }}>Pkgs</Text>
+              <Text style={{ width: '30%', padding: 4 }}>Description</Text>
+              <Text style={{ width: '15%', padding: 4, textAlign: 'center' }}>HSN</Text>
+              <Text style={{ width: '15%', padding: 4, textAlign: 'center' }}>Pkgs</Text>
               <Text style={{ width: '20%', padding: 4, textAlign: 'center' }}>Gross Wt</Text>
               <Text style={{ width: '20%', padding: 4, textAlign: 'center' }}>Vol Wt</Text>
             </View>
             {cargo.items.map((item: any, i: number) => (
               <View key={i} style={styles.tableRow}>
-                <Text style={{ width: '40%' }}>{item.description || '-'}</Text>
-                <Text style={{ width: '20%', textAlign: 'center' }}>{item.noOfPackages || 0}</Text>
+                <Text style={{ width: '30%' }}>{item.description || '-'}</Text>
+                <Text style={{ width: '15%', textAlign: 'center' }}>{item.hsnCode || '-'}</Text>
+                <Text style={{ width: '15%', textAlign: 'center' }}>{item.noOfPackages || 0}</Text>
                 <Text style={{ width: '20%', textAlign: 'center' }}>{item.grossWeight || 0} kg</Text>
                 <Text style={{ width: '20%', textAlign: 'center' }}>{item.volumetricWeight || 0} kg</Text>
               </View>
@@ -165,18 +169,27 @@ export default function QuotePDF({ data }: { data: any }) {
           <View style={styles.tableHeader}>
             <Text style={styles.colSno}>S.No.</Text>
             <Text style={styles.colDesc}>Particulars</Text>
-            <Text style={styles.colAmount}>Rate</Text>
-            <Text style={styles.colRemarks}>Remarks</Text>
+            <Text style={styles.colQty}>Qty</Text>
+            <Text style={styles.colRate}>Rate</Text>
+            <Text style={styles.colAmount}>Total</Text>
+            <Text style={styles.colRemarks}>Unit</Text>
           </View>
           
-          {lineItems.map((item: any, i: number) => (
-            <View key={i} style={styles.tableRow}>
-              <Text style={styles.colSno}>{i + 1}</Text>
-              <Text style={styles.colDesc}>{item.chargeName}</Text>
-              <Text style={styles.colAmount}>{item.currency || "INR"} {Number(item.sellPrice || 0).toLocaleString()}</Text>
-              <Text style={styles.colRemarks}>{item.notes || "PER SET"}</Text>
-            </View>
-          ))}
+          {lineItems.map((item: any, i: number) => {
+            const qty = Number(item.quantity) || 1;
+            const rate = Number(item.sellPrice) || 0;
+            const lineTotal = qty * rate;
+            return (
+              <View key={i} style={styles.tableRow}>
+                <Text style={styles.colSno}>{i + 1}</Text>
+                <Text style={styles.colDesc}>{item.chargeName}</Text>
+                <Text style={styles.colQty}>{qty}</Text>
+                <Text style={styles.colRate}>{item.currency || "USD"} {rate.toLocaleString()}</Text>
+                <Text style={styles.colAmount}>{item.currency || "USD"} {lineTotal.toLocaleString()}</Text>
+                <Text style={styles.colRemarks}>{item.notes || "PER SET"}</Text>
+              </View>
+            );
+          })}
         </View>
 
         {/* ESTIMATED TOTAL */}

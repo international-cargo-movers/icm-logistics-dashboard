@@ -51,9 +51,13 @@ export const jobFormSchema = z.object({
   }),
   cargoDetails: z.object({
     commodity: z.string().optional(),
+    containerCount: z.coerce.number().optional(),
+    containerType: z.string().optional(),
+    totalCBM: z.coerce.number().optional(),
     carrier: z.string().optional(),
     items: z.array(z.object({
       description: z.string().optional(),
+      hsnCode: z.string().optional(),
       noOfPackages: z.coerce.number().optional(),
       grossWeight: z.coerce.number().optional(),
       netWeight: z.coerce.number().optional(),
@@ -86,8 +90,11 @@ const defaultFormValues = {
   shipmentDetails: { mode: "", originCountry: "", originPort: "", destinationCountry: "", destinationPort: "" },
   cargoDetails: { 
     commodity: "", 
+    containerCount: 1,
+    containerType: "20' GP",
+    totalCBM: 0,
     carrier: "",
-    items: [{ description: "", noOfPackages: 0, grossWeight: 0, netWeight: 0, volumetricWeight: 0, dimensions: "" }],
+    items: [{ description: "", hsnCode: "", noOfPackages: 0, grossWeight: 0, netWeight: 0, volumetricWeight: 0, dimensions: "" }],
     packageCount: 0, 
     grossWeight: "", 
     netWeight: "", 
@@ -159,6 +166,7 @@ export default function NewJobPage() {
     const quoteItems = quote.cargoSummary?.items?.length > 0 
       ? quote.cargoSummary.items.map((item: any) => ({
           description: item.description || "",
+          hsnCode: item.hsnCode || "",
           noOfPackages: Number(item.noOfPackages) || 0,
           grossWeight: Number(item.grossWeight) || 0,
           netWeight: Number(item.netWeight) || 0,
@@ -167,6 +175,7 @@ export default function NewJobPage() {
         }))
       : [{ 
           description: quote.cargoSummary?.commodity || "", 
+          hsnCode: "",
           noOfPackages: 0, 
           grossWeight: Number(cleanWeight) || 0, 
           netWeight: 0, 
@@ -199,6 +208,9 @@ export default function NewJobPage() {
       cargoDetails: {
         ...defaultFormValues.cargoDetails,
         commodity: quote.cargoSummary?.commodity || "",
+        containerCount: quote.cargoSummary?.containerCount || 1,
+        containerType: quote.cargoSummary?.containerType || "20' GP",
+        totalCBM: quote.cargoSummary?.totalCBM || 0,
         items: quoteItems,
         grossWeight: cleanWeight || "",
       }
@@ -291,6 +303,12 @@ export default function NewJobPage() {
       const totalNet = items.reduce((sum, item) => sum + (Number(item.netWeight) || 0), 0);
       const totalVol = items.reduce((sum, item) => sum + (Number(item.volumetricWeight) || 0), 0);
 
+      // Compute legacy equipment string for compatibility
+      let equipmentStr = "";
+      if (values.shipmentDetails.mode.includes("Sea FCL")) equipmentStr = `${values.cargoDetails.containerCount}x ${values.cargoDetails.containerType}`;
+      else if (values.shipmentDetails.mode.includes("Sea LCL")) equipmentStr = `${values.cargoDetails.totalCBM} CBM`;
+      else equipmentStr = `${Math.max(totalGross, totalVol)} KG (Air)`;
+
       const finalJobPayload = {
         ...values,
         customerDetails: { companyId: finalCompanyId }, // Fully normalized
@@ -309,6 +327,10 @@ export default function NewJobPage() {
         },
         cargoDetails: {
           commodity: values.cargoDetails.commodity,
+          equipment: equipmentStr,
+          containerCount: values.cargoDetails.containerCount,
+          containerType: values.cargoDetails.containerType,
+          totalCBM: values.cargoDetails.totalCBM,
           carrier: values.cargoDetails.carrier,
           items: items,
           totalNoOfPackages: totalPkgs,
@@ -361,10 +383,10 @@ export default function NewJobPage() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit, (errors) => console.error("ZOD BLOCKED", errors))} className="flex flex-col h-screen bg-surface text-on-surface">
+      <form onSubmit={form.handleSubmit(onSubmit, (errors) => console.error("ZOD BLOCKED", errors))} className="flex flex-col bg-surface text-on-surface min-h-screen">
         <Header />
 
-        <div className="flex-1 overflow-y-auto p-8 lg:p-14 space-y-10">
+        <div className="p-8 lg:p-14 space-y-10">
           <div className="max-w-5xl mx-auto space-y-10">
 
             <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 flex items-center gap-6">

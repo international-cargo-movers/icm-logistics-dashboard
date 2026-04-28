@@ -1,10 +1,17 @@
 import {NextResponse} from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import { getAdminModels } from '@/model/tenantModels';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function GET(request:Request){
     try{
         await dbConnect();
+        const session = await getServerSession(authOptions);
+        if (!session) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const { Port } = await getAdminModels();
 
         const {searchParams} = new URL(request.url);
@@ -31,12 +38,32 @@ export async function GET(request:Request){
 export async function POST(request:Request){
     try{
         await dbConnect();
+        const session = await getServerSession(authOptions);
+        if (!session || !["SuperAdmin", "Finance", "Sales", "Operations"].includes(session.user.role)) {
+            return NextResponse.json({ 
+                success: false, 
+                error: "Security Violation: You do not have clearance to modify the Master Directory." 
+            }, { status: 403 });
+        }
+
         const { Port } = await getAdminModels();
         const body = await request.json();
 
         if(Array.isArray(body)){
-            const newPorts = await Port.insertMany(body);
-            return NextResponse.json({success:true,data:newPorts},{status:201});
+            try {
+                const newPorts = await Port.insertMany(body, { ordered: false });
+                return NextResponse.json({success:true,data:newPorts},{status:201});
+            } catch (bulkError: any) {
+                // If some succeeded and some failed (e.g. duplicates), we can still return success for those that worked
+                if (bulkError.writeErrors) {
+                    return NextResponse.json({
+                        success: true, 
+                        data: bulkError.insertedDocs,
+                        warning: `${bulkError.writeErrors.length} records were skipped (likely duplicates).`
+                    }, {status: 201});
+                }
+                throw bulkError;
+            }
         }else {
             const newPort = await Port.create({
                 name: body.name,
