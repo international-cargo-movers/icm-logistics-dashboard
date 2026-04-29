@@ -15,7 +15,7 @@ import ReconciliationClient from "@/components/dashboard/reconciliation/Reconcil
 
 export default async function GlobalReconciliationPage() {
     await dbConnect();
-    const { Job, Invoice, VendorInvoice } = await getTenantModels();
+    const { Job, Invoice, VendorInvoice, VendorBill } = await getTenantModels();
 
     // Fetch all jobs with populated customer details
     const jobs = await Job.find({})
@@ -23,9 +23,12 @@ export default async function GlobalReconciliationPage() {
         .sort({ createdAt: -1 })
         .lean();
     
-    // Fetch all invoices
-    const customerInvoices = await Invoice.find({}).lean();
-    const vendorInvoices = await VendorInvoice.find({}).lean();
+    // Fetch all invoices & bills
+    const [customerInvoices, vendorInvoices, vendorBills] = await Promise.all([
+        Invoice.find({}).lean(),
+        VendorInvoice.find({}).lean(),
+        VendorBill.find({}).lean()
+    ]);
 
     // Map data for easy access
     const receivablesMap: Record<string, number> = {};
@@ -37,7 +40,7 @@ export default async function GlobalReconciliationPage() {
     });
 
     const payablesMap: Record<string, number> = {};
-    vendorInvoices.forEach(inv => {
+    [...vendorInvoices, ...vendorBills].forEach(inv => {
         const jId = inv.jobId?.toString();
         if (jId) {
             payablesMap[jId] = (payablesMap[jId] || 0) + (inv.totals?.netAmount || 0);
@@ -61,7 +64,7 @@ export default async function GlobalReconciliationPage() {
     });
 
     const totalCompanyReceivables = customerInvoices.reduce((sum, inv) => sum + (inv.totals?.netAmount || 0), 0);
-    const totalCompanyPayables = vendorInvoices.reduce((sum, inv) => sum + (inv.totals?.netAmount || 0), 0);
+    const totalCompanyPayables = [...vendorInvoices, ...vendorBills].reduce((sum, inv) => sum + (inv.totals?.netAmount || 0), 0);
     const totalCompanyMargin = totalCompanyReceivables - totalCompanyPayables;
 
     const formatCurrency = (amount: number) => {

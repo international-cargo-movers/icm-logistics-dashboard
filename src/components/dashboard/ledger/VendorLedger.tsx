@@ -46,10 +46,10 @@ export default function VendorLedger({ companyId }: { companyId: string }) {
 
     const stats = useMemo(() => {
         // Standard Accounting Calculation:
-        // Lifetime Payables = Sum of all Vendor Invoices
+        // Lifetime Payables = Sum of all Vendor Invoices and Bills
         // Settled Balance = Sum of all actual Payments (Receipts)
         const total = invoices
-            .filter(inv => inv.type === "Invoice")
+            .filter(inv => inv.type === "Invoice" || inv.type === "Bill")
             .reduce((sum, inv) => sum + (inv.amount || 0), 0);
             
         const settled = invoices
@@ -157,11 +157,11 @@ export default function VendorLedger({ companyId }: { companyId: string }) {
                                             <td className="px-8 py-6">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`p-2 rounded-lg transition-colors ${
-                                                        inv.type === 'Invoice' 
+                                                        (inv.type === 'Invoice' || inv.type === 'Bill') 
                                                             ? 'bg-slate-100 group-hover:bg-rose-600 group-hover:text-white' 
                                                             : 'bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white text-emerald-600'
                                                     }`}>
-                                                        {inv.type === 'Invoice' ? <Calendar className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                                                        {(inv.type === 'Invoice' || inv.type === 'Bill') ? <Calendar className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
                                                     </div>
                                                     <span className="font-bold text-slate-900">{formatDate(inv.date)}</span>
                                                 </div>
@@ -180,7 +180,7 @@ export default function VendorLedger({ companyId }: { companyId: string }) {
                                                 </div>
                                             </td>
                                             <td className="px-8 py-6 text-right">
-                                                <p className={`font-bold ${inv.type === 'Invoice' ? 'text-slate-900' : 'text-slate-300'}`}>
+                                                <p className={`font-bold ${(inv.type === 'Invoice' || inv.type === 'Bill') ? 'text-slate-900' : 'text-slate-300'}`}>
                                                     {inv.amount > 0 ? formatCurrency(inv.amount) : "—"}
                                                 </p>
                                             </td>
@@ -191,7 +191,7 @@ export default function VendorLedger({ companyId }: { companyId: string }) {
                                             </td>
                                             <td className="px-8 py-6 text-right">
                                                 <p className={`font-black ${inv.balanceDue > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
-                                                    {inv.type === 'Invoice' ? formatCurrency(inv.balanceDue) : "—"}
+                                                    {(inv.type === 'Invoice' || inv.type === 'Bill') ? formatCurrency(inv.balanceDue) : "—"}
                                                 </p>
                                             </td>
                                             <td className="px-8 py-6 text-center">
@@ -208,10 +208,10 @@ export default function VendorLedger({ companyId }: { companyId: string }) {
                                             <td className="px-8 py-6 text-right">
                                                 {(inv.status === "Paid" || inv.status === "Cleared") && (
                                                     <div className="flex items-center justify-end gap-1.5 text-emerald-600 font-black text-[10px] uppercase tracking-tighter">
-                                                        <ShieldCheck className="h-3.5 w-3.5" /> {inv.type === 'Invoice' ? 'Fully Settled' : 'Payment Verified'}
+                                                        <ShieldCheck className="h-3.5 w-3.5" /> {(inv.type === 'Invoice' || inv.type === 'Bill') ? 'Fully Settled' : 'Payment Verified'}
                                                     </div>
                                                 )}
-                                                {inv.type === 'Invoice' && inv.status !== "Paid" && (
+                                                {(inv.type === 'Invoice' || inv.type === 'Bill') && inv.status !== "Paid" && (
                                                      <div className="flex items-center justify-end gap-1.5 text-rose-600 font-black text-[10px] uppercase tracking-tighter">
                                                         <Clock className="h-3.5 w-3.5" /> Awaiting Payment
                                                     </div>

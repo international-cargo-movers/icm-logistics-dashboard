@@ -5,6 +5,8 @@ import { InvoiceSchema } from "./InvoiceModel";
 import { QuoteSchema } from "./QuoteModel";
 import { ReceiptSchema } from "./ReceiptModel";
 import { VendorInvoiceSchema } from "./VendorInvoiceModel";
+import { VendorBillSchema } from "./VendorBillModel";
+import { CustomerBillSchema } from "./CustomerBillModel";
 import { PortSchema } from "./PortModel";
 import { UserSchema } from "./UserModel";
 import { FinancialItemSchema } from "./FinancialItemModel";
@@ -15,8 +17,10 @@ export async function getTenantModels() {
     Company: await getModel("CompanyModel", CompanySchema),
     Invoice: await getModel("Invoice", InvoiceSchema),
     Quote: await getModel("Quote", QuoteSchema),
-    Receipt: await getModel("Receipt", ReceiptSchema),
+    Receipt: await getModel("FinancialReceipt", ReceiptSchema),
     VendorInvoice: await getModel("VendorInvoice", VendorInvoiceSchema),
+    VendorBill: await getModel("VendorBill", VendorBillSchema),
+    CustomerBill: await getModel("CustomerBill", CustomerBillSchema),
   };
 }
 

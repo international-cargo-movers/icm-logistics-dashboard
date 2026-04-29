@@ -8,35 +8,55 @@ export async function GET(
 ) {
     try {
         await dbConnect();
-        const { VendorInvoice, Receipt } = await getTenantModels();
+        const { VendorInvoice, VendorBill, Receipt } = await getTenantModels();
         const { id } = await params;
 
-        // 1. Fetch all Vendor Invoices for this vendor
-        const vendorInvoices = await VendorInvoice.find({ "vendorDetails.vendorId": id }).lean();
+        // 1. Fetch all Vendor Invoices & Vendor Bills for this vendor
+        const [vendorInvoices, vendorBills] = await Promise.all([
+            VendorInvoice.find({ "vendorDetails.vendorId": id }).lean(),
+            VendorBill.find({ "sellerDetails.vendorId": id }).lean()
+        ]);
         
         // 2. Fetch all Receipts for this vendor
-        const receipts = await Receipt.find({ companyId: id, type: "Vendor" }).lean();
+        const receipts = await Receipt.find({ companyId: id, type: { $in: ["Vendor", "VendorBill"] } }).lean();
 
-        // 3. Map Vendor Invoices to transaction format
-        const invoiceTransactions = vendorInvoices.map((inv: any) => {
-            const invoiceDate = new Date(inv.vendorInvoiceDate || inv.createdAt);
-            const dueDate = new Date(invoiceDate);
-            dueDate.setDate(dueDate.getDate() + 30); 
+        // 3. Map Vendor Invoices & Bills to transaction format
+        const invoiceTransactions = [
+            ...vendorInvoices.map((inv: any) => {
+                const invoiceDate = new Date(inv.vendorInvoiceDate || inv.createdAt);
+                const dueDate = new Date(invoiceDate);
+                dueDate.setDate(dueDate.getDate() + 30); 
 
-            return {
-                id: inv._id.toString(),
-                type: "Invoice",
-                date: invoiceDate,
-                reference: inv.vendorInvoiceNo,
-                status: inv.status || "Unpaid",
-                amount: inv.totals?.netAmount || 0,
-                amountPaid: inv.amountPaid || 0,
-                balanceDue: inv.balanceDue ?? (inv.status === "Paid" ? 0 : inv.totals?.netAmount || 0),
-                notes: `Job: ${inv.jobReference}`,
-                dueDate: dueDate,
-                createdAt: inv.createdAt
-            };
-        });
+                return {
+                    id: inv._id.toString(),
+                    type: "Invoice",
+                    date: invoiceDate,
+                    reference: inv.vendorInvoiceNo,
+                    status: inv.status || "Unpaid",
+                    amount: inv.totals?.netAmount || 0,
+                    amountPaid: inv.amountPaid || 0,
+                    balanceDue: inv.balanceDue ?? (inv.status === "Paid" ? 0 : inv.totals?.netAmount || 0),
+                    notes: `Job: ${inv.jobReference}`,
+                    dueDate: dueDate,
+                    createdAt: inv.createdAt
+                };
+            }),
+            ...vendorBills.map((bill: any) => {
+                const billDate = new Date(bill.billDate || bill.createdAt);
+                return {
+                    id: bill._id.toString(),
+                    type: "Bill",
+                    date: billDate,
+                    reference: bill.billNo,
+                    status: bill.status || "Unpaid",
+                    amount: bill.totals?.netAmount || 0,
+                    amountPaid: bill.amountPaid || 0,
+                    balanceDue: bill.balanceDue ?? (bill.status === "Paid" ? 0 : bill.totals?.netAmount || 0),
+                    notes: `Job Goods: ${bill.jobReference}`,
+                    createdAt: bill.createdAt
+                };
+            })
+        ];
 
         // 4. Map Receipts to transaction format
         const receiptTransactions = receipts.map((rct: any) => {

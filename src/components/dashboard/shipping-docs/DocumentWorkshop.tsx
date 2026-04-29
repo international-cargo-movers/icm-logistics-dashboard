@@ -17,11 +17,12 @@ export default function DocumentWorkshop() {
 
       {isAir ? (
         /* --- AIRWAY BILL FIELDS --- */
-        <div className="space-y-6">
+        <div className="space-y-8">
           <div className="flex items-center gap-2 text-sky-600 mb-2">
             <Plane className="w-4 h-4" />
             <span className="text-xs font-bold uppercase tracking-widest">HAWB Legal Details</span>
           </div>
+          
           <div className="grid grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase">AWB Prefix (3 Digit)</label>
@@ -35,9 +36,94 @@ export default function DocumentWorkshop() {
               <label className="text-[10px] font-bold text-slate-500 uppercase">HAWB Number</label>
               <input {...register("shippingDocuments.awbDetails.hawbNumber")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="ICMICN064" />
             </div>
+          </div>
+
+          <div className="bg-slate-50 p-4 rounded-xl space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">To (1)</label>
+                <input {...register("shippingDocuments.awbDetails.routingTo1")} className="w-full bg-white border-none rounded-lg h-10 px-3 text-sm uppercase" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">By First Carrier</label>
+                <input {...register("shippingDocuments.awbDetails.routingBy1")} className="w-full bg-white border-none rounded-lg h-10 px-3 text-sm uppercase" />
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-4">
+               <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">To (2)</label>
+                  <input {...register("shippingDocuments.awbDetails.routingTo2")} className="w-full bg-white border-none rounded-lg h-10 px-3 text-sm uppercase" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">By (2)</label>
+                  <input {...register("shippingDocuments.awbDetails.routingBy2")} className="w-full bg-white border-none rounded-lg h-10 px-3 text-sm uppercase" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Currency</label>
+                  <input {...register("shippingDocuments.awbDetails.currencyCode")} defaultValue="INR" className="w-full bg-white border-none rounded-lg h-10 px-3 text-sm" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">CHGS</label>
+                  <input {...register("shippingDocuments.awbDetails.chgsCode")} className="w-full bg-white border-none rounded-lg h-10 px-3 text-sm" placeholder="PX" />
+                </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">WT/VAL</label>
+              <select {...register("shippingDocuments.awbDetails.wtValPayment")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm">
+                <option value="PPD">PPD</option>
+                <option value="COLL">COLL</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Other Payment</label>
+              <select {...register("shippingDocuments.awbDetails.otherPayment")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm">
+                <option value="PPD">PPD</option>
+                <option value="COLL">COLL</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">D.V. Carriage</label>
+              <input {...register("shippingDocuments.awbDetails.declaredValueCarriage")} defaultValue="NVD" className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">D.V. Customs</label>
+              <input {...register("shippingDocuments.awbDetails.declaredValueCustoms")} defaultValue="NCV" className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" />
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-4 border-t border-slate-50">
+             <label className="text-[10px] font-bold text-slate-500 uppercase">Charges Breakdown</label>
+             {[
+                { label: "Weight", key: "weight" },
+                { label: "Valuation", key: "valuation" },
+                { label: "Tax", key: "tax" },
+                { label: "Due Agent", key: "otherAgent" },
+                { label: "Due Carrier", key: "otherCarrier" },
+                { label: "Total", key: "total" }
+             ].map((item) => (
+                <div key={item.key} className="grid grid-cols-3 gap-4 items-center">
+                    <div className="text-[11px] font-medium text-slate-600">{item.label}</div>
+                    <input {...register(`shippingDocuments.awbDetails.charges.${item.key}.prepaid`)} placeholder="Prepaid" className="bg-slate-50 border-none rounded-md h-8 px-3 text-xs" />
+                    <input {...register(`shippingDocuments.awbDetails.charges.${item.key}.collect`)} placeholder="Collect" className="bg-slate-50 border-none rounded-md h-8 px-3 text-xs" />
+                </div>
+             ))}
+          </div>
+
+          <div className="grid grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase">Accounting Information</label>
               <input {...register("shippingDocuments.awbDetails.accountingInformation")} defaultValue="FREIGHT PREPAID" className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" />
+            </div>
+            <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Executed On</label>
+                <input {...register("shippingDocuments.awbDetails.executedOnDate")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="DD-MMM-YYYY" />
+            </div>
+            <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Executed At</label>
+                <input {...register("shippingDocuments.awbDetails.executedAtPlace")} className="w-full bg-slate-50 border-none rounded-lg h-10 px-3 text-sm" placeholder="NEW DELHI" />
             </div>
           </div>
           <div className="space-y-2">

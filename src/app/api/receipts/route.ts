@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 export async function POST(request: Request) {
     try {
         await dbConnect();
-        const { Receipt, Invoice, VendorInvoice } = await getTenantModels();
+        const { Receipt, Invoice, VendorInvoice, VendorBill } = await getTenantModels();
         const session = await getServerSession();
         if (!session) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -26,26 +26,47 @@ export async function POST(request: Request) {
         if (type === "Customer") {
             Model = Invoice;
             invoice = await Invoice.findById(invoiceId);
-        } else {
+        } else if (type === "Vendor") {
             Model = VendorInvoice;
             invoice = await VendorInvoice.findById(invoiceId);
+        } else if (type === "VendorBill") {
+            Model = VendorBill;
+            invoice = await VendorBill.findById(invoiceId);
         }
 
         if (!invoice) {
-            return NextResponse.json({ success: false, error: "Invoice not found" }, { status: 404 });
+            return NextResponse.json({ success: false, error: "Invoice/Bill not found" }, { status: 404 });
         }
 
         // 3. Generate Receipt Number
         const receiptNo = `RCT-${Date.now()}`;
 
         // 4. Create the Receipt Record
+        let invoiceNo = "";
+        let companyId;
+        let companyName = "";
+
+        if (type === "Customer") {
+            invoiceNo = invoice.invoiceNo;
+            companyId = invoice.customerDetails.companyId;
+            companyName = invoice.customerDetails.name;
+        } else if (type === "Vendor") {
+            invoiceNo = invoice.vendorInvoiceNo;
+            companyId = invoice.vendorDetails.vendorId;
+            companyName = invoice.vendorDetails.name;
+        } else if (type === "VendorBill") {
+            invoiceNo = invoice.billNo;
+            companyId = invoice.sellerDetails.vendorId;
+            companyName = invoice.sellerDetails.name;
+        }
+
         await Receipt.create({
             receiptNo,
             type,
             invoiceId,
-            invoiceNo: type === "Customer" ? invoice.invoiceNo : invoice.vendorInvoiceNo,
-            companyId: type === "Customer" ? invoice.customerDetails.companyId : invoice.vendorDetails.vendorId,
-            companyName: type === "Customer" ? invoice.customerDetails.name : invoice.vendorDetails.name,
+            invoiceNo,
+            companyId,
+            companyName,
             amount: Number(amount),
             paymentDate,
             paymentMode,
@@ -55,7 +76,6 @@ export async function POST(request: Request) {
         });
 
         // 5. RECALCULATE TOTAL PAID FROM ALL RECEIPTS (Source of Truth)
-        // This ensures math never drifts and always matches the sum of receipts
         const allReceipts = await Receipt.find({ invoiceId });
         const totalAmountPaid = allReceipts.reduce((sum, rct) => sum + (Number(rct.amount) || 0), 0);
         
@@ -63,7 +83,6 @@ export async function POST(request: Request) {
         const newBalanceDue = Math.max(0, totalBilled - totalAmountPaid);
 
         // 6. Determine Status based on Truth
-        // We use a small buffer (0.5) for floating point safety if needed
         let newStatus = "Partially Paid";
         if (newBalanceDue <= 0.5) {
             newStatus = "Paid";

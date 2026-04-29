@@ -32,8 +32,11 @@ export default async function ReconciliationPage({ params }: { params: { jobId: 
     // Fetch all vendor invoices for this job
     const vendorInvoices = await VendorInvoice.find({ jobId: job._id }).lean();
 
-    const totalReceivables = customerInvoices.reduce((sum, inv) => sum + (inv.totals?.netAmount || 0), 0);
-    const totalPayables = vendorInvoices.reduce((sum, inv) => sum + (inv.totals?.netAmount || 0), 0);
+    const sanitizedCustomerInvoices = JSON.parse(JSON.stringify(customerInvoices));
+    const sanitizedVendorInvoices = JSON.parse(JSON.stringify(vendorInvoices));
+
+    const totalReceivables = sanitizedCustomerInvoices.reduce((sum: number, inv: any) => sum + (inv.totals?.netAmount || 0), 0);
+    const totalPayables = sanitizedVendorInvoices.reduce((sum: number, inv: any) => sum + (inv.totals?.netAmount || 0), 0);
     const netMargin = totalReceivables - totalPayables;
     const marginPercentage = totalReceivables > 0 ? (netMargin / totalReceivables) * 100 : 0;
 
@@ -131,7 +134,7 @@ export default async function ReconciliationPage({ params }: { params: { jobId: 
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {customerInvoices.length > 0 ? customerInvoices.map((inv: any) => (
+                                {sanitizedCustomerInvoices.length > 0 ? sanitizedCustomerInvoices.map((inv: any) => (
                                     <TableRow key={inv._id}>
                                         <TableCell className="font-bold">{inv.invoiceNo}</TableCell>
                                         <TableCell>{new Date(inv.invoiceDate).toLocaleDateString()}</TableCell>
@@ -170,7 +173,7 @@ export default async function ReconciliationPage({ params }: { params: { jobId: 
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {vendorInvoices.length > 0 ? vendorInvoices.map((inv: any) => (
+                                {sanitizedVendorInvoices.length > 0 ? sanitizedVendorInvoices.map((inv: any) => (
                                     <TableRow key={inv._id}>
                                         <TableCell className="font-bold">{inv.vendorInvoiceNo}</TableCell>
                                         <TableCell>{new Date(inv.vendorInvoiceDate).toLocaleDateString()}</TableCell>

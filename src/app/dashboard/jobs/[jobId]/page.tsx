@@ -58,7 +58,7 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                             </Button>
                         </Link>
                         <span className="text-muted-foreground/30">|</span>
-                        <Link href={`/dashboard/jobs/${job.jobId}/reconciliation`}>
+                        <Link href={`/dashboard/jobs/${sanitizedJob.jobId}/reconciliation`}>
                             <Button variant="ghost" className="text-muted-foreground hover:text-blue-600">
                                 <FileText className="mr-2 h-4 w-4" /> Reconciliation
                             </Button>
@@ -66,23 +66,23 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                     </div>
                     <div className="flex items-center gap-4">
                         <h1 className="text-4xl font-extrabold text-primary tracking-tight">
-                            {job.jobId}
+                            {sanitizedJob.jobId}
                         </h1>
 
                         <div className="flex items-center gap-2 mt-1">
                             <Badge className="text-sm px-4 py-1 bg-primary/10 text-primary hover:bg-primary/20 border-none shadow-none capitalize">
-                                {job.shipmentDetails?.mode?.replace(/_/g, ' ') || "Unknown Mode"}
+                                {sanitizedJob.shipmentDetails?.mode?.replace(/_/g, ' ') || "Unknown Mode"}
                             </Badge>
                             <Badge variant="outline" className="text-sm px-4 py-1 border-primary text-primary">
-                                {job.cargoDetails?.jobStatus || "Processing"}
+                                {sanitizedJob.cargoDetails?.jobStatus || "Processing"}
                             </Badge>
                         </div>
                     </div>
                 </div>
                 <div className="flex gap-3">
                     <StatusDropdown
-                        jobId={job.jobId}
-                        currentStatus={job.cargoDetails?.jobStatus || "Processing"}
+                        jobId={sanitizedJob.jobId}
+                        currentStatus={sanitizedJob.cargoDetails?.jobStatus || "Processing"}
                     />
                 </div>
             </div>
@@ -101,7 +101,7 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                         <div className="flex items-center justify-between p-6 bg-muted/30 rounded-xl border">
                             <div className="text-center">
                                 <p className="text-sm text-muted-foreground mb-1">Origin (POL)</p>
-                                <p className="font-bold text-xl">{job.shipmentDetails?.portOfLoading || "TBD"}</p>
+                                <p className="font-bold text-xl">{sanitizedJob.shipmentDetails?.portOfLoading || "TBD"}</p>
                             </div>
 
                             <div className="flex-1 flex items-center justify-center px-4">
@@ -114,7 +114,7 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
 
                             <div className="text-center">
                                 <p className="text-sm text-muted-foreground mb-1">Destination (POD)</p>
-                                <p className="font-bold text-xl">{job.shipmentDetails?.portOfDischarge || "TBD"}</p>
+                                <p className="font-bold text-xl">{sanitizedJob.shipmentDetails?.portOfDischarge || "TBD"}</p>
                             </div>
                         </div>
                     </Card>
@@ -127,20 +127,20 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                             <div>
                                 <p className="text-sm text-muted-foreground">Commodity</p>
-                                <p className="font-semibold">{job.cargoDetails?.commodity || "N/A"}</p>
+                                <p className="font-semibold">{sanitizedJob.cargoDetails?.commodity || "N/A"}</p>
                             </div>
                             <div>
                                 <p className="text-sm text-muted-foreground">Packages</p>
-                                <p className="font-semibold">{job.cargoDetails?.noOfPackages || "0"}</p>
+                                <p className="font-semibold">{sanitizedJob.cargoDetails?.noOfPackages || "0"}</p>
                             </div>
                             <div>
                                 <p className="text-sm text-muted-foreground">Gross Wt.</p>
-                                <p className="font-semibold">{job.cargoDetails?.grossWeight ? `${job.cargoDetails.grossWeight} kg` : "N/A"}</p>
+                                <p className="font-semibold">{sanitizedJob.cargoDetails?.grossWeight ? `${sanitizedJob.cargoDetails.grossWeight} kg` : "N/A"}</p>
                             </div>
                             <div>
                                 <p className="text-sm text-muted-foreground">ETD</p>
                                 <p className="font-semibold">
-                                    {job.cargoDetails?.etd ? new Date(job.cargoDetails.etd).toLocaleDateString() : "TBD"}
+                                    {sanitizedJob.cargoDetails?.etd ? new Date(sanitizedJob.cargoDetails.etd).toLocaleDateString() : "TBD"}
                                 </p>
                             </div>
                         </div>
@@ -153,13 +153,13 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                                 <FileText className="text-blue-500" /> Attached Documents
                             </h2>
                             <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100">
-                                {job.documents?.length || 0} Files
+                                {sanitizedJob.documents?.length || 0} Files
                             </Badge>
                         </div>
 
-                        {job.documents && job.documents.length > 0 ? (
+                        {sanitizedJob.documents && sanitizedJob.documents.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {job.documents.map((doc: any, index: number) => (
+                                {sanitizedJob.documents.map((doc: any, index: number) => (
                                     <div key={index} className="flex items-start gap-4 p-4 rounded-xl border bg-muted/20 hover:bg-muted/40 transition-colors">
                                         <div className="h-10 w-10 shrink-0 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
                                             <FileIcon className="h-5 w-5" />
@@ -210,16 +210,16 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                 <div className="space-y-8">
 
                     <EntitySwitcher 
-                        client={job.customerDetails} 
-                        consignee={job.partyDetails?.consigneeId} 
+                        client={sanitizedJob.customerDetails} 
+                        consignee={sanitizedJob.partyDetails?.consigneeId} 
                     />
 
                     {/* Vendors Card */}
                     <Card className="p-6">
                         <h2 className="text-lg font-bold mb-4">Assigned Vendors</h2>
-                        {job.vendorDetails && job.vendorDetails.length > 0 ? (
+                        {sanitizedJob.vendorDetails && sanitizedJob.vendorDetails.length > 0 ? (
                             <div className="space-y-3">
-                                {job.vendorDetails.map((vendor: any, i: number) => (
+                                {sanitizedJob.vendorDetails.map((vendor: any, i: number) => (
                                     <div key={i} className="flex justify-between items-center p-3 bg-muted/40 rounded-md border">
                                         <div>
                                             <p className="font-semibold text-sm">{vendor.vendorId?.name || "Unknown Vendor"}</p>

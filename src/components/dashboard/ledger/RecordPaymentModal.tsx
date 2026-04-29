@@ -31,7 +31,7 @@ interface RecordPaymentModalProps {
         invoiceNo: string;
         totalAmount: number;
         balanceDue: number;
-        type: "Customer" | "Vendor";
+        type: "Customer" | "Vendor" | "VendorBill";
     } | null;
 }
 

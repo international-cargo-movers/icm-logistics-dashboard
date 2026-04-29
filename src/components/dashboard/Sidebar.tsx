@@ -79,7 +79,9 @@ export default function Sidebar() {
             <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Finance</p>
         </div>
         <NavItem href="/dashboard/invoices" pathname={pathname} icon={Receipt} label="Customer Invoices" />
+        <NavItem href="/dashboard/customer-bills" pathname={pathname} icon={Receipt} label="Customer Bills" />
         <NavItem href="/dashboard/vendor-invoices" pathname={pathname} icon={Wallet} label="Vendor Invoices" />
+        <NavItem href="/dashboard/vendor-bills" pathname={pathname} icon={Receipt} label="Vendor Bills" />
         <NavItem href="/dashboard/ledger" pathname={pathname} icon={HandCoins} label="Customer Ledger" />
         <NavItem href="/dashboard/vendor-ledger" pathname={pathname} icon={Wallet} label="Vendor Ledger" />
         <NavItem href="/dashboard/reconciliation" pathname={pathname} icon={Scale} label="Financial Audit" />

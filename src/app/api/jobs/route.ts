@@ -10,6 +10,11 @@ export async function GET(){
         const { Job } = await getTenantModels();
         const jobs = await Job.find({})
         .populate("customerDetails.companyId","name streetAddress state taxId zipCode defaultSalesPerson country city")
+        .populate("partyDetails.shipperId")
+        .populate("partyDetails.consigneeId")
+        .populate("partyDetails.notifyPartyId")
+        .populate("partyDetails.overseasAgentId")
+        .populate("vendorDetails.vendorId")
         .sort({createdAt:-1});
 
         return NextResponse.json({success:true,data:jobs},{status:200});

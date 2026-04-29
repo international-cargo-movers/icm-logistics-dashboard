@@ -2,8 +2,8 @@ import mongoose, { Schema, Document, models } from "mongoose";
 
 export interface IReceipt extends Document {
     receiptNo: string;
-    type: "Customer" | "Vendor";
-    invoiceId: mongoose.Types.ObjectId; // Reference to Invoice or VendorInvoice
+    type: "Customer" | "Vendor" | "VendorBill";
+    invoiceId: mongoose.Types.ObjectId; // Reference to Invoice, VendorInvoice or VendorBill
     invoiceNo: string;
     companyId: mongoose.Types.ObjectId; // Reference to CompanyModel
     companyName: string;
@@ -17,7 +17,7 @@ export interface IReceipt extends Document {
 
 export const ReceiptSchema = new Schema<IReceipt>({
     receiptNo: { type: String, required: true, unique: true },
-    type: { type: String, enum: ["Customer", "Vendor"], required: true },
+    type: { type: String, enum: ["Customer", "Vendor", "VendorBill"], required: true },
     invoiceId: { type: Schema.Types.ObjectId, required: true },
     invoiceNo: { type: String, required: true },
     companyId: { type: Schema.Types.ObjectId, ref: "CompanyModel", required: true },
@@ -30,4 +30,4 @@ export const ReceiptSchema = new Schema<IReceipt>({
     recordedBy: { type: String, required: true }
 }, { timestamps: true });
 
-export default models.Receipt || mongoose.model<IReceipt>("Receipt", ReceiptSchema);
+export default models.FinancialReceipt || mongoose.model<IReceipt>("FinancialReceipt", ReceiptSchema);

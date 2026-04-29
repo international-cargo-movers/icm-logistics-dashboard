@@ -97,6 +97,25 @@ export interface IJob extends Document {
       airportOfDeparture?: string; // e.g., "DEL" 
       airportOfDestination?: string; // e.g., "ICN" 
       requestedRouting?: string; // 
+      routingTo1?: string;
+      routingBy1?: string;
+      routingTo2?: string;
+      routingBy2?: string;
+      currencyCode?: string;
+      chgsCode?: string;
+      wtValPayment?: "PPD" | "COLL";
+      otherPayment?: "PPD" | "COLL";
+      amountOfInsurance?: string;
+      charges?: {
+          weight?: { prepaid?: string; collect?: string };
+          valuation?: { prepaid?: string; collect?: string };
+          tax?: { prepaid?: string; collect?: string };
+          otherAgent?: { prepaid?: string; collect?: string };
+          otherCarrier?: { prepaid?: string; collect?: string };
+          total?: { prepaid?: string; collect?: string };
+      };
+      executedOnDate?: string;
+      executedAtPlace?: string;
     };
   };
 }
@@ -203,6 +222,25 @@ export const JobSchema = new Schema<IJob>({
             handlingInformation: String,
             airportOfDeparture: String,
             airportOfDestination: String,
+            routingTo1: String,
+            routingBy1: String,
+            routingTo2: String,
+            routingBy2: String,
+            currencyCode: { type: String, default: "INR" },
+            chgsCode: String,
+            wtValPayment: { type: String, enum: ["PPD", "COLL"], default: "PPD" },
+            otherPayment: { type: String, enum: ["PPD", "COLL"], default: "PPD" },
+            amountOfInsurance: { type: String, default: "XXX" },
+            charges: {
+                weight: { prepaid: String, collect: String },
+                valuation: { prepaid: String, collect: String },
+                tax: { prepaid: String, collect: String },
+                otherAgent: { prepaid: String, collect: String },
+                otherCarrier: { prepaid: String, collect: String },
+                total: { prepaid: String, collect: String }
+            },
+            executedOnDate: String,
+            executedAtPlace: String,
         }
     }
 }, { timestamps: true });
