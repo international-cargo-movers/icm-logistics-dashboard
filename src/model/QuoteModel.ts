@@ -96,7 +96,7 @@ export const QuoteSchema = new Schema<IQuote>({
         lineItems: [
             {
                 chargeName: { type: String, required: true },
-                chargeType: { type: String, default: "Freight" },
+                chargeType: { type: String, default: "Other" },
                 buyPrice: { type: Number, required: true, default: 0 },
                 sellPrice: { type: Number, required: true, default: 0 },
                 currency: { type: String, default: "USD" },

@@ -97,7 +97,7 @@ export default function EditQuotePage() {
 
   const profitMargin = totalSell - totalBuy
 
-  const addLineItem = () => setQuoteData({ ...quoteData, lineItems: [...quoteData.lineItems, { chargeName: "", chargeType: "Freight", currency: "INR", roe: 1, buyPrice: 0, sellPrice: 0, notes: "" }] })
+  const addLineItem = () => setQuoteData({ ...quoteData, lineItems: [...quoteData.lineItems, { chargeName: "", chargeType: "Origin", currency: "INR", roe: 1, buyPrice: 0, sellPrice: 0, notes: "" }] })
   const removeLineItem = (index: number) => setQuoteData({ ...quoteData, lineItems: quoteData.lineItems.filter((_, idx) => idx !== index) })
   const updateLineItem = (index: number, field: string, value: string | number) => {
     const newItems = [...quoteData.lineItems]
