@@ -126,8 +126,6 @@ InvoiceSchema.pre("save", function (this: IInvoice, next) {
     this.totals.totalGst = totalGst;
     this.totals.netAmount = Math.round(totalTaxable + totalGst + (this.totals.roundOff || 0));
     this.balanceDue = this.totals.netAmount - (this.amountPaid || 0);
-
-    next();
 });
 
 export default models.Invoice || mongoose.model<IInvoice>("Invoice", InvoiceSchema);
