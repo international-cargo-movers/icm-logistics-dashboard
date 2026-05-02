@@ -263,7 +263,8 @@ export default function NewCustomerBillPage() {
                 </div>
             </div>
 
-            <form className="max-w-7xl mx-auto p-10 space-y-8">
+            <Form {...form}>
+                <form className="max-w-7xl mx-auto p-10 space-y-8">
                 {/* 1. Job Link & Exchange Rate */}
                 <div className="grid grid-cols-3 gap-6">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-2">
@@ -455,6 +456,7 @@ export default function NewCustomerBillPage() {
                     </div>
                 </div>
             </form>
-        </div>
-    )
+        </Form>
+    </div>
+)
 }
