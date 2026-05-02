@@ -66,16 +66,16 @@ export default function Sidebar() {
         </p>
       </div>
 
-      <nav className="flex-1 space-y-1.5">
+      <nav className="flex-1 space-y-1">
         <NavItem href="/dashboard" pathname={pathname} icon={LayoutDashboard} label="Dashboard" exact />
         
-        <div className="pt-5 pb-1.5 px-3">
+        <div className="pt-3 pb-1 px-3">
             <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Operations</p>
         </div>
         <NavItem href="/dashboard/quotes" pathname={pathname} icon={ScrollText} label="Quotations" />
         <NavItem href="/dashboard/jobs" pathname={pathname} icon={Package} label="Freight Jobs" />
         
-        <div className="pt-5 pb-1.5 px-3">
+        <div className="pt-3 pb-1 px-3">
             <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Finance</p>
         </div>
         <NavItem href="/dashboard/invoices" pathname={pathname} icon={Receipt} label="Customer Invoices" />
@@ -86,11 +86,12 @@ export default function Sidebar() {
         <NavItem href="/dashboard/vendor-ledger" pathname={pathname} icon={Wallet} label="Vendor Ledger" />
         <NavItem href="/dashboard/reconciliation" pathname={pathname} icon={Scale} label="Financial Audit" />
         
-        <div className="pt-5 pb-1.5 px-3">
+        <div className="pt-3 pb-1 px-3">
             <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Workspace</p>
         </div>
         <NavItem href="/dashboard/directory/companies" pathname={pathname} icon={Folders} label="Directory" />
         <NavItem href="/dashboard/directory/ports" pathname={pathname} icon={Anchor} label="Ports Hub" />
+        <NavItem href="/dashboard/directory/vehicles" pathname={pathname} icon={Anchor} label="Vessels & Flights" />
         <NavItem href="/dashboard/team" pathname={pathname} icon={UsersRound} label="Control Team" />
       </nav>
 

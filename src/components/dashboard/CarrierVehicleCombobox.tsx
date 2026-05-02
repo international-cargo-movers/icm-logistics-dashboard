@@ -29,9 +29,15 @@ export default function CarrierVehicleCombobox({
   const currentValue = watch(name) || "";
   
   const [open, setOpen] = React.useState(false);
-  const [search, setSearch] = React.useState("");
+  const [search, setSearch] = React.useState(currentValue);
   const [vehicles, setVehicles] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (currentValue && !search) {
+      setSearch(currentValue);
+    }
+  }, [currentValue]);
 
   React.useEffect(() => {
     async function fetchVehicles() {
@@ -57,13 +63,14 @@ export default function CarrierVehicleCombobox({
   };
 
   const handleRegisterNew = async () => {
-    if (!search || !type) return;
+    const normalizedSearch = search.toUpperCase();
+    if (!normalizedSearch || !type) return;
     
     try {
       const res = await fetch("/api/carrier-vehicles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: search, type })
+        body: JSON.stringify({ name: normalizedSearch, type })
       });
       const json = await res.json();
       if (json.success) {
