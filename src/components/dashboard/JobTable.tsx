@@ -54,7 +54,7 @@ export default function JobTable({ searchTerm = "" }: { searchTerm?: string }) {
   React.useEffect(() => {
     async function fetchJobs() {
       try {
-        const res = await fetch("/api/jobs")
+        const res = await fetch(`/api/jobs?t=${Date.now()}`)
         const json = await res.json()
         if (json.success) {
           setJobs(json.data)

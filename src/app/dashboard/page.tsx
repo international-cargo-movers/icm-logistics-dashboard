@@ -27,11 +27,13 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
+  const [timeframe, setTimeframe] = React.useState("monthly");
 
   React.useEffect(() => {
     const fetchDashboardData = async () => {
+      setLoading(true);
       try {
-        const res = await fetch("/api/dashboard");
+        const res = await fetch(`/api/dashboard?timeframe=${timeframe}&t=${Date.now()}`);
         const json = await res.json();
         if (json.success) {
           setData(json.data);
@@ -44,7 +46,7 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, []);
+  }, [timeframe]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -177,8 +179,20 @@ export default function DashboardPage() {
                   <h3 className="text-xl font-black text-slate-800 tracking-tight">Financial Trajectory</h3>
                   <p className="text-slate-400 text-sm font-medium">Revenue vs Gross Profit Trend</p>
                 </div>
-                <div className="flex gap-2">
-                  <Badge variant="outline" className="border-slate-200 text-slate-400 font-bold">Monthly</Badge>
+                <div className="flex gap-2 bg-slate-50 p-1 rounded-xl border border-slate-100">
+                  {['weekly', 'monthly', 'yearly'].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTimeframe(t)}
+                      className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                        timeframe === t 
+                          ? "bg-white text-blue-600 shadow-sm border border-slate-200" 
+                          : "text-slate-400 hover:text-slate-600"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
                 </div>
               </div>
               <ProfitTrendChart data={trendData} />

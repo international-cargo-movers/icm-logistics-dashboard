@@ -12,6 +12,7 @@ import { CalendarIcon, Plus, Trash2 } from "lucide-react"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Box, Container } from "lucide-react"
+import CarrierVehicleCombobox from "@/components/dashboard/CarrierVehicleCombobox"
 
 export default function CargoSection({ isReadOnly }: { isReadOnly?: boolean }) {
   const { control, register } = useFormContext()
@@ -24,6 +25,8 @@ export default function CargoSection({ isReadOnly }: { isReadOnly?: boolean }) {
     control,
     name: "shipmentDetails.mode"
   }) || ""
+
+  const vehicleType = mode.toLowerCase().includes("air") ? "Air" : "Sea"
 
   // useWatch ensures the component re-renders on every keystroke in these fields
   const items = useWatch({
@@ -76,7 +79,12 @@ export default function CargoSection({ isReadOnly }: { isReadOnly?: boolean }) {
               <FormItem>
                 <FormLabel>Carrier / Airline</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Emirates, Maersk..." {...field} />
+                  <CarrierVehicleCombobox 
+                    name="cargoDetails.carrier" 
+                    type={vehicleType} 
+                    placeholder="Search or register carrier..."
+                    className="bg-white border-slate-200"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

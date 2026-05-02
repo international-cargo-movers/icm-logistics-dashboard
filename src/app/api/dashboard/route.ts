@@ -2,69 +2,74 @@ import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import { getTenantModels } from "@/model/tenantModels";
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
     try {
         await dbConnect();
-        const { Job, Invoice, VendorInvoice } = await getTenantModels();
+        const { Job, Invoice, VendorInvoice, Quote } = await getTenantModels();
+        const { searchParams } = new URL(request.url);
+        const timeframe = searchParams.get('timeframe') || 'monthly';
         
         // Fetch all data needed for aggregations
         const jobs = await Job.find({}).populate("customerDetails.companyId", "name").lean();
+        const quotes = await Quote.find({}).lean();
         const customerInvoices = await Invoice.find({}).lean();
         const vendorInvoices = await VendorInvoice.find({}).lean();
+
+        // Create a map for quick quote lookup
+        const quoteMap: Record<string, any> = {};
+        quotes.forEach((q: any) => {
+            quoteMap[q.quoteId] = q;
+        });
 
         // 1. Basic Stats
         const totalJobs = jobs.length;
         const activeJobs = jobs.filter((j: any) => j.cargoDetails?.jobStatus !== "Completed").length;
         const completedJobs = totalJobs - activeJobs;
 
-        // 2. Financial Aggregations
-        const receivablesMap: Record<string, number> = {};
-        const receivedMap: Record<string, number> = {};
+        // 2. Financial Aggregations (Job-Based)
         let totalRevenue = 0;
+        let totalExpense = 0;
+        
+        // Maps for company and job level tracking
+        const jobRevenueMap: Record<string, number> = {};
+        const jobExpenseMap: Record<string, number> = {};
+
+        jobs.forEach((job: any) => {
+            const quote = job.quoteReference ? quoteMap[job.quoteReference] : null;
+            const rev = quote?.financials?.totalSell || 0;
+            const exp = quote?.financials?.totalBuy || 0;
+            
+            const jId = job._id.toString();
+            jobRevenueMap[jId] = rev;
+            jobExpenseMap[jId] = exp;
+            
+            totalRevenue += rev;
+            totalExpense += exp;
+        });
+
+        // Track actual payments from invoices for "Outstanding"
         let totalReceived = 0;
+        const receivedMap: Record<string, number> = {};
 
         customerInvoices.forEach((inv: any) => {
             const billedAmount = Number(inv.totals?.netAmount) || 0;
-            // Legacy Fix: If it's "Paid" but amountPaid is missing, treat it as fully paid
             const paidAmount = (inv.status === "Paid" && (inv.amountPaid === undefined || inv.amountPaid === 0)) 
                 ? billedAmount 
                 : (Number(inv.amountPaid) || 0);
             
             const jId = inv.jobId?.toString();
-            
             if (jId) {
-                receivablesMap[jId] = (receivablesMap[jId] || 0) + billedAmount;
                 receivedMap[jId] = (receivedMap[jId] || 0) + paidAmount;
             }
-            
-            totalRevenue += billedAmount;
             totalReceived += paidAmount;
-        });
-
-        const payablesMap: Record<string, number> = {};
-        const vendorPaidMap: Record<string, number> = {};
-        let totalExpense = 0;
-
-        vendorInvoices.forEach((inv: any) => {
-            const billedAmount = Number(inv.totals?.netAmount) || 0;
-            const paidAmount = (inv.status === "Paid" && (inv.amountPaid === undefined || inv.amountPaid === 0)) 
-                ? billedAmount 
-                : (Number(inv.amountPaid) || 0);
-            
-            const jId = inv.jobId?.toString();
-            
-            if (jId) {
-                payablesMap[jId] = (payablesMap[jId] || 0) + billedAmount;
-                vendorPaidMap[jId] = (vendorPaidMap[jId] || 0) + paidAmount;
-            }
-            
-            totalExpense += billedAmount;
         });
 
         const totalProfit = totalRevenue - totalExpense;
         const outstanding = totalRevenue - totalReceived;
 
-        // 3. Company Level Aggregation
+        // 3. Company Level Aggregation (Job-Based)
         const companyMetrics: Record<string, { 
             name: string, 
             revenue: number, 
@@ -81,8 +86,8 @@ export async function GET() {
                 companyMetrics[companyName] = { name: companyName, revenue: 0, margin: 0, jobs: 0, outstanding: 0 };
             }
 
-            const rev = receivablesMap[jId] || 0;
-            const exp = payablesMap[jId] || 0;
+            const rev = jobRevenueMap[jId] || 0;
+            const exp = jobExpenseMap[jId] || 0;
             const rec = receivedMap[jId] || 0;
 
             companyMetrics[companyName].revenue += rev;
@@ -95,47 +100,52 @@ export async function GET() {
             .sort((a, b) => b.revenue - a.revenue)
             .slice(0, 5);
 
-        // 4. Monthly Trend (Revenue vs Profit)
-        const monthlyData: Record<string, { revenue: number, profit: number, sortKey: string }> = {};
+        // 4. Monthly/Weekly/Yearly Trend (Job-Based Revenue vs Profit)
+        const trendDataMap: Record<string, { revenue: number, profit: number, sortKey: string }> = {};
 
-        customerInvoices.forEach((inv: any) => {
-            const amount = Number(inv.totals?.netAmount) || 0;
-            const date = new Date(inv.invoiceDate || inv.createdAt || new Date());
-            const month = date.toLocaleString('default', { month: 'short' });
+        const getGroupingKey = (d: any, type: string) => {
+            const date = new Date(d || new Date());
             const year = date.getFullYear();
-            const key = `${month} ${year}`;
-            const sortKey = `${year}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-            if (!monthlyData[key]) {
-                monthlyData[key] = { revenue: 0, profit: 0, sortKey };
-            }
-            monthlyData[key].revenue += amount;
-        });
-
-        // Simplified Profit trend: just subtract vendor invoices by their date
-        vendorInvoices.forEach((inv: any) => {
-            const amount = Number(inv.totals?.netAmount) || 0;
-            const date = new Date(inv.vendorInvoiceDate || inv.createdAt || new Date());
-            const month = date.toLocaleString('default', { month: 'short' });
-            const year = date.getFullYear();
-            const key = `${month} ${year}`;
             
-            if (monthlyData[key]) {
-                monthlyData[key].profit += (0 - amount); // Initial revenue already added, now subtract expenses
+            if (type === 'yearly') {
+                return { key: `${year}`, sortKey: `${year}` };
             }
-        });
-        
-        // Finalize profit (it was just expenses, now add revenue)
-        Object.keys(monthlyData).forEach(key => {
-            monthlyData[key].profit += monthlyData[key].revenue;
+            
+            if (type === 'weekly') {
+                const target = new Date(date.valueOf());
+                const dayNr = (date.getDay() + 6) % 7;
+                target.setDate(target.getDate() - dayNr + 3);
+                const firstThursday = target.valueOf();
+                target.setMonth(0, 1);
+                if (target.getDay() !== 4) {
+                    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+                }
+                const week = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+                return { key: `W${week} ${year}`, sortKey: `${year}-${String(week).padStart(2, '0')}` };
+            }
+            
+            const month = date.toLocaleString('default', { month: 'short' });
+            return { key: `${month} ${year}`, sortKey: `${year}-${String(date.getMonth() + 1).padStart(2, '0')}` };
+        };
+
+        jobs.forEach((job: any) => {
+            const rev = jobRevenueMap[job._id.toString()] || 0;
+            const exp = jobExpenseMap[job._id.toString()] || 0;
+            const { key, sortKey } = getGroupingKey(job.createdAt, timeframe);
+
+            if (!trendDataMap[key]) {
+                trendDataMap[key] = { revenue: 0, profit: 0, sortKey };
+            }
+            trendDataMap[key].revenue += rev;
+            trendDataMap[key].profit += (rev - exp);
         });
 
-        const trendData = Object.keys(monthlyData)
+        const trendData = Object.keys(trendDataMap)
             .map(key => ({
                 name: key,
-                Revenue: monthlyData[key].revenue,
-                Profit: monthlyData[key].profit,
-                sortKey: monthlyData[key].sortKey
+                Revenue: trendDataMap[key].revenue,
+                Profit: trendDataMap[key].profit,
+                sortKey: trendDataMap[key].sortKey
             }))
             .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 

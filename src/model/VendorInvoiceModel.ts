@@ -107,7 +107,6 @@ VendorInvoiceSchema.pre("save", function (this: IVendorInvoice, next) {
     this.totals.netAmount = Math.round(totalTaxable + totalGst + (this.totals.roundOff || 0));
     this.balanceDue = this.totals.netAmount - (this.amountPaid || 0);
 
-    next();
 });
 
 export default models.VendorInvoice || mongoose.model<IVendorInvoice>("VendorInvoice", VendorInvoiceSchema);

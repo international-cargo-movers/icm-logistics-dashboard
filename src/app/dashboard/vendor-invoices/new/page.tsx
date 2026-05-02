@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield, FileText } from "lucide-react"
@@ -124,8 +124,11 @@ export default function SmartVendorInvoiceGenerator() {
 
         // Get vendor if job has vendor details
         if (job.vendorDetails && job.vendorDetails.length > 0) {
-            const vendorId = job.vendorDetails[0].vendorId;
-            const vendorData = vendors.find(v => v._id === vendorId);
+            const vendorInfo = job.vendorDetails[0].vendorId;
+            const vendorData = (typeof vendorInfo === 'object' && vendorInfo !== null) 
+                ? vendorInfo 
+                : vendors.find(v => v._id === vendorInfo);
+
             if (vendorData) {
                 setValue("vendorName", vendorData.name || "")
                 const addressParts = [
@@ -221,7 +224,13 @@ export default function SmartVendorInvoiceGenerator() {
         try {
             const linkedJob = jobs.find(j => j._id === data.jobId);
             const vendor = vendors.find(v => v.name === data.vendorName);
-            const vendorId = vendor?._id || linkedJob?.vendorDetails?.[0]?.vendorId;
+            
+            // Safe extraction of vendorId (string)
+            let vendorId = vendor?._id;
+            if (!vendorId && linkedJob?.vendorDetails?.[0]?.vendorId) {
+                const vInfo = linkedJob.vendorDetails[0].vendorId;
+                vendorId = (typeof vInfo === 'object' && vInfo !== null) ? vInfo._id : vInfo;
+            }
 
             const processedLineItems = data.lineItems.map(item => {
                 const taxableValue = (item.rate || 0) * (item.quantity || 1) * (item.roe || 1);
@@ -427,7 +436,16 @@ export default function SmartVendorInvoiceGenerator() {
                                 <div key={field.id} className="grid grid-cols-12 gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
                                     <div className="col-span-3 space-y-1">
                                         <label className="text-[9px] font-bold text-slate-600 uppercase">Description</label>
-                                        <LineItemDescriptionInput {...register(`lineItems.${index}.description`)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" />
+                                        <Controller
+                                            name={`lineItems.${index}.description`}
+                                            control={control}
+                                            render={({ field }) => (
+                                                <LineItemDescriptionInput 
+                                                    {...field} 
+                                                    className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-slate-200 outline-none" 
+                                                />
+                                            )}
+                                        />
                                     </div>
                                     <div className="col-span-1 space-y-1">
                                         <label className="text-[9px] font-bold text-slate-600 uppercase">SAC</label>

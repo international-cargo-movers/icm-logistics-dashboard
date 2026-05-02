@@ -14,6 +14,7 @@ import { Form } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import CarrierVehicleCombobox from "@/components/dashboard/CarrierVehicleCombobox"
 
 // --- UTILITY: Number to Words (INR) ---
 function numberToWords(num: number): string {
@@ -104,6 +105,7 @@ export default function NewCustomerBillPage() {
     const router = useRouter()
     const [jobs, setJobs] = React.useState<any[]>([])
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [vehicleType, setVehicleType] = React.useState<"Sea" | "Air">("Sea")
 
     const form = useForm<CustomerBillFormValues>({
         resolver: zodResolver(customerBillSchema) as any,
@@ -178,6 +180,7 @@ export default function NewCustomerBillPage() {
 
         // Pre-fill Shipping from Job
         setValue("shipping.vesselFlightNo", job.cargoDetails?.carrier || "")
+        setVehicleType(job.shipmentDetails?.mode?.toLowerCase().includes("air") ? "Air" : "Sea")
         setValue("shipping.portOfDischarge", job.shipmentDetails?.portOfDischarge || "")
         setValue("shipping.finalDestination", job.shipmentDetails?.destination || "")
         setValue("shipping.countryOfDestination", job.shipmentDetails?.destination?.split(',').pop()?.trim() || "")
@@ -341,7 +344,14 @@ export default function NewCustomerBillPage() {
                     <div className="grid grid-cols-4 gap-6">
                         <div className="space-y-1"><label className="text-[9px] font-bold text-slate-400 uppercase">Pre-Carriage By</label><input {...register("shipping.preCarriageBy")} className="w-full bg-slate-50 border-none rounded-xl px-4 py-2 text-xs font-bold" /></div>
                         <div className="space-y-1"><label className="text-[9px] font-bold text-slate-400 uppercase">Place of Receipt</label><input {...register("shipping.placeOfReceipt")} className="w-full bg-slate-50 border-none rounded-xl px-4 py-2 text-xs font-bold" /></div>
-                        <div className="space-y-1"><label className="text-[9px] font-bold text-slate-400 uppercase">Vessel/Flight No</label><input {...register("shipping.vesselFlightNo")} className="w-full bg-slate-50 border-none rounded-xl px-4 py-2 text-xs font-bold" /></div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase">Vessel/Flight No</label>
+                            <CarrierVehicleCombobox 
+                                name="shipping.vesselFlightNo" 
+                                type={vehicleType} 
+                                className="w-full bg-slate-50 border-none rounded-xl px-4 py-2 text-xs font-bold" 
+                            />
+                        </div>
                         <div className="space-y-1"><label className="text-[9px] font-bold text-slate-400 uppercase">Port of Loading</label><input {...register("shipping.portOfLoading")} className="w-full bg-slate-50 border-none rounded-xl px-4 py-2 text-xs font-bold" /></div>
                         
                         <div className="space-y-1"><label className="text-[9px] font-bold text-slate-400 uppercase">Port of Discharge</label><input {...register("shipping.portOfDischarge")} className="w-full bg-slate-50 border-none rounded-xl px-4 py-2 text-xs font-bold" /></div>

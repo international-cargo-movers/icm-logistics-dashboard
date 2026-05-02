@@ -33,55 +33,62 @@ export async function POST(request: Request) {
         }
 
         // 1. Map the frontend data to our strict MongoDB Schema
-        const newQuote = await Quote.create({
-            quoteId: quoteData.quoteRef,
-            customerDetails: {
-                companyId: quoteData.customerId,
-                contactPerson: quoteData.customerName, 
+        const updatedQuote = await Quote.findOneAndUpdate(
+            { quoteId: quoteData.quoteRef },
+            {
+                customerDetails: {
+                    companyId: quoteData.customerId,
+                    contactPerson: quoteData.customerName, 
+                },
+                routingDetails: {
+                    originCountry: quoteData.originCountry,           
+                    originPort: quoteData.originPort,
+                    destinationCountry: quoteData.destinationCountry, 
+                    destinationPort: quoteData.destinationPort,
+                    // The Fallback ensures Mongoose never crashes even if the UI drops the mode
+                    mode: quoteData.mode, 
+                },
+                cargoSummary: {
+                    commodity: quoteData.cargoSummary?.commodity || "General Cargo",
+                    equipment: quoteData.cargoSummary?.equipment,
+                    containerCount: Number(quoteData.cargoSummary?.containerCount) || undefined,
+                    containerType: quoteData.cargoSummary?.containerType,
+                    totalCBM: Number(quoteData.cargoSummary?.totalCBM) || undefined,
+                    items: quoteData.cargoSummary?.items?.map((item: any) => ({
+                        description: item.description,
+                        hsnCode: item.hsnCode,
+                        noOfPackages: Number(item.noOfPackages) || 0,
+                        grossWeight: Number(item.grossWeight) || 0,
+                        volumetricWeight: Number(item.volumetricWeight) || 0,
+                    })) || [],
+                    totalNoOfPackages: Number(quoteData.totalNoOfPackages) || 0,
+                    totalGrossWeight: Number(quoteData.totalGrossWeight) || 0,
+                    totalVolumetricWeight: Number(quoteData.totalVolumetricWeight) || 0,
+                },
+                validity: {
+                    issueDate: new Date(),
+                    expiryDate: new Date(quoteData.validUntil),
+                },
+                financials: {
+                    lineItems: quoteData.lineItems.map((item: any) => ({
+                        chargeName: item.chargeName,
+                        chargeType: item.chargeType,
+                        buyPrice: Number(item.buyPrice),
+                        sellPrice: Number(item.sellPrice),
+                        currency: item.currency || "USD",
+                        roe: Number(item.roe) || 1,
+                        quantity: Number(item.quantity) || 1,
+                        notes: item.notes || ""
+                    })),
+                    totalBuy: Number(quoteData.totalBuy) || 0,
+                    totalSell: Number(quoteData.totalSell) || 0,
+                    profitMargin: Number(quoteData.profitMargin) || 0,
+                    baseCurrency: "INR"
+                },
+                status: "Sent"
             },
-            routingDetails: {
-                originCountry: quoteData.originCountry,           
-                originPort: quoteData.originPort,
-                destinationCountry: quoteData.destinationCountry, 
-                destinationPort: quoteData.destinationPort,
-                // The Fallback ensures Mongoose never crashes even if the UI drops the mode
-                mode: quoteData.mode, 
-            },
-            cargoSummary: {
-                commodity: quoteData.cargoSummary?.commodity || "General Cargo",
-                equipment: quoteData.cargoSummary?.equipment,
-                containerCount: Number(quoteData.cargoSummary?.containerCount) || undefined,
-                containerType: quoteData.cargoSummary?.containerType,
-                totalCBM: Number(quoteData.cargoSummary?.totalCBM) || undefined,
-                items: quoteData.cargoSummary?.items?.map((item: any) => ({
-                    description: item.description,
-                    hsnCode: item.hsnCode,
-                    noOfPackages: Number(item.noOfPackages) || 0,
-                    grossWeight: Number(item.grossWeight) || 0,
-                    volumetricWeight: Number(item.volumetricWeight) || 0,
-                })) || [],
-                totalNoOfPackages: Number(quoteData.totalNoOfPackages) || 0,
-                totalGrossWeight: Number(quoteData.totalGrossWeight) || 0,
-                totalVolumetricWeight: Number(quoteData.totalVolumetricWeight) || 0,
-            },
-            validity: {
-                issueDate: new Date(),
-                expiryDate: new Date(quoteData.validUntil),
-            },
-            financials: {
-                lineItems: quoteData.lineItems.map((item: any) => ({
-                    chargeName: item.chargeName,
-                    chargeType: item.chargeType,
-                    buyPrice: Number(item.buyPrice),
-                    sellPrice: Number(item.sellPrice),
-                    currency: item.currency || "USD",
-                    roe: Number(item.roe) || 1,
-                    quantity: Number(item.quantity) || 1,
-                    notes: item.notes || ""
-                }))
-            },
-            status: "Sent"
-        });
+            { upsert: true, new: true, runValidators: true }
+        );
 
         // ==========================================
         // 2. EMAIL DISPATCH PIPELINE (Nodemailer)
@@ -90,10 +97,15 @@ export async function POST(request: Request) {
             const pdfBuffer = Buffer.from(pdfBase64, 'base64');
 
             const transporter = nodemailer.createTransport({
-                service: 'outlook',
+                host: "smtp.office365.com",
+                port: 587,
+                secure: false, // use TLS
                 auth: {
                     user: process.env.EMAIL_USER,
                     pass: process.env.EMAIL_APP_PASSWORD,
+                },
+                tls: {
+                    ciphers: 'SSLv3'
                 }
             });
             
@@ -117,19 +129,12 @@ export async function POST(request: Request) {
             console.warn("[WARNING] Missing email or PDF base64. Quote saved to DB but email skipped.");
         }
 
-        console.log(`[SUCCESS] Quote ${newQuote.quoteId} saved to database!`);
+        console.log(`[SUCCESS] Quote ${updatedQuote.quoteId} saved to database!`);
 
-        return NextResponse.json({ success: true, data: newQuote, message: "Quote saved and email sent!" }, { status: 201 });
+        return NextResponse.json({ success: true, data: updatedQuote, message: "Quote saved successfully!" }, { status: 200 });
 
     } catch (error: any) {
         console.error("Quote Engine Error:", error);
-        
-        if (error.code === 11000) {
-            return NextResponse.json(
-                { success: false, error: "A quote with this Reference ID already exists." }, 
-                { status: 400 }
-            );
-        }
         
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }

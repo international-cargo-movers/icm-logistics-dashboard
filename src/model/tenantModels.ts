@@ -10,6 +10,7 @@ import { CustomerBillSchema } from "./CustomerBillModel";
 import { PortSchema } from "./PortModel";
 import { UserSchema } from "./UserModel";
 import { FinancialItemSchema } from "./FinancialItemModel";
+import { CarrierVehicleSchema } from "./CarrierVehicleModel";
 
 export async function getTenantModels() {
   return {
@@ -29,5 +30,6 @@ export async function getAdminModels() {
     User: await getAdminModel("User", UserSchema),
     Port: await getAdminModel("Port", PortSchema),
     FinancialItem: await getAdminModel("FinancialItem", FinancialItemSchema),
+    CarrierVehicle: await getAdminModel("CarrierVehicle", CarrierVehicleSchema),
   };
 }

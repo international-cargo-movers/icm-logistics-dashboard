@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield, FileText } from "lucide-react"
@@ -16,6 +16,7 @@ import { useSession } from "next-auth/react"
 
 import { LineItemDescriptionInput } from "@/components/dashboard/financials/LineItemDescriptionInput"
 import { getAutoUnitAndQty } from "@/lib/utils"
+import CarrierVehicleCombobox from "@/components/dashboard/CarrierVehicleCombobox"
 
 // --- UTILITY: Number to Words ---
 function numberToWords(num: number): string {
@@ -95,6 +96,7 @@ export default function EditInvoicePage() {
     const [jobs, setJobs] = React.useState<any[]>([])
     const [isLoading, setIsLoading] = React.useState(true)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [vehicleType, setVehicleType] = React.useState<"Sea" | "Air">("Sea")
 
     const form = useForm<InvoiceFormValues>({
         resolver: zodResolver(invoiceSchema) as any,
@@ -192,6 +194,7 @@ export default function EditInvoicePage() {
         setValue("origin", job.shipmentDetails?.portOfLoading || "TBD")
         setValue("destination", job.shipmentDetails?.portOfDischarge || "TBD")
         setValue("commodity", job.cargoDetails?.commodity || "General Cargo")
+        setVehicleType(job.shipmentDetails?.mode?.toLowerCase().includes("air") ? "Air" : "Sea")
         setValue("grossWeight", job.cargoDetails?.totalGrossWeight || job.cargoDetails?.grossWeight || 0)
         setValue("noOfPackages", job.cargoDetails?.totalNoOfPackages || job.cargoDetails?.noOfPackages || 0)
         setValue("volumetricWeight", job.cargoDetails?.totalVolumetricWeight || job.cargoDetails?.volumetricWeight || 0)
@@ -396,7 +399,14 @@ export default function EditInvoicePage() {
                             
                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Origin / POL</label><input {...register("origin")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Destination / POD</label><input {...register("destination")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
-                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Vessel & Voyage / Flight</label><input {...register("vesselFlight")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase block">Vessel & Voyage / Flight</label>
+                                <CarrierVehicleCombobox 
+                                    name="vesselFlight" 
+                                    type={vehicleType} 
+                                    className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" 
+                                />
+                            </div>
                             
                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">OBL / MAWB No</label><input {...register("oblMawb")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">HBL / HAWB No</label><input {...register("hblHawb")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
@@ -440,7 +450,19 @@ export default function EditInvoicePage() {
                                         const lineTaxable = lineRate * lineQty * lineRoe;
                                         return (
                                             <tr key={field.id} className="hover:bg-slate-50/50 transition-colors group">
-                                                <td className="px-6 py-4"><LineItemDescriptionInput {...register(`lineItems.${index}.description`)} className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none" placeholder="Description..." /></td>
+                                                <td className="px-6 py-4">
+                                                    <Controller
+                                                        name={`lineItems.${index}.description`}
+                                                        control={control}
+                                                        render={({ field }) => (
+                                                            <LineItemDescriptionInput 
+                                                                {...field} 
+                                                                className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none" 
+                                                                placeholder="Description..." 
+                                                            />
+                                                        )}
+                                                    />
+                                                </td>
                                                 <td className="px-4 py-4"><input {...register(`lineItems.${index}.sacCode`)} className="w-full bg-transparent border-none text-xs text-slate-500 font-mono focus:ring-0 p-0 outline-none" placeholder="996511" /></td>
                                                 <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.quantity`)} className="w-full bg-transparent border-none text-sm font-semibold tabular-nums focus:ring-0 p-0 outline-none" /></td>
                                                 <td className="px-4 py-4"><input {...register(`lineItems.${index}.unit`)} className="w-full bg-transparent border-none text-xs text-slate-500 focus:ring-0 p-0 outline-none" placeholder="per KG" /></td>

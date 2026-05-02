@@ -283,6 +283,13 @@ export default function NewQuotePage() {
       if (!response.ok) throw new Error(result.error || "Database rejection.");
 
       toast.success("Quote Saved and PDF Downloaded!");
+      
+      // Redirect to the quote details page
+      if (result.data?._id) {
+        setTimeout(() => {
+          router.push(`/dashboard/quotes/${result.data._id}`);
+        }, 1500);
+      }
     } catch (error: any) {
       toast.error(`Failed to save quote: ${error.message}`);
     } finally {
@@ -315,6 +322,13 @@ export default function NewQuotePage() {
       if (!response.ok) throw new Error(result.error || "Email pipeline failed.");
 
       toast.success("Quote Saved and Emailed Successfully!");
+
+      // Redirect to the quote details page
+      if (result.data?._id) {
+        setTimeout(() => {
+          router.push(`/dashboard/quotes/${result.data._id}`);
+        }, 1500);
+      }
     } catch (error: any) {
       toast.error(`Failed to send quote: ${error.message}`);
     } finally {
