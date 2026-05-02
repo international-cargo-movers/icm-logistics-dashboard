@@ -287,7 +287,7 @@ export default function NewQuotePage() {
       // Redirect to the quote details page
       if (result.data?._id) {
         setTimeout(() => {
-          router.push(`/dashboard/quotes/${result.data._id}`);
+          router.push(`/dashboard/quotes`);
         }, 1500);
       }
     } catch (error: any) {
@@ -326,7 +326,7 @@ export default function NewQuotePage() {
       // Redirect to the quote details page
       if (result.data?._id) {
         setTimeout(() => {
-          router.push(`/dashboard/quotes/${result.data._id}`);
+          router.push(`/dashboard/quotes`);
         }, 1500);
       }
     } catch (error: any) {

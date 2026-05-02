@@ -170,7 +170,7 @@ export default function SmartInvoiceGenerator() {
         setValue("hblHawb", hawb)
         setValue("oblMawb", mawb)
         setValue("vesselFlight", job.cargoDetails?.carrier || "")
-        setValue("containerNo", job.shippingDocuments?.bolDetails?.bookingReference || "")
+        setValue("containerNo", job.shippingDocuments?.bolDetails?.containerNumber || "")
 
         const { unit: defaultUnit, qty: defaultQty } = getAutoUnitAndQty(job);
 
