@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem, ComboboxEmpty } from "@/components/ui/combobox"
 import { ArrowDown } from "lucide-react"
+import { AddPortModal } from "@/components/dashboard/ports/AddPortModal"
 
 type DBPort = {
   _id: string;
@@ -34,6 +35,22 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
   const [openDC, setOpenDC] = React.useState(false); const [searchDC, setSearchDC] = React.useState("")
   const [openDP, setOpenDP] = React.useState(false); const [searchDP, setSearchDP] = React.useState("")
 
+  // Modal State
+  const [isPortModalOpen, setIsPortModalOpen] = React.useState(false)
+  const [portModalConfig, setPortModalConfig] = React.useState<{
+    target: "origin" | "destination";
+    initialName: string;
+  } | null>(null)
+
+  const handlePortSuccess = (newPort: any) => {
+    setAllPorts(prev => [...prev, newPort])
+    if (portModalConfig?.target === "origin") {
+        setValue("shipmentDetails.originPort", newPort.locode || newPort.name, { shouldValidate: true })
+    } else {
+        setValue("shipmentDetails.destinationPort", newPort.locode || newPort.name, { shouldValidate: true })
+    }
+  }
+
   // --- 1. RESTORED: Fetch Master Data ---
   React.useEffect(() => {
     async function fetchPorts() {
@@ -60,7 +77,7 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
   // --- 2. RACE CONDITION FIX: Only clear the port if the new country DOESN'T match ---
   React.useEffect(() => {
     if(!isReadOnly && originCountry && allPorts.length > 0) {
-        const currentPortObj = allPorts.find(p => p.locode === originPort);
+        const currentPortObj = allPorts.find(p => (p.locode === originPort || p.name === originPort));
         if (currentPortObj && currentPortObj.countryCode !== originCountry) {
             setValue("shipmentDetails.originPort", "", { shouldValidate: true })
         }
@@ -69,7 +86,7 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
 
   React.useEffect(() => {
     if(!isReadOnly && destinationCountry && allPorts.length > 0) {
-        const currentPortObj = allPorts.find(p => p.locode === destinationPort);
+        const currentPortObj = allPorts.find(p => (p.locode === destinationPort || p.name === destinationPort));
         if (currentPortObj && currentPortObj.countryCode !== destinationCountry) {
             setValue("shipmentDetails.destinationPort", "", { shouldValidate: true })
         }
@@ -89,7 +106,7 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
   React.useEffect(() => {
     if (!originPort) setSearchOP("");
     else if (allPorts.length > 0) {
-      const found = allPorts.find(p => p.locode === originPort);
+      const found = allPorts.find(p => (p.locode === originPort || p.name === originPort));
       if (found) setSearchOP(found.name);
     }
   }, [originPort, allPorts]);
@@ -105,7 +122,7 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
   React.useEffect(() => {
     if (!destinationPort) setSearchDP("");
     else if (allPorts.length > 0) {
-      const found = allPorts.find(p => p.locode === destinationPort);
+      const found = allPorts.find(p => (p.locode === destinationPort || p.name === destinationPort));
       if (found) setSearchDP(found.name);
     }
   }, [destinationPort, allPorts]);
@@ -188,16 +205,29 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
               <FormItem>
                 <FormLabel className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">Port of Loading</FormLabel>
                 <FormControl>
-                  <Combobox open={isReadOnly ? false : openOP} onOpenChange={isReadOnly ? () => {} : setOpenOP} value={allPorts.find(p => p.locode === field.value)?.name || field.value || ""} inputValue={searchOP} onValueChange={(val) => {
+                  <Combobox open={isReadOnly ? false : openOP} onOpenChange={isReadOnly ? () => {} : setOpenOP} value={allPorts.find(p => (p.locode === field.value || p.name === field.value))?.name || field.value || ""} inputValue={searchOP} onValueChange={(val) => {
                       if(isReadOnly) return;
                       const selected = availableOriginPorts.find(p => p.name.toLowerCase() === (val || "").toLowerCase())
-                      field.onChange(selected ? selected.locode : val)
+                      field.onChange(selected ? (selected.locode || selected.name) : val)
                     }} onInputValueChange={isReadOnly ? () => {} : setSearchOP}>
                     <ComboboxInput showTrigger={!isReadOnly && !!originCountry} disabled={isReadOnly || !originCountry} placeholder={originCountry ? "Select Port..." : "Select Country First"} className={`border-none ${isReadOnly || !originCountry ? "bg-muted/50 opacity-70 cursor-not-allowed font-semibold text-on-surface" : "bg-white"}`} />
                     <ComboboxContent>
                       <ComboboxList>
-                        {availableOriginPorts.map((p) => <ComboboxItem key={p.locode} value={p.name}>{p.name} ({p.locode})</ComboboxItem>)}
-                        <ComboboxEmpty>{originCountry ? "No ports found" : "Select a country first"}</ComboboxEmpty>
+                        {availableOriginPorts.map((p) => <ComboboxItem key={p._id} value={p.name}>{p.name} ({p.locode || "N/A"})</ComboboxItem>)}
+                        <ComboboxEmpty className="flex flex-col gap-2 p-4">
+                          <p className="text-xs text-muted-foreground">No ports found.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPortModalConfig({ target: "origin", initialName: searchOP });
+                              setIsPortModalOpen(true);
+                              setOpenOP(false);
+                            }}
+                            className="text-[10px] font-bold uppercase py-2 px-4 border border-primary/20 bg-primary/5 text-primary rounded-md hover:bg-primary/10 transition-all"
+                          >
+                            + Add "{searchOP}"
+                          </button>
+                        </ComboboxEmpty>
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
@@ -247,16 +277,29 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
               <FormItem>
                 <FormLabel className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">Port of Discharge</FormLabel>
                 <FormControl>
-                  <Combobox open={isReadOnly ? false : openDP} onOpenChange={isReadOnly ? () => {} : setOpenDP} value={allPorts.find(p => p.locode === field.value)?.name || field.value || ""} inputValue={searchDP} onValueChange={(val) => {
+                  <Combobox open={isReadOnly ? false : openDP} onOpenChange={isReadOnly ? () => {} : setOpenDP} value={allPorts.find(p => (p.locode === field.value || p.name === field.value))?.name || field.value || ""} inputValue={searchDP} onValueChange={(val) => {
                       if(isReadOnly) return;
                       const selected = availableDestPorts.find(p => p.name.toLowerCase() === (val || "").toLowerCase())
-                      field.onChange(selected ? selected.locode : val)
+                      field.onChange(selected ? (selected.locode || selected.name) : val)
                     }} onInputValueChange={isReadOnly ? () => {} : setSearchDP}>
                     <ComboboxInput showTrigger={!isReadOnly && !!destinationCountry} disabled={isReadOnly || !destinationCountry} placeholder={destinationCountry ? "Select Port..." : "Select Country First"} className={`border-none ${isReadOnly || !destinationCountry ? "bg-muted/50 opacity-70 cursor-not-allowed font-semibold text-on-surface" : "bg-white"}`} />
                     <ComboboxContent>
                       <ComboboxList>
-                        {availableDestPorts.map((p) => <ComboboxItem key={p.locode} value={p.name}>{p.name} ({p.locode})</ComboboxItem>)}
-                        <ComboboxEmpty>{destinationCountry ? "No ports found" : "Select a country first"}</ComboboxEmpty>
+                        {availableDestPorts.map((p) => <ComboboxItem key={p._id} value={p.name}>{p.name} ({p.locode || "N/A"})</ComboboxItem>)}
+                        <ComboboxEmpty className="flex flex-col gap-2 p-4">
+                          <p className="text-xs text-muted-foreground">No ports found.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPortModalConfig({ target: "destination", initialName: searchDP });
+                              setIsPortModalOpen(true);
+                              setOpenDP(false);
+                            }}
+                            className="text-[10px] font-bold uppercase py-2 px-4 border border-primary/20 bg-primary/5 text-primary rounded-md hover:bg-primary/10 transition-all"
+                          >
+                            + Add "{searchDP}"
+                          </button>
+                        </ComboboxEmpty>
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
@@ -266,6 +309,15 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
           />
         </div>
       </Card>
+
+      <AddPortModal 
+        isOpen={isPortModalOpen}
+        onClose={() => setIsPortModalOpen(false)}
+        onSuccess={handlePortSuccess}
+        initialName={portModalConfig?.initialName}
+        defaultCountry={countries.find(c => c.code === (portModalConfig?.target === "origin" ? originCountry : destinationCountry))}
+        defaultType={isAir ? "Air" : "Sea"}
+      />
     </section>
   )
 }

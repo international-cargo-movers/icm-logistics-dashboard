@@ -3,7 +3,7 @@ import dbConnect from '@/lib/mongodb';
 import { getTenantModels } from '@/model/tenantModels';
 import nodemailer from "nodemailer";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Ensure this matches your path!
+import { authOptions } from "@/lib/auth";
 
 export async function POST(request: Request) {
     try {
@@ -12,9 +12,10 @@ export async function POST(request: Request) {
 
         // --- THE SERVER LOCK ---
         const session = await getServerSession(authOptions);
+        const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
         
-        // Block if not logged in, or if role is NOT SuperAdmin or Sales
-        if (!session?.user?.role || !["SuperAdmin", "Sales", "Operations"].includes(session.user.role)) {
+        // Block if not logged in, or if role is NOT SuperAdmin, Sales or Operations
+        if (!session || !userRoles.some(r => ["SuperAdmin", "Sales", "Operations"].includes(r))) {
             return NextResponse.json({ 
                 success: false, 
                 error: "Security Violation: You do not have clearance to create sales quotes." 
@@ -41,12 +42,11 @@ export async function POST(request: Request) {
                     contactPerson: quoteData.customerName, 
                 },
                 routingDetails: {
-                    originCountry: quoteData.originCountry,           
-                    originPort: quoteData.originPort,
-                    destinationCountry: quoteData.destinationCountry, 
-                    destinationPort: quoteData.destinationPort,
-                    // The Fallback ensures Mongoose never crashes even if the UI drops the mode
-                    mode: quoteData.mode, 
+                    originCountry: String(quoteData.originCountry),           
+                    originPort: String(quoteData.originPort),
+                    destinationCountry: String(quoteData.destinationCountry), 
+                    destinationPort: String(quoteData.destinationPort),
+                    mode: String(quoteData.mode), 
                 },
                 cargoSummary: {
                     commodity: quoteData.cargoSummary?.commodity || "General Cargo",
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
                 },
                 status: "Sent"
             },
-            { upsert: true, new: true, runValidators: true }
+            { upsert: true, returnDocument: 'after', runValidators: true }
         );
 
         // ==========================================

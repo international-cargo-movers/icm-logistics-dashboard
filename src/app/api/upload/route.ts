@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Ensure path matches
+import { authOptions } from "@/lib/auth";
 import cloudinary from "@/lib/cloudinary"; // The connection file you just made!
 
 export async function POST(request: Request) {
   try {
     // --- THE SERVER LOCK ---
     const session = await getServerSession(authOptions);
+    const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
     
     // Only SuperAdmins and Operations can upload files to the vault
-    if (!session?.user?.role || !["SuperAdmin", "Operations"].includes(session.user.role)) {
+    if (!session || !userRoles.some(r => ["SuperAdmin", "Operations"].includes(r))) {
       return NextResponse.json({ 
         success: false, 
         error: "Security Violation: You do not have clearance to upload documents." 

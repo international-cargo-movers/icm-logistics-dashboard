@@ -4,28 +4,28 @@ import { getTenantModels } from '@/model/tenantModels';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ vendorInvoiceId: string }> }) {
     try {
         await dbConnect();
-        const { VendorBill } = await getTenantModels();
+        const { VendorInvoice } = await getTenantModels();
         
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const resolvedParams = await params;
-        const bill = await VendorBill.findOne({ billNo: resolvedParams.id });
+        const { vendorInvoiceId } = await params;
+        const invoice = await VendorInvoice.findById(vendorInvoiceId);
         
-        if (!bill) return NextResponse.json({ success: false, error: "Bill not found" }, { status: 404 });
-        return NextResponse.json({ success: true, data: bill });
+        if (!invoice) return NextResponse.json({ success: false, error: "Invoice not found" }, { status: 404 });
+        return NextResponse.json({ success: true, data: invoice });
     } catch (error: any) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ vendorInvoiceId: string }> }) {
     try {
         await dbConnect();
-        const { VendorBill } = await getTenantModels();
+        const { VendorInvoice } = await getTenantModels();
         
         const session = await getServerSession(authOptions);
         const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
@@ -38,24 +38,24 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         }
 
         const body = await request.json();
-        const resolvedParams  = await params;
+        const { vendorInvoiceId }  = await params;
         
-        const existingBill = await VendorBill.findOne({ billNo: resolvedParams.id });
-        if (!existingBill) return NextResponse.json({ success: false, error: "Bill not found" }, { status: 404 });
+        const existingInvoice = await VendorInvoice.findById(vendorInvoiceId);
+        if (!existingInvoice) return NextResponse.json({ success: false, error: "Invoice not found" }, { status: 404 });
 
-        const amountPaid = existingBill.amountPaid || 0;
-        const newNetAmount = body.totals?.netAmount || existingBill.totals.netAmount;
+        const amountPaid = existingInvoice.amountPaid || 0;
+        const newNetAmount = body.totals?.netAmount || existingInvoice.totals.netAmount;
         const newBalanceDue = Math.max(0, newNetAmount - amountPaid);
 
-        let newStatus = body.status || existingBill.status;
+        let newStatus = body.status || existingInvoice.status;
         if (amountPaid > 0) {
             newStatus = newBalanceDue <= 0.5 ? "Paid" : "Partially Paid";
         } else if (newStatus !== "Draft") {
             newStatus = "Unpaid";
         }
 
-        const updatedBill = await VendorBill.findOneAndUpdate(
-            { billNo: resolvedParams.id },
+        const updatedInvoice = await VendorInvoice.findByIdAndUpdate(
+            vendorInvoiceId,
             { 
                 ...body, 
                 balanceDue: newBalanceDue, 
@@ -65,17 +65,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             { new: true, runValidators: true }
         );
 
-        if (!updatedBill) return NextResponse.json({ success: false, error: "Bill not found" }, { status: 404 });
-        return NextResponse.json({ success: true, data: updatedBill });
+        if (!updatedInvoice) return NextResponse.json({ success: false, error: "Invoice not found" }, { status: 404 });
+        return NextResponse.json({ success: true, data: updatedInvoice });
     } catch (error: any) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }
 
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ vendorInvoiceId: string }> }) {
     try {
         await dbConnect();
-        const { VendorBill } = await getTenantModels();
+        const { VendorInvoice } = await getTenantModels();
         
         const session = await getServerSession(authOptions);
         const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
@@ -83,11 +83,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
             return NextResponse.json({ success: false, error: "Only SuperAdmins can delete records." }, { status: 403 });
         }
 
-        const resolvedParams = await params;
-        const deletedBill = await VendorBill.findOneAndDelete({ billNo: resolvedParams.id });
+        const { vendorInvoiceId } = await params;
+        const deletedInvoice = await VendorInvoice.findByIdAndDelete(vendorInvoiceId);
 
-        if (!deletedBill) return NextResponse.json({ success: false, error: "Bill not found" }, { status: 404 });
-        return NextResponse.json({ success: true, message: "Bill deleted successfully" });
+        if (!deletedInvoice) return NextResponse.json({ success: false, error: "Invoice not found" }, { status: 404 });
+        return NextResponse.json({ success: true, message: "Invoice deleted successfully" });
     } catch (error: any) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }

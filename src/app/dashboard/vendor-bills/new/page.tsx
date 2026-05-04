@@ -102,7 +102,28 @@ export default function NewVendorBillPage() {
     const router = useRouter()
     const { data: session, status } = useSession()
     const [jobs, setJobs] = React.useState<any[]>([])
+
+    // Subtle UI Abstraction: Silent redirect if not authorized
+    React.useEffect(() => {
+        if (status === "loading") return
+        const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+        if (!userRoles.some(r => ["SuperAdmin", "Finance", "Operations"].includes(r))) {
+            router.push("/dashboard")
+        }
+    }, [session, status, router])
+
     const [vendors, setVendors] = React.useState<any[]>([])
+
+    if (status === "loading") {
+        return (
+            <div className="bg-slate-50 min-h-screen flex items-center justify-center">
+                <div className="animate-pulse flex flex-col items-center gap-4">
+                    <div className="h-12 w-12 bg-blue-600/20 rounded-2xl"></div>
+                    <div className="h-4 w-32 bg-slate-200 rounded-full"></div>
+                </div>
+            </div>
+        )
+    }
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
     const form = useForm<VendorBillFormValues>({

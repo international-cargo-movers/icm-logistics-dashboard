@@ -1,11 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield, FileText } from "lucide-react"
+import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield, FileText, Activity } from "lucide-react"
 import { pdf } from '@react-pdf/renderer'
 import VendorInvoicePDF from '@/components/dashboard/vendor-invoices/VendorInvoicePDF'
 
@@ -75,17 +75,19 @@ const vendorInvoiceSchema = z.object({
 
 type VendorInvoiceFormValues = z.infer<typeof vendorInvoiceSchema>
 
-export default function SmartVendorInvoiceGenerator() {
+export default function EditVendorInvoicePage() {
     const router = useRouter()
+    const { id } = useParams()
     const { data: session, status } = useSession()
     const [jobs, setJobs] = React.useState<any[]>([])
     const [vendors, setVendors] = React.useState<any[]>([])
+    const [isLoading, setIsLoading] = React.useState(true)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
     const form = useForm<VendorInvoiceFormValues>({
         resolver: zodResolver(vendorInvoiceSchema) as any,
         defaultValues: {
-            vendorInvoiceNo: `VINV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+            vendorInvoiceNo: "",
             issueDate: new Date().toISOString().split('T')[0],
             jobId: "", vendorName: "", billingAddress: "", gstin: "", stateCode: "",
             origin: "", destination: "",
@@ -95,25 +97,63 @@ export default function SmartVendorInvoiceGenerator() {
         }
     })
 
-    const { control, watch, setValue, register, handleSubmit } = form
+    const { control, watch, setValue, register, handleSubmit, reset } = form
     const { fields, append, remove, replace } = useFieldArray({ control, name: "lineItems" })
 
     React.useEffect(() => {
-        async function fetchJobsAndVendors() {
+        async function fetchData() {
             try {
-                const jobRes = await fetch("/api/jobs")
-                const jobJson = await jobRes.json()
-                if (jobJson.success) setJobs(jobJson.data)
+                const [jobRes, vendorRes, invoiceRes] = await Promise.all([
+                    fetch("/api/jobs"),
+                    fetch("/api/companies?type=Vendor"),
+                    fetch(`/api/vendor-invoices/${id}`)
+                ])
 
-                const vendorRes = await fetch("/api/companies?type=Vendor")
-                const vendorJson = await vendorRes.json()
+                const [jobJson, vendorJson, invoiceJson] = await Promise.all([
+                    jobRes.json(),
+                    vendorRes.json(),
+                    invoiceRes.json()
+                ])
+
+                if (jobJson.success) setJobs(jobJson.data)
                 if (vendorJson.success) setVendors(vendorJson.data)
+                
+                if (invoiceJson.success) {
+                    const inv = invoiceJson.data
+                    reset({
+                        vendorInvoiceNo: inv.vendorInvoiceNo,
+                        issueDate: inv.vendorInvoiceDate ? new Date(inv.vendorInvoiceDate).toISOString().split('T')[0] : "",
+                        jobId: inv.jobId,
+                        jobReference: inv.jobReference,
+                        vendorName: inv.vendorDetails?.name || "",
+                        billingAddress: inv.vendorDetails?.billingAddress || "",
+                        gstin: inv.vendorDetails?.gstin || "",
+                        stateCode: inv.vendorDetails?.stateCode || "",
+                        origin: inv.shipmentSnapshot?.origin || "",
+                        destination: inv.shipmentSnapshot?.destination || "",
+                        oblMawb: inv.shipmentSnapshot?.oblMawb || "",
+                        hblHawb: inv.shipmentSnapshot?.hblHawb || "",
+                        containerNo: inv.shipmentSnapshot?.containerNo || "",
+                        vesselFlight: inv.shipmentSnapshot?.vesselFlight || "",
+                        commodity: inv.shipmentSnapshot?.commodity || "",
+                        egm: inv.shipmentSnapshot?.egm || "",
+                        igm: inv.shipmentSnapshot?.igm || "",
+                        sbNo: inv.shipmentSnapshot?.sbNo || "",
+                        noOfPackages: inv.shipmentSnapshot?.noOfPackages || 0,
+                        grossWeight: inv.shipmentSnapshot?.grossWeight || 0,
+                        volumetricWeight: inv.shipmentSnapshot?.volumetricWeight || 0,
+                        chargeableWeight: inv.shipmentSnapshot?.chargeableWeight || 0,
+                        lineItems: inv.lineItems || []
+                    })
+                }
             } catch (error) { 
                 toast.error("Could not fetch data.") 
+            } finally {
+                setIsLoading(false)
             }
         }
-        fetchJobsAndVendors()
-    }, [])
+        fetchData()
+    }, [id, reset])
 
     const handleJobSelect = async (selectedJobId: string) => {
         const job = jobs.find(j => j.jobId === selectedJobId)
@@ -169,41 +209,16 @@ export default function SmartVendorInvoiceGenerator() {
         setValue("oblMawb", mawb)
         setValue("vesselFlight", job.cargoDetails?.carrier || "")
         setValue("containerNo", job.shippingDocuments?.bolDetails?.bookingReference || "")
-
-        if (job.quoteReference) {
-            toast.message(`Fetching Vendor Financials from Quote: ${job.quoteReference}`)
-            try {
-                const quoteRes = await fetch(`/api/quotes/${job.quoteReference}`)
-                const quoteJson = await quoteRes.json()
-
-                if (quoteJson.success && quoteJson.data) {
-                    // KEY DIFFERENCE: Use buyPrice instead of sellPrice
-                    const vendorInvoiceReadyLines = (quoteJson.data.financials?.lineItems || []).map((item: any) => ({
-                        description: item.chargeName || "Freight Charge",
-                        sacCode: "996511",
-                        rate: Number(item.buyPrice) || 0,
-                        quantity: Number(item.quantity) || 1,
-                        unit: item.notes?.includes("per") ? item.notes.split("per ")[1] : "SET",
-                        currency: item.currency || "USD",
-                        roe: item.roe || 1,
-                        gstPercent: 18 
-                    }))
-                    replace(vendorInvoiceReadyLines.length > 0 ? vendorInvoiceReadyLines : [{ description: "Freight Charges", sacCode: "996511", rate: 0, quantity: 1, unit: "SET", currency: "USD", roe: 1, gstPercent: 18 }])
-                }
-            } catch (error) { toast.error("Failed to fetch linked quote financials.") }
-        } else {
-            replace([{ description: "Freight Charges", sacCode: "996511", rate: 0, quantity: 1, unit: "SET", currency: "USD", roe: 1, gstPercent: 18 }])
-        }
     }
 
-    if (status === "loading") return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials...</div>
+    if (status === "loading" || isLoading) return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Synchronizing Records...</div>
     const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
     if (session && !userRoles.some(r => ["SuperAdmin", "Finance", "Operations"].includes(r))) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
                 <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
                 <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
-                <p className="text-slate-500 max-w-md">Your current role does not have clearance to generate financial documents.</p>
+                <p className="text-slate-500 max-w-md">Your current role does not have clearance to modify financial documents.</p>
                 <button onClick={() => router.back()} className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors">Go Back</button>
             </div>
         )
@@ -223,7 +238,7 @@ export default function SmartVendorInvoiceGenerator() {
     async function onSubmit(data: VendorInvoiceFormValues) {
         setIsSubmitting(true)
         try {
-            const linkedJob = jobs.find(j => j._id === data.jobId);
+            const linkedJob = jobs.find(j => j._id === data.jobId || j.jobId === data.jobReference);
             const vendor = vendors.find(v => v.name === data.vendorName);
             
             // Safe extraction of vendorId (string)
@@ -264,24 +279,23 @@ export default function SmartVendorInvoiceGenerator() {
                     roundOff: 0,
                     netAmount: totals.net,
                     amountInWords: numberToWords(totals.net)
-                },
-                status: "Unpaid"
+                }
             }
 
-            const dbResponse = await fetch("/api/vendor-invoices", {
-                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(vendorInvoicePayload)
+            const dbResponse = await fetch(`/api/vendor-invoices/${id}`, {
+                method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(vendorInvoicePayload)
             });
             const dbResult = await dbResponse.json();
-            if (!dbResult.success) throw new Error(dbResult.error || "Failed to save to database");
+            if (!dbResult.success) throw new Error(dbResult.error || "Failed to update database");
 
             const blob = await pdf(<VendorInvoicePDF data={vendorInvoicePayload} />).toBlob()
             const url = URL.createObjectURL(blob)
             window.open(url, '_blank')
-            toast.success("Vendor Invoice Recorded & PDF Generated!")
+            toast.success("Vendor Invoice Updated & PDF Generated!")
             router.push("/dashboard/vendor-invoices") 
         } catch (error: any) { 
             console.error(error);
-            toast.error(error.message || "Failed to generate vendor invoice.") 
+            toast.error(error.message || "Failed to update vendor invoice.") 
         } 
         finally { setIsSubmitting(false) }
     }
@@ -290,13 +304,13 @@ export default function SmartVendorInvoiceGenerator() {
         <div className="bg-slate-50 text-slate-900 min-h-screen font-sans pb-12">
             <div className="sticky px-6 py-2 top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-10 h-16 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-pulse"></div>
-                    <span className="text-sm font-semibold tracking-tight uppercase text-slate-600">Smart Vendor Invoice Generator</span>
+                    <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                    <span className="text-sm font-semibold tracking-tight uppercase text-slate-600">Edit Vendor Invoice: {watch("vendorInvoiceNo")}</span>
                 </div>
                 <div className="flex items-center gap-3">
                     <button onClick={() => router.back()} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors rounded-lg flex items-center gap-2"><X className="w-4 h-4" /> Discard</button>
                     <button onClick={handleSubmit(onSubmit)} disabled={isSubmitting} className="px-6 py-2.5 text-sm font-bold bg-black text-white p-2 rounded-lg shadow-md hover:bg-slate-800 transition-all flex items-center gap-2">
-                        <Save className="w-4 h-4" /> {isSubmitting ? "Saving..." : "Save Vendor Invoice"}
+                        <Save className="w-4 h-4" /> {isSubmitting ? "Saving Changes..." : "Update Vendor Invoice"}
                     </button>
                 </div>
             </div>
@@ -315,12 +329,11 @@ export default function SmartVendorInvoiceGenerator() {
                         </div>
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Job ID Search</label>
-                            <Select onValueChange={handleJobSelect}>
+                            <Select onValueChange={handleJobSelect} value={watch("jobReference") || ""}>
                                 <SelectTrigger className="w-full bg-slate-100 border-none rounded-lg h-[44px] px-4 shadow-none focus:ring-2 focus:ring-slate-200">
                                     <SelectValue placeholder="Select Freight Job..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {jobs.length === 0 && <SelectItem value="none" disabled>Loading jobs...</SelectItem>}
                                     {jobs.map(job => (<SelectItem key={job.jobId} value={job.jobId}>{job.jobId} - {job.customerDetails?.companyId?.name || "Unknown"}</SelectItem>))}
                                 </SelectContent>
                             </Select>
@@ -422,7 +435,7 @@ export default function SmartVendorInvoiceGenerator() {
                         <div className="px-8 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Info className="w-4 h-4 text-slate-500" />
-                                <h2 className="text-xs font-black uppercase tracking-widest text-slate-700">Charge Details (From Quote Buy Price)</h2>
+                                <h2 className="text-xs font-black uppercase tracking-widest text-slate-700">Charge Details</h2>
                             </div>
                             <button
                                 type="button"

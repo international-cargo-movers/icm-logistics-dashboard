@@ -14,13 +14,25 @@ import CargoSection from "@/components/dashboard/new-job/cargo-section";
 import VendorSection from "@/components/dashboard/new-job/vendor-section";
 import DocumentWorkshop from "@/components/dashboard/shipping-docs/DocumentWorkshop";
 
+import { useSession } from "next-auth/react"
+
 export default function EditJobPage() {
     const router = useRouter();
+    const { data: session, status } = useSession();
     const params = useParams();
     const jobId = params.id as string;
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+
+    // Subtle UI Abstraction: Silent redirect if not authorized
+    useEffect(() => {
+        if (status === "loading") return
+        const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+        if (!userRoles.some(r => ["SuperAdmin", "Operations", "Sales"].includes(r))) {
+            router.push("/dashboard")
+        }
+    }, [session, status, router])
 
     // Initialize the form
     const methods = useForm({

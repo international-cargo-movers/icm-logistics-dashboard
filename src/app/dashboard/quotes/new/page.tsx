@@ -17,6 +17,7 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
 import { LineItemDescriptionInput } from "@/components/dashboard/financials/LineItemDescriptionInput"
+import { AddPortModal } from "@/components/dashboard/ports/AddPortModal"
 
 export default function NewQuotePage() {
   const { data: session, status } = useSession()
@@ -30,7 +31,7 @@ export default function NewQuotePage() {
   const [countries, setCountries] = useState<{ name: string, code: string }[]>([])
 
   const [openCustomer, setOpenCustomer] = useState(false)
-  const [customerSearch, setCustomerSearch] = useState("") 
+  const [customerSearch, setCustomerSearch] = useState("")
 
   // Combobox States for Routing
   const [openOC, setOpenOC] = useState(false); const [searchOC, setSearchOC] = useState("")
@@ -38,8 +39,15 @@ export default function NewQuotePage() {
   const [openDC, setOpenDC] = useState(false); const [searchDC, setSearchDC] = useState("")
   const [openDP, setOpenDP] = useState(false); const [searchDP, setSearchDP] = useState("")
 
+  // Modal State
+  const [isPortModalOpen, setIsPortModalOpen] = useState(false)
+  const [portModalConfig, setPortModalConfig] = useState<{
+    target: "origin" | "destination";
+    initialName: string;
+  } | null>(null)
+
   const [quoteData, setQuoteData] = useState({
-    quoteRef: `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+    quoteRef: "",
     validityDays: 15,
     customerId: "",
     customerName: "",
@@ -54,11 +62,10 @@ export default function NewQuotePage() {
       items: [
         { description: "", hsnCode: "", noOfPackages: 0, grossWeight: 0, volumetricWeight: 0 }
       ],
-      // New structured fields
       containerCount: 1,
       containerType: "20' GP",
       totalCBM: 0,
-      equipment: "" // for legacy/PDF compatibility
+      equipment: ""
     },
     lineItems: [
       { chargeName: "Ocean Freight", chargeType: "Freight", currency: "USD", roe: 83.5, buyPrice: 2800, sellPrice: 3250, notes: "" },
@@ -66,7 +73,13 @@ export default function NewQuotePage() {
     ]
   })
 
-  // LIVE TOTALS - Calculated every render pass
+  useEffect(() => {
+    setQuoteData(prev => ({
+      ...prev,
+      quoteRef: `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`
+    }))
+  }, [])
+
   const cargoTotals = quoteData.cargoSummary.items.reduce((acc, item) => {
     acc.pkgs += Number(item.noOfPackages || 0)
     acc.gross += Number(item.grossWeight || 0)
@@ -76,7 +89,6 @@ export default function NewQuotePage() {
 
   const chargeableWeight = Math.max(cargoTotals.gross, cargoTotals.vol);
 
-  // --- DYNAMIC MULTIPLIER LOGIC ---
   const getMultiplier = () => {
     if (quoteData.mode.includes("Sea FCL")) return Number(quoteData.cargoSummary.containerCount) || 1;
     if (quoteData.mode.includes("Sea LCL")) return Number(quoteData.cargoSummary.totalCBM) || 1;
@@ -87,7 +99,6 @@ export default function NewQuotePage() {
   const multiplier = getMultiplier();
   const unitLabel = quoteData.mode.includes("Sea FCL") ? "Containers" : (quoteData.mode.includes("Sea LCL") ? "CBM" : "KG");
 
-  // --- LIVE MATH ENGINE ---
   const totalBuy = quoteData.lineItems.reduce((acc, item) => {
     const qty = (item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight")) ? multiplier : 1;
     return acc + ((Number(item.buyPrice) || 0) * (Number(item.roe) || 1) * qty);
@@ -142,7 +153,7 @@ export default function NewQuotePage() {
         const companyJson = await companyRes.json();
         const portJson = await portRes.json();
 
-        if (companyJson.success) setCustomers(companyJson.data.filter((c: any) => c.type.includes("Customer")||c.type.includes("Shipper")||c.type.includes("Consignee") ));
+        if (companyJson.success) setCustomers(companyJson.data.filter((c: any) => c.type.includes("Customer") || c.type.includes("Shipper") || c.type.includes("Consignee")));
         if (portJson.success) {
           setPorts(portJson.data);
           const uniqueCountriesMap = new Map();
@@ -158,6 +169,15 @@ export default function NewQuotePage() {
     fetchMasterData();
   }, [])
 
+  const handlePortSuccess = (newPort: any) => {
+    setPorts(prev => [...prev, newPort])
+    if (portModalConfig?.target === "origin") {
+      setQuoteData(prev => ({ ...prev, originPort: newPort.locode || newPort.name }))
+    } else {
+      setQuoteData(prev => ({ ...prev, destinationPort: newPort.locode || newPort.name }))
+    }
+  }
+
   const handleQuickAddCustomer = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!customerSearch.trim()) return;
@@ -168,7 +188,7 @@ export default function NewQuotePage() {
         body: JSON.stringify({
           name: customerSearch.trim(),
           type: ["Customer"],
-          contactEmail: quoteData.customerEmail 
+          contactEmail: quoteData.customerEmail
         })
       });
       const json = await res.json();
@@ -229,7 +249,6 @@ export default function NewQuotePage() {
       return null;
     }
 
-    // Generate legacy equipment string for PDF/Display
     let equipmentStr = "";
     if (quoteData.mode.includes("Sea FCL")) equipmentStr = `${quoteData.cargoSummary.containerCount}x ${quoteData.cargoSummary.containerType}`;
     else if (quoteData.mode.includes("Sea LCL")) equipmentStr = `${quoteData.cargoSummary.totalCBM} CBM`;
@@ -237,7 +256,7 @@ export default function NewQuotePage() {
 
     const finalLineItems = quoteData.lineItems.map(item => {
       const qty = (item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight")) ? multiplier : 1;
-      return { ...item, quantity: qty, notes: (item.chargeType === "Freight") ? `per ${unitLabel.slice(0,-1)}` : item.notes };
+      return { ...item, quantity: qty, notes: (item.chargeType === "Freight") ? `per ${unitLabel.slice(0, -1)}` : item.notes };
     });
 
     return {
@@ -261,7 +280,6 @@ export default function NewQuotePage() {
   const handleDownloadPDF = async () => {
     const finalData = preparePayload();
     if (!finalData) return;
-
     setIsSavingPdf(true);
     try {
       const blob = await pdf(<QuotePDF data={finalData} />).toBlob();
@@ -283,12 +301,8 @@ export default function NewQuotePage() {
       if (!response.ok) throw new Error(result.error || "Database rejection.");
 
       toast.success("Quote Saved and PDF Downloaded!");
-      
-      // Redirect to the quote details page
       if (result.data?._id) {
-        setTimeout(() => {
-          router.push(`/dashboard/quotes`);
-        }, 1500);
+        setTimeout(() => { router.push(`/dashboard/quotes`); }, 1500);
       }
     } catch (error: any) {
       toast.error(`Failed to save quote: ${error.message}`);
@@ -322,12 +336,8 @@ export default function NewQuotePage() {
       if (!response.ok) throw new Error(result.error || "Email pipeline failed.");
 
       toast.success("Quote Saved and Emailed Successfully!");
-
-      // Redirect to the quote details page
       if (result.data?._id) {
-        setTimeout(() => {
-          router.push(`/dashboard/quotes`);
-        }, 1500);
+        setTimeout(() => { router.push(`/dashboard/quotes`); }, 1500);
       }
     } catch (error: any) {
       toast.error(`Failed to send quote: ${error.message}`);
@@ -336,18 +346,26 @@ export default function NewQuotePage() {
     }
   }
 
-  if (session && !["SuperAdmin", "Sales", "Operations"].includes(session?.user?.role || "")) {
+  // Subtle UI Abstraction: Silent redirect if not authorized
+  React.useEffect(() => {
+    if (status === "loading") return
+    const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+    if (!userRoles.some(r => ["SuperAdmin", "Sales", "Operations"].includes(r))) {
+      router.push("/dashboard")
+    }
+  }, [session, status, router])
+
+  if (status === "loading") {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
-        <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
-        <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to modify sales quotes.</p>
-        <button onClick={() => router.back()} className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors">
-          Go Back
-        </button>
+      <div className="bg-surface min-h-screen flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="h-12 w-12 bg-primary/20 rounded-2xl"></div>
+          <div className="h-4 w-32 bg-slate-200 rounded-full"></div>
+        </div>
       </div>
     )
   }
+
   return (
     <div className="flex-1 overflow-y-auto px-16 py-12 bg-surface text-on-surface font-sans min-h-screen">
       <div className="max-w-5xl mx-auto space-y-8">
@@ -371,7 +389,7 @@ export default function NewQuotePage() {
                     <label className="text-xs font-semibold text-on-surface-variant block">Select Customer</label>
                     <Popover open={openCustomer} onOpenChange={setOpenCustomer}>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={openCustomer} className="w-full justify-between bg-surface-container-low border-none h-12 px-4 hover:bg-surface-container transition-colors">
+                        <Button variant="outline" role="combobox" aria-expanded={openCustomer} className="w-full justify-between bg-surface-container-low border-none h-12 px-4">
                           {quoteData.customerId ? customers.find((c) => c._id === quoteData.customerId)?.name : "Search directory..."}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -389,7 +407,7 @@ export default function NewQuotePage() {
                             <CommandGroup>
                               {customers.map((c) => (
                                 <CommandItem key={c._id} value={c.name} onSelect={() => {
-                                  setQuoteData({ ...quoteData, customerId: c._id, customerName: c.name, customerEmail: c.contactEmail || c.contactEmail || "" });
+                                  setQuoteData({ ...quoteData, customerId: c._id, customerName: c.name, customerEmail: c.contactEmail || "" });
                                   setOpenCustomer(false);
                                   setCustomerSearch("");
                                 }}>
@@ -405,7 +423,7 @@ export default function NewQuotePage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-on-surface-variant block">Customer Email (Editable)</label>
-                    <input type="email" value={quoteData.customerEmail} onChange={(e) => setQuoteData({ ...quoteData, customerEmail: e.target.value })} onBlur={handleEmailBlur} placeholder="manager@company.com" className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                    <input type="email" value={quoteData.customerEmail} onChange={(e) => setQuoteData({ ...quoteData, customerEmail: e.target.value })} onBlur={handleEmailBlur} placeholder="manager@company.com" className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm outline-none" />
                   </div>
                 </div>
               </section>
@@ -417,11 +435,11 @@ export default function NewQuotePage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-on-surface-variant block">Quote Reference</label>
-                    <input type="text" readOnly value={quoteData.quoteRef} className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm font-mono cursor-not-allowed outline-none opacity-70" />
+                    <input type="text" readOnly value={quoteData.quoteRef} className="w-full bg-surface-container-highest border-none rounded-lg h-12 px-4 text-sm font-mono opacity-70" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-on-surface-variant block">Validity (Days)</label>
-                    <input type="number" value={quoteData.validityDays} onChange={(e) => setQuoteData({ ...quoteData, validityDays: parseInt(e.target.value) || 0 })} className="w-full bg-surface-container-low border-none rounded-lg h-12 px-4 focus:ring-2 focus:ring-primary/20 text-sm outline-none" />
+                    <input type="number" value={quoteData.validityDays} onChange={(e) => setQuoteData({ ...quoteData, validityDays: parseInt(e.target.value) || 0 })} className="w-full bg-surface-container-low border-none rounded-lg h-12 px-4 text-sm outline-none" />
                   </div>
                 </div>
               </section>
@@ -433,7 +451,7 @@ export default function NewQuotePage() {
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Routing Data</h2>
                 <div className="w-48">
                   <Select value={quoteData.mode} onValueChange={(val) => setQuoteData({ ...quoteData, mode: val })}>
-                    <SelectTrigger className="w-full bg-primary/10 border-none h-9 text-xs font-bold text-primary focus:ring-0 focus:ring-offset-0">
+                    <SelectTrigger className="w-full bg-primary/10 border-none h-9 text-xs font-bold text-primary">
                       <SelectValue placeholder="Mode" />
                     </SelectTrigger>
                     <SelectContent>
@@ -454,7 +472,7 @@ export default function NewQuotePage() {
                     <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block">POL Country</label>
                     <Popover open={openOC} onOpenChange={setOpenOC}>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={openOC} className="w-full justify-between bg-surface-container-highest border-none h-11 px-3">
+                        <Button variant="outline" role="combobox" className="w-full justify-between bg-surface-container-highest border-none h-11 px-3">
                           {quoteData.originCountry ? countries.find((c) => c.code === quoteData.originCountry)?.name : "Select Country..."}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -481,21 +499,28 @@ export default function NewQuotePage() {
                     <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block">Port of Loading</label>
                     <Popover open={openOP} onOpenChange={setOpenOP}>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={openOP} disabled={!quoteData.originCountry} className="w-full justify-between bg-surface-container-highest border-none h-11 px-3 disabled:opacity-50">
-                          {quoteData.originPort ? ports.find((p) => p.locode === quoteData.originPort)?.name : (quoteData.originCountry ? "Select Port..." : "Select Country First")}
+                        <Button variant="outline" role="combobox" disabled={!quoteData.originCountry} className="w-full justify-between bg-surface-container-highest border-none h-11 px-3">
+                          {quoteData.originPort ? ports.find((p) => p.locode === quoteData.originPort)?.name || quoteData.originPort : (quoteData.originCountry ? "Select Port..." : "Select Country First")}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-[300px] p-0" align="start">
                         <Command>
-                          <CommandInput placeholder="Search by name or UN/LOCODE..." />
+                          <CommandInput placeholder="Search by name or UN/LOCODE..." value={searchOP} onValueChange={setSearchOP} />
                           <CommandList>
-                            <CommandEmpty>No port found.</CommandEmpty>
+                            <CommandEmpty className="py-4 text-center">
+                              <p className="text-xs text-muted-foreground mb-2">No port found.</p>
+                              <Button size="sm" variant="outline" className="text-[10px] font-bold uppercase" onClick={() => {
+                                setPortModalConfig({ target: "origin", initialName: searchOP });
+                                setIsPortModalOpen(true);
+                                setOpenOP(false);
+                              }}>+ Add "{searchOP}"</Button>
+                            </CommandEmpty>
                             <CommandGroup>
                               {availableOriginPorts.map((p) => (
-                                <CommandItem key={p._id} value={`${p.name} ${p.locode}`} onSelect={() => { setQuoteData({ ...quoteData, originPort: p.locode }); setOpenOP(false); }}>
-                                  <Check className={cn("mr-2 h-4 w-4", quoteData.originPort === p.locode ? "opacity-100 text-primary" : "opacity-0")} />
-                                  {p.name} ({p.locode})
+                                <CommandItem key={p._id} value={`${p.name} ${p.locode}`} onSelect={() => { setQuoteData({ ...quoteData, originPort: p.locode || p.name }); setOpenOP(false); setSearchOP(""); }}>
+                                  <Check className={cn("mr-2 h-4 w-4", quoteData.originPort === (p.locode || p.name) ? "opacity-100 text-primary" : "opacity-0")} />
+                                  {p.name} ({p.locode || "N/A"})
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -511,7 +536,7 @@ export default function NewQuotePage() {
                     <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block">POD Country</label>
                     <Popover open={openDC} onOpenChange={setOpenDC}>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={openDC} className="w-full justify-between bg-surface-container-highest border-none h-11 px-3">
+                        <Button variant="outline" role="combobox" className="w-full justify-between bg-surface-container-highest border-none h-11 px-3">
                           {quoteData.destinationCountry ? countries.find((c) => c.code === quoteData.destinationCountry)?.name : "Select Country..."}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -538,21 +563,28 @@ export default function NewQuotePage() {
                     <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block">Port of Discharge</label>
                     <Popover open={openDP} onOpenChange={setOpenDP}>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={openDP} disabled={!quoteData.destinationCountry} className="w-full justify-between bg-surface-container-highest border-none h-11 px-3 disabled:opacity-50">
-                          {quoteData.destinationPort ? ports.find((p) => p.locode === quoteData.destinationPort)?.name : (quoteData.destinationCountry ? "Select Port..." : "Select Country First")}
+                        <Button variant="outline" role="combobox" disabled={!quoteData.destinationCountry} className="w-full justify-between bg-surface-container-highest border-none h-11 px-3">
+                          {quoteData.destinationPort ? ports.find((p) => p.locode === quoteData.destinationPort)?.name || quoteData.destinationPort : (quoteData.destinationCountry ? "Select Port..." : "Select Country First")}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-[300px] p-0" align="start">
                         <Command>
-                          <CommandInput placeholder="Search by name or UN/LOCODE..." />
+                          <CommandInput placeholder="Search by name or UN/LOCODE..." value={searchDP} onValueChange={setSearchDP} />
                           <CommandList>
-                            <CommandEmpty>No port found.</CommandEmpty>
+                            <CommandEmpty className="py-4 text-center">
+                              <p className="text-xs text-muted-foreground mb-2">No port found.</p>
+                              <Button size="sm" variant="outline" className="text-[10px] font-bold uppercase" onClick={() => {
+                                setPortModalConfig({ target: "destination", initialName: searchDP });
+                                setIsPortModalOpen(true);
+                                setOpenDP(false);
+                              }}>+ Add "{searchDP}"</Button>
+                            </CommandEmpty>
                             <CommandGroup>
                               {availableDestPorts.map((p) => (
-                                <CommandItem key={p._id} value={`${p.name} ${p.locode}`} onSelect={() => { setQuoteData({ ...quoteData, destinationPort: p.locode }); setOpenDP(false); }}>
-                                  <Check className={cn("mr-2 h-4 w-4", quoteData.destinationPort === p.locode ? "opacity-100 text-primary" : "opacity-0")} />
-                                  {p.name} ({p.locode})
+                                <CommandItem key={p._id} value={`${p.name} ${p.locode}`} onSelect={() => { setQuoteData({ ...quoteData, destinationPort: p.locode || p.name }); setOpenDP(false); setSearchDP(""); }}>
+                                  <Check className={cn("mr-2 h-4 w-4", quoteData.destinationPort === (p.locode || p.name) ? "opacity-100 text-primary" : "opacity-0")} />
+                                  {p.name} ({p.locode || "N/A"})
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -565,7 +597,7 @@ export default function NewQuotePage() {
               </div>
             </section>
 
-            {/* DYNAMIC Cargo Summary */}
+            {/* Cargo Summary */}
             <section className="space-y-6 pt-6 border-t border-outline-variant/10">
               <div className="flex items-center justify-between border-l-4 border-primary pl-4">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Cargo Summary</h2>
@@ -579,7 +611,7 @@ export default function NewQuotePage() {
                   <label className="text-xs font-semibold text-on-surface-variant block">Commodity Group</label>
                   <input type="text" value={quoteData.cargoSummary.commodity} onChange={(e) => setQuoteData({ ...quoteData, cargoSummary: { ...quoteData.cargoSummary, commodity: e.target.value } })} className="w-full bg-surface-container-highest border-none rounded-lg h-11 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" placeholder="e.g. Furniture" />
                 </div>
-                
+
                 {/* DYNAMIC FIELDS BASED ON MODE */}
                 {quoteData.mode.includes("Sea FCL") && (
                   <>
@@ -676,6 +708,8 @@ export default function NewQuotePage() {
               </div>
             </section>
 
+
+            {/* Financials */}
             {/* Financial Line Items (HIDDEN QTY, AUTO CALCULATED) */}
             <section className="space-y-6 pt-6 border-t border-outline-variant/10">
               <div className="flex items-center justify-between border-l-4 border-primary pl-4">
@@ -703,7 +737,7 @@ export default function NewQuotePage() {
                     {quoteData.lineItems.map((item, index) => {
                       const isFreight = item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight");
                       const itemMultiplier = isFreight ? multiplier : 1;
-                      
+
                       const baseBuy = (Number(item.buyPrice) || 0) * (Number(item.roe) || 1) * itemMultiplier;
                       const baseSell = (Number(item.sellPrice) || 0) * (Number(item.roe) || 1) * itemMultiplier;
 
@@ -735,7 +769,7 @@ export default function NewQuotePage() {
                           </td>
                           <td className="py-2 px-3 text-right border-l border-outline-variant/10">
                             <span className="text-sm font-black text-on-surface">
-                              ₹{baseSell.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              ₹{baseSell.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </td>
                           <td className="py-2 px-3 text-right">
@@ -750,37 +784,31 @@ export default function NewQuotePage() {
             </section>
           </div>
 
-          {/* Footer Metrics */}
           <div className="bg-surface-container-low p-8 flex items-center justify-between border-t border-outline-variant/20">
             <div className="flex gap-12">
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Total Buy Cost</span>
-                <div className="text-xl font-bold text-error tabular-nums">₹{totalBuy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Total Sell</span>
-                <div className="text-xl font-bold text-primary tabular-nums">₹{totalSell.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              </div>
-              <div className="space-y-1 border-l border-outline-variant/30 pl-6 pr-6">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Net Margin</span>
-                <div className="text-2xl font-black text-emerald-600 tabular-nums">₹{profitMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              </div>
+              <div className="space-y-1"><span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Total Sell</span><div className="text-xl font-bold text-primary tabular-nums">₹{totalSell.toLocaleString('en-IN')}</div></div>
+              <div className="space-y-1 border-l border-outline-variant/30 pl-6 pr-6"><span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Net Margin</span><div className="text-2xl font-black text-emerald-600 tabular-nums">₹{profitMargin.toLocaleString('en-IN')}</div></div>
             </div>
-
             <div className="flex gap-4">
               <button onClick={handleDownloadPDF} disabled={isSavingPdf || isSendingEmail} className="px-6 py-3 bg-white border border-outline-variant/30 text-on-surface-variant rounded-lg font-bold flex items-center gap-2 hover:bg-surface-container transition-colors disabled:opacity-50">
-                <Download className="w-4 h-4" />
-                {isSavingPdf ? "Processing..." : "Save & Download PDF"}
+                <Download className="w-4 h-4" /> Save & PDF
               </button>
-
               <button onClick={handleSendEmail} disabled={isSavingPdf || isSendingEmail} className="px-8 py-3 bg-primary text-on-primary rounded-lg font-bold shadow-lg shadow-primary/20 flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50">
-                <Mail className="w-4 h-4" />
-                {isSendingEmail ? "Sending..." : "Save & Email Client"}
+                <Mail className="w-4 h-4" /> Save & Email
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      <AddPortModal
+        isOpen={isPortModalOpen}
+        onClose={() => setIsPortModalOpen(false)}
+        onSuccess={handlePortSuccess}
+        initialName={portModalConfig?.initialName}
+        defaultCountry={countries.find(c => c.code === (portModalConfig?.target === "origin" ? quoteData.originCountry : quoteData.destinationCountry))}
+        defaultType={isAir ? "Air" : "Sea"}
+      />
     </div>
   )
 }

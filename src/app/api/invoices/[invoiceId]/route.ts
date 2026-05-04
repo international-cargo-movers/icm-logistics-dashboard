@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import { getTenantModels } from '@/model/tenantModels';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Check this path matches your nextauth file!
+import { authOptions } from "@/lib/auth";
 
 export async function GET(request: Request, { params }: { params: Promise<{ invoiceId: string }> }) {
     try {
@@ -32,7 +32,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ invo
         const session = await getServerSession(authOptions);
         
         // If they are not logged in, OR they are a Viewer/Operations/Sales, block the request!
-        if (!session || !["SuperAdmin", "Finance", "Operations"].includes(session.user.role)) {
+        const allowedRoles = ["SuperAdmin", "Finance", "Operations"];
+        const hasAccess = session?.user?.roles?.some((r: string) => allowedRoles.includes(r)) || 
+                         allowedRoles.includes(session?.user?.role || "");
+
+        if (!session || !hasAccess) {
             return NextResponse.json({ 
                 success: false, 
                 error: "Security Violation: You do not have clearance to modify financial records." 

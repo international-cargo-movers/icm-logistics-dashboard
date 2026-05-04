@@ -2,7 +2,7 @@ import {NextResponse} from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import { getAdminModels } from '@/model/tenantModels';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 export async function GET(request:Request){
     try{
@@ -39,7 +39,11 @@ export async function POST(request:Request){
     try{
         await dbConnect();
         const session = await getServerSession(authOptions);
-        if (!session || !["SuperAdmin", "Finance", "Sales", "Operations"].includes(session.user.role)) {
+        const allowedRoles = ["SuperAdmin", "Finance", "Sales", "Operations"];
+        const hasAccess = session?.user?.roles?.some((r: string) => allowedRoles.includes(r)) || 
+                         allowedRoles.includes(session?.user?.role || "");
+
+        if (!session || !hasAccess) {
             return NextResponse.json({ 
                 success: false, 
                 error: "Security Violation: You do not have clearance to modify the Master Directory." 
@@ -67,7 +71,7 @@ export async function POST(request:Request){
         }else {
             const newPort = await Port.create({
                 name: body.name,
-                locode: body.locode.toUpperCase(),
+                locode: body.locode ? body.locode.toUpperCase() : undefined,
                 country: body.country,
                 countryCode: body.countryCode.toUpperCase(),
                 type: body.type || ["Sea"],

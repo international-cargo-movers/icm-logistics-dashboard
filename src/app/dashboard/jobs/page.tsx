@@ -19,9 +19,21 @@ import {
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { useSession } from "next-auth/react"
 
 export default function JobsDashboardPage() {
+  const { data: session, status } = useSession();
   const router = useRouter();
+  
+  // Subtle UI Abstraction: Silent redirect if not authorized
+  React.useEffect(() => {
+    if (status === "loading") return
+    const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+    if (!userRoles.some(r => ["SuperAdmin", "Operations", "Sales"].includes(r))) {
+      router.push("/dashboard")
+    }
+  }, [session, status, router])
+
   const [searchTerm, setSearchTerm] = React.useState("");
   const [stats, setStats] = React.useState({
     active: 0,

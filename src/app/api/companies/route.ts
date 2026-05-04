@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import { getTenantModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 export async function GET(){
     try{
@@ -25,7 +25,11 @@ export async function POST(request:Request){
         const session = await getServerSession(authOptions);
         
         // Block if not logged in, or if role is NOT SuperAdmin or Finance
-        if (!session?.user?.role || !["SuperAdmin", "Finance", "Operations"].includes(session.user.role)) {
+        const allowedRoles = ["SuperAdmin", "Finance", "Operations"];
+        const hasAccess = session?.user?.roles?.some((r: string) => allowedRoles.includes(r)) || 
+                         allowedRoles.includes(session?.user?.role || "");
+
+        if (!session || !hasAccess) {
             return NextResponse.json({ 
                 success: false, 
                 error: "Security Violation: You do not have clearance to modify the Master Directory." 
@@ -34,23 +38,32 @@ export async function POST(request:Request){
         // -----------------------
 
         const body = await request.json();
+        const trimmedName = body.name.trim();
 
-        const newCompany = await Company.create({
-            name: body.name,
-            type: body.type || ["Customer"],
-            // THE FIX: Catch 'email' from frontend and save it as 'contactEmail'
-            contactEmail: body.email || body.contactEmail, 
-            contactName:body.contactName,
-            contactPhone: body.contactPhone,
-            defaultSalesPerson: body.defaultSalesPerson || body.salesPerson, 
-            taxId: body.taxId,
-            streetAddress: body.streetAddress,
-            city: body.city,
-            state: body.state,
-            zipCode: body.zipCode,
-            country: body.country
-        });
-        return NextResponse.json({success:true,data:newCompany},{status:201})
+        // Use findOneAndUpdate with upsert to prevent duplicate key errors
+        // and handle race conditions gracefully.
+        const company = await Company.findOneAndUpdate(
+            { name: { $regex: new RegExp(`^${trimmedName}$`, "i") } },
+            {
+                $setOnInsert: { name: trimmedName },
+                $addToSet: { type: { $each: body.type || ["Customer"] } },
+                $set: {
+                    contactEmail: body.email || body.contactEmail, 
+                    contactName: body.contactName,
+                    contactPhone: body.contactPhone,
+                    defaultSalesPerson: body.defaultSalesPerson || body.salesPerson, 
+                    taxId: body.taxId,
+                    streetAddress: body.streetAddress,
+                    city: body.city,
+                    state: body.state,
+                    zipCode: body.zipCode,
+                    country: body.country
+                }
+            },
+            { upsert: true, new: true, runValidators: true }
+        );
+
+        return NextResponse.json({ success: true, data: company }, { status: 201 });
     }catch(error:any){
         return NextResponse.json({success:false,error:error.message},{status:500});
     }

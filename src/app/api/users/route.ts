@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import dbConnect from "@/lib/mongodb";
 import { getAdminModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 // GET: Fetch all employees (Only SuperAdmins should ideally see this)
 export async function GET() {
@@ -13,7 +13,7 @@ export async function GET() {
     const session = await getServerSession(authOptions);
     
     // Extra Security: Ensure the person asking for the user list is an Admin
-    if (session?.user?.role !== "SuperAdmin") {
+    if (!session?.user?.roles?.includes("SuperAdmin") && session?.user?.role !== "SuperAdmin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -31,12 +31,12 @@ export async function POST(request: Request) {
     const { User } = await getAdminModels();
     const session = await getServerSession(authOptions);
 
-    if (session?.user?.role !== "SuperAdmin") {
+    if (!session?.user?.roles?.includes("SuperAdmin") && session?.user?.role !== "SuperAdmin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const body = await request.json();
-    const { email, password, firstName, lastName, role } = body;
+    const { email, password, firstName, lastName, roles } = body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       passwordHash,
       firstName,
       lastName,
-      role: role || "Viewer",
+      roles: roles || ["Viewer"],
       isActive: true,
     });
 

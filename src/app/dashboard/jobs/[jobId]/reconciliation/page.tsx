@@ -18,7 +18,18 @@ import {
     ArrowDownRight
 } from "lucide-react"
 
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { redirect } from "next/navigation"
+
 export default async function ReconciliationPage({ params }: { params: { jobId: string } }) {
+    const session = await getServerSession(authOptions);
+    const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+    
+    if (!session || !userRoles.some(r => ["SuperAdmin", "Finance"].includes(r))) {
+        redirect("/dashboard");
+    }
+
     await dbConnect();
     const { Job, Invoice, VendorInvoice } = await getTenantModels();
     const { jobId } = await params;

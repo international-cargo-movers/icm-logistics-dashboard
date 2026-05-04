@@ -5,7 +5,7 @@ export interface IUser extends Document {
   passwordHash: string;
   firstName: string;
   lastName: string;
-  role: "SuperAdmin" | "Finance" | "Operations" | "Sales" | "Viewer";
+  roles: Array<"SuperAdmin" | "Finance" | "Operations" | "Sales" | "Viewer">;
   isActive: boolean;
   lastLogin: Date;
 }
@@ -15,10 +15,10 @@ export const UserSchema = new Schema<IUser>({
   passwordHash: { type: String, required: true },
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
-  role: { 
-    type: String, 
+  roles: { 
+    type: [String], 
     enum: ["SuperAdmin", "Finance", "Operations", "Sales", "Viewer"], 
-    default: "Viewer" 
+    default: ["Viewer"] 
   },
   isActive: { type: Boolean, default: true },
   lastLogin: { type: Date }

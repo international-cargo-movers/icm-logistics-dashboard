@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import { getTenantModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 export async function GET(){
     try{
@@ -34,11 +34,15 @@ export async function POST(request:Request){
 
         const session = await getServerSession(authOptions);
         
-        // Block if not logged in, or if role is NOT SuperAdmin or Sales
-        if (!session?.user?.role || !["SuperAdmin", "Operations"].includes(session.user.role)) {
+        // Block if not logged in, or if role is NOT SuperAdmin or Operations
+        const allowedRoles = ["SuperAdmin", "Operations"];
+        const hasAccess = session?.user?.roles?.some((r: string) => allowedRoles.includes(r)) || 
+                         allowedRoles.includes(session?.user?.role || "");
+
+        if (!session || !hasAccess) {
             return NextResponse.json({ 
                 success: false, 
-                error: "Security Violation: You do not have clearance to create sales quotes." 
+                error: "Security Violation: You do not have clearance to create jobs." 
             }, { status: 403 });
         }
 

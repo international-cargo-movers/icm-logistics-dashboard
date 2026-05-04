@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import { getTenantModels } from '@/model/tenantModels';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Ensure this path matches
+import { authOptions } from "@/lib/auth";
 
 // GET: Fetch a single quote to populate the Edit Form
 export async function GET(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
@@ -31,9 +31,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ quot
 
         // --- THE SERVER LOCK ---
         const session = await getServerSession(authOptions);
+        const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
 
-        // Block if not logged in, or if role is NOT SuperAdmin or Sales
-        if (!session?.user?.role || !["SuperAdmin", "Sales", "Operations"].includes(session.user.role)) {
+        // Block if not logged in, or if role is NOT SuperAdmin, Sales or Operations
+        if (!session || !userRoles.some(r => ["SuperAdmin", "Sales", "Operations"].includes(r))) {
             return NextResponse.json({
                 success: false,
                 error: "Security Violation: You do not have clearance to modify quotes."
@@ -57,12 +58,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ quot
         quote.customerDetails.companyId = quoteData.customerId;
         quote.customerDetails.contactPerson = quoteData.customerName;
         quote.routingDetails = {
-            originCountry: quoteData.originCountry,
-            destinationCountry: quoteData.destinationCountry,
+            originCountry: String(quoteData.originCountry),
+            destinationCountry: String(quoteData.destinationCountry),
 
-            originPort: quoteData.originPort,
-            destinationPort: quoteData.destinationPort,
-            mode: quoteData.mode
+            originPort: String(quoteData.originPort),
+            destinationPort: String(quoteData.destinationPort),
+            mode: String(quoteData.mode)
         };
         quote.cargoSummary = {
             commodity: quoteData.cargoSummary?.commodity || "General Cargo",

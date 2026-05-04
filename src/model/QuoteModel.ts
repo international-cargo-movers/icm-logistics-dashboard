@@ -57,6 +57,14 @@ export interface IQuote extends Document {
     status: "Draft" | "Sent" | "Accepted" | "Rejected" | "Expired" | "Approved";
 }
 
+const RoutingDetailsSchema = new Schema({
+    originCountry: { type: Schema.Types.Mixed, required: true },
+    originPort: { type: Schema.Types.Mixed, required: true },
+    destinationCountry: { type: Schema.Types.Mixed, required: true },
+    destinationPort: { type: Schema.Types.Mixed, required: true },
+    mode: { type: Schema.Types.Mixed, required: true }
+}, { _id: false });
+
 // 3. Schema Definition
 export const QuoteSchema = new Schema<IQuote>({
     quoteId: { type: String, required: true, unique: true },
@@ -64,13 +72,7 @@ export const QuoteSchema = new Schema<IQuote>({
         companyId: { type: Schema.Types.ObjectId, ref: "CompanyModel", required: true },
         contactPerson: { type: String }
     },
-    routingDetails: {
-        originCountry: { type: String, required: true },
-        originPort: { type: String, required: true },
-        destinationCountry: { type: String, required: true },
-        destinationPort: { type: String, required: true },
-        mode: { type: String, required: true }
-    },
+    routingDetails: { type: RoutingDetailsSchema, required: true },
     cargoSummary: {
         commodity: { type: String, default: "General Cargo" },
         equipment: { type: String },
@@ -137,6 +139,7 @@ QuoteSchema.pre("save", function (this: IQuote, next) {
     
     // Set base currency to INR since totals are now converted
     this.financials.baseCurrency = "INR"; 
+    next();
 });
 
 export default mongoose.models.Quote || mongoose.model<IQuote>("Quote", QuoteSchema);

@@ -40,7 +40,22 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+
 export default function QuotesDashboard() {
+    const { data: session, status } = useSession()
+    const router = useRouter()
+    
+    // Subtle UI Abstraction: Silent redirect if not authorized
+    React.useEffect(() => {
+        if (status === "loading") return
+        const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+        if (!userRoles.some(r => ["SuperAdmin", "Operations", "Sales"].includes(r))) {
+            router.push("/dashboard")
+        }
+    }, [session, status, router])
+
     const [quotes, setQuotes] = useState<any[]>([])
     const [searchQuery, setSearchQuery] = useState("")
     const [isLoading, setIsLoading] = useState(true)

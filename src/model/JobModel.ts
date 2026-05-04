@@ -146,10 +146,10 @@ export const JobSchema = new Schema<IJob>({
     },
     shipmentDetails: {
         mode: { type: String, required: true },
-        polCountry: { type: String },
-        portOfLoading: { type: String },
-        podCountry: { type: String },
-        portOfDischarge: { type: String },
+        polCountry: { type: Schema.Types.Mixed },
+        portOfLoading: { type: Schema.Types.Mixed },
+        podCountry: { type: Schema.Types.Mixed },
+        portOfDischarge: { type: Schema.Types.Mixed },
     },
     cargoDetails: {
         commodity: { type: String },

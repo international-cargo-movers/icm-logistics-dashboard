@@ -41,7 +41,8 @@ export default function MasterPortsPage() {
   const [ports, setPorts] = React.useState<IPort[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(true)
-  const canEditMasterData = session && ["SuperAdmin", "Finance", "Sales", "Operations"].includes(session?.user?.role || "")
+  const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+  const canEditMasterData = session && (userRoles.includes("SuperAdmin") || userRoles.includes("Finance") || userRoles.includes("Sales") || userRoles.includes("Operations"));
 
   // Single Add State
   const [isAddOpen, setIsAddOpen] = React.useState(false)

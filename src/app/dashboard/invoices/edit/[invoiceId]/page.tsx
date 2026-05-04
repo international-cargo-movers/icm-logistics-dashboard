@@ -5,18 +5,22 @@ import { useParams, useRouter } from "next/navigation"
 import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield, FileText } from "lucide-react"
+import { MapPin, Anchor, PlusCircle, Trash2, Info, Save, X, Shield, FileText, Check, ChevronsUpDown } from "lucide-react"
 import { pdf } from '@react-pdf/renderer'
 import InvoicePDF from '@/components/dashboard/invoices/InvoicePDF'
 
 import { Form, FormField, FormItem, FormControl } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
 
 import { LineItemDescriptionInput } from "@/components/dashboard/financials/LineItemDescriptionInput"
-import { getAutoUnitAndQty } from "@/lib/utils"
+import { getAutoUnitAndQty, cn } from "@/lib/utils"
 import CarrierVehicleCombobox from "@/components/dashboard/CarrierVehicleCombobox"
+import { AddPortModal } from "@/components/dashboard/ports/AddPortModal"
 
 // --- UTILITY: Number to Words ---
 function numberToWords(num: number): string {
@@ -94,9 +98,21 @@ export default function EditInvoicePage() {
     const { data: session, status } = useSession()
 
     const [jobs, setJobs] = React.useState<any[]>([])
+    const [ports, setPorts] = React.useState<any[]>([])
     const [isLoading, setIsLoading] = React.useState(true)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [vehicleType, setVehicleType] = React.useState<"Sea" | "Air">("Sea")
+
+    // Port Popover States
+    const [openOP, setOpenOP] = React.useState(false); const [searchOP, setSearchOP] = React.useState("")
+    const [openDP, setOpenDP] = React.useState(false); const [searchDP, setSearchDP] = React.useState("")
+
+    // Modal State
+    const [isPortModalOpen, setIsPortModalOpen] = React.useState(false)
+    const [portModalConfig, setPortModalConfig] = React.useState<{
+        target: "origin" | "destination";
+        initialName: string;
+    } | null>(null)
 
     const form = useForm<InvoiceFormValues>({
         resolver: zodResolver(invoiceSchema) as any,
@@ -116,15 +132,18 @@ export default function EditInvoicePage() {
     React.useEffect(() => {
         async function loadData() {
             try {
-                const [jobsRes, invRes] = await Promise.all([
+                const [jobsRes, invRes, portRes] = await Promise.all([
                     fetch("/api/jobs"),
-                    fetch(`/api/invoices/${invoiceId}`)
+                    fetch(`/api/invoices/${invoiceId}`),
+                    fetch("/api/ports")
                 ])
                 
                 const jobsJson = await jobsRes.json()
                 const invJson = await invRes.json()
+                const portJson = await portRes.json()
 
                 if (jobsJson.success) setJobs(jobsJson.data)
+                if (portJson.success) setPorts(portJson.data)
 
                 if (invJson.success && invJson.data) {
                     const inv = invJson.data;
@@ -167,7 +186,15 @@ export default function EditInvoicePage() {
         loadData()
     }, [invoiceId, reset, router])
 
-    // --- 2. AUTOFILL ENGINE: Update fields from Job/CRM ---
+    const handlePortSuccess = (newPort: any) => {
+        setPorts(prev => [...prev, newPort])
+        if (portModalConfig?.target === "origin") {
+            setValue("origin", newPort.locode || newPort.name)
+        } else {
+            setValue("destination", newPort.locode || newPort.name)
+        }
+    }
+
     const handleJobSelect = async (selectedJobId: string) => {
         const job = jobs.find(j => j.jobId === selectedJobId || j._id === selectedJobId)
         if (!job) return
@@ -175,19 +202,9 @@ export default function EditInvoicePage() {
         setValue("jobId", job._id)
         setValue("jobReference", job.jobId)
 
-        // Pull data from the dynamically populated company object!
         const company = job.customerDetails?.companyId || {};
-
         setValue("customerName", company.name || "Unknown Customer")
-        
-        const addressParts = [
-            company.streetAddress, 
-            company.city, 
-            company.state, 
-            company.zipCode,
-            company.country
-        ].filter(Boolean)
-        
+        const addressParts = [company.streetAddress, company.city, company.state, company.zipCode, company.country].filter(Boolean)
         setValue("billingAddress", addressParts.join(", ") || "No Address Provided")
         setValue("gstin", company.taxId || "")
 
@@ -203,13 +220,11 @@ export default function EditInvoicePage() {
 
         const { unit: defaultUnit, qty: defaultQty } = getAutoUnitAndQty(job);
 
-        // Give the user the option to replace line items or keep existing ones
         if (job.quoteReference && watch("lineItems").length === 0) {
             toast.message(`Fetching Financials from Quote: ${job.quoteReference}`)
             try {
                 const quoteRes = await fetch(`/api/quotes/${job.quoteReference}`)
                 const quoteJson = await quoteRes.json()
-
                 if (quoteJson.success && quoteJson.data) {
                     const invoiceReadyLines = (quoteJson.data.financials?.lineItems || []).map((item: any) => {
                         const isFreight = item.chargeType === "Freight" || (item.chargeName || "").toLowerCase().includes("freight");
@@ -230,7 +245,6 @@ export default function EditInvoicePage() {
         }
     }
 
-    // --- 3. LIVE MATH ENGINE ---
     const lineItems = watch("lineItems") || []
     const totals = lineItems.reduce((acc, item) => {
         const taxableValue = (item.rate || 0) * (item.quantity || 1) * (item.roe || 1)
@@ -285,45 +299,36 @@ export default function EditInvoicePage() {
             }
 
             const dbResponse = await fetch(`/api/invoices/${invoiceId}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(invoicePayload)
+                method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(invoicePayload)
             });
-
             const dbResult = await dbResponse.json();
             if (!dbResult.success) throw new Error(dbResult.error || "Failed to update database");
 
             const blob = await pdf(<InvoicePDF data={invoicePayload} />).toBlob()
             const url = URL.createObjectURL(blob)
             window.open(url, '_blank')
-
             toast.success("Success", { description: "Invoice Revised & PDF Generated!" })
             router.push("/dashboard/invoices")
-
-        } catch (error: any) {
-            toast.error("Submission Error", { description: error.message || "Failed to update invoice." })
-        } finally {
-            setIsSubmitting(false)
-        }
+        } catch (error: any) { toast.error("Submission Error", { description: error.message || "Failed to update invoice." }) }
+        finally { setIsSubmitting(false) }
     }
     
-    // --- THE CLIENT LOCK ---
-    if (status === "loading" || isLoading) {
-        return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Verifying Credentials & Hydrating Data...</div>
-    }
-
-    if (session && !["SuperAdmin", "Finance", "Operations"].includes(session.user.role)) {
+    if (status === "loading" || isLoading) return <div className="p-12 text-center font-bold text-slate-500 animate-pulse">Loading...</div>
+    const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+    if (session && !userRoles.some(r => ["SuperAdmin", "Finance", "Operations"].includes(r))) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
                 <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
                 <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
-                <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to modify financial documents.</p>
-                <button onClick={() => router.back()} className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors">
-                    Go Back
-                </button>
+                <p className="text-slate-500 max-w-md">Your role does not have clearance.</p>
+                <button onClick={() => router.back()} className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium">Go Back</button>
             </div>
         )
     }
+
+    const filteredPorts = ports.filter(p => p.type.includes(vehicleType))
+    const originVal = watch("origin")
+    const destVal = watch("destination")
 
     return (
         <div className="bg-slate-50 text-slate-900 min-h-screen font-sans pb-12">
@@ -333,10 +338,8 @@ export default function EditInvoicePage() {
                     <span className="text-sm font-semibold tracking-tight uppercase text-slate-600">Edit Invoice: {watch("invoiceNo")}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => router.back()} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors rounded-lg flex items-center gap-2">
-                        <X className="w-4 h-4" /> Discard
-                    </button>
-                    <button onClick={handleSubmit(onSubmit)} disabled={isSubmitting} className="px-6 py-2.5 text-sm font-bold bg-black text-white p-2 rounded-lg shadow-md hover:bg-slate-800 transition-all flex items-center gap-2">
+                    <button type="button" onClick={() => router.back()} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg flex items-center gap-2"><X className="w-4 h-4" /> Discard</button>
+                    <button onClick={handleSubmit(onSubmit)} disabled={isSubmitting} className="px-6 py-2.5 text-sm font-bold bg-black text-white rounded-lg shadow-md hover:bg-slate-800 flex items-center gap-2">
                         <Save className="w-4 h-4" /> {isSubmitting ? "Saving..." : "Save Revisions"}
                     </button>
                 </div>
@@ -344,101 +347,124 @@ export default function EditInvoicePage() {
 
             <Form {...form}>
                 <form className="max-w-6xl mx-auto p-8 space-y-8">
-
-                    {/* SECTION 1: INVOICE META */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Invoice Number</label>
-                            <input {...register("invoiceNo")} className="bg-slate-100 border-none rounded-lg px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-slate-200 outline-none" />
+                            <input {...register("invoiceNo")} className="bg-slate-100 border-none rounded-lg px-4 py-3 text-sm font-mono outline-none" />
                         </div>
-
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Issue Date</label>
-                            <input type="date" {...register("issueDate")} className="bg-slate-100 border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
+                            <input type="date" {...register("issueDate")} className="bg-slate-100 border-none rounded-lg px-4 py-3 text-sm outline-none" />
                         </div>
-
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-blue-600">Linked Job ID (Select to Auto-Fill Data)</label>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-blue-600">Linked Job (Auto-Fill)</label>
                             <Select onValueChange={handleJobSelect} value={watch("jobReference") || ""}>
-                                <SelectTrigger className="w-full bg-slate-100 border-none rounded-lg h-[44px] px-4 shadow-none focus:ring-2 focus:ring-slate-200">
+                                <SelectTrigger className="w-full bg-slate-100 border-none rounded-lg h-[44px] px-4 shadow-none">
                                     <SelectValue placeholder="Select Freight Job..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {jobs.length === 0 && <SelectItem value="none" disabled>Loading jobs...</SelectItem>}
                                     {jobs.map(job => (<SelectItem key={job._id} value={job.jobId}>{job.jobId} - {job.customerDetails?.companyId?.name || "Unknown"}</SelectItem>))}
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
 
-                    {/* SECTION 2: CUSTOMER & ADVANCED ROUTING */}
                     <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
                         <div className="px-8 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-slate-500" />
-                            <h2 className="text-xs font-black uppercase tracking-widest text-slate-700">Tax & Routing Details</h2>
+                            <FileText className="w-4 h-4 text-slate-500" /><h2 className="text-xs font-black uppercase tracking-widest text-slate-700">Tax & Routing Details</h2>
                         </div>
                         <div className="p-8 grid grid-cols-3 gap-x-8 gap-y-6">
                             <div className="col-span-3 grid grid-cols-2 gap-6 mb-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Consignee Name</label>
-                                    <input {...register("customerName")} className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Billing Address</label>
-                                    <input {...register("billingAddress")} className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm focus:ring-2 focus:ring-slate-200 outline-none" />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Customer GSTIN/UIN</label>
-                                    <input {...register("gstin")} placeholder="e.g. 07AADC..." className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm font-mono focus:ring-2 focus:ring-slate-200 outline-none" />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">State Code</label>
-                                    <input {...register("stateCode")} placeholder="e.g. 07" className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm font-mono focus:ring-2 focus:ring-slate-200 outline-none" />
-                                </div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Consignee Name</label><input {...register("customerName")} className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm outline-none" /></div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Billing Address</label><input {...register("billingAddress")} className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm outline-none" /></div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Customer GSTIN/UIN</label><input {...register("gstin")} className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm font-mono outline-none" /></div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">State Code</label><input {...register("stateCode")} className="w-full bg-slate-100 border-none rounded-lg h-10 px-3 text-sm font-mono outline-none" /></div>
                             </div>
                             
-                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Origin / POL</label><input {...register("origin")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
-                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Destination / POD</label><input {...register("destination")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase block">Vessel & Voyage / Flight</label>
-                                <CarrierVehicleCombobox 
-                                    name="vesselFlight" 
-                                    type={vehicleType} 
-                                    className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" 
-                                />
+                                <label className="text-[10px] font-bold text-slate-500 uppercase block">Origin / POL</label>
+                                <Popover open={openOP} onOpenChange={setOpenOP}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="w-full justify-between bg-slate-100 border-none h-9 px-3">
+                                            {originVal ? ports.find(p => p.locode === originVal)?.name || originVal : "Select Origin..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[300px] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search ports..." value={searchOP} onValueChange={setSearchOP} />
+                                            <CommandList>
+                                                <CommandEmpty className="py-4 text-center">
+                                                    <p className="text-xs text-muted-foreground mb-2">No port found.</p>
+                                                    <Button size="sm" variant="outline" onClick={() => { setPortModalConfig({ target: "origin", initialName: searchOP }); setIsPortModalOpen(true); setOpenOP(false); }}>+ Add "{searchOP}"</Button>
+                                                </CommandEmpty>
+                                                <CommandGroup>
+                                                    {filteredPorts.map(p => (
+                                                        <CommandItem key={p._id} value={`${p.name} ${p.locode}`} onSelect={() => { setValue("origin", p.locode || p.name); setOpenOP(false); setSearchOP(""); }}>
+                                                            <Check className={cn("mr-2 h-4 w-4", originVal === (p.locode || p.name) ? "opacity-100" : "opacity-0")} />
+                                                            {p.name} ({p.locode || "N/A"})
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
-                            
-                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">OBL / MAWB No</label><input {...register("oblMawb")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
-                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">HBL / HAWB No</label><input {...register("hblHawb")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
-                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Container No.</label><input {...register("containerNo")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
 
-                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">EGM No.</label><input {...register("egm")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
-                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">IGM No.</label><input {...register("igm")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase block">Destination / POD</label>
+                                <Popover open={openDP} onOpenChange={setOpenDP}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="w-full justify-between bg-slate-100 border-none h-9 px-3">
+                                            {destVal ? ports.find(p => p.locode === destVal)?.name || destVal : "Select Destination..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[300px] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search ports..." value={searchDP} onValueChange={setSearchDP} />
+                                            <CommandList>
+                                                <CommandEmpty className="py-4 text-center">
+                                                    <p className="text-xs text-muted-foreground mb-2">No port found.</p>
+                                                    <Button size="sm" variant="outline" onClick={() => { setPortModalConfig({ target: "destination", initialName: searchDP }); setIsPortModalOpen(true); setOpenDP(false); }}>+ Add "{searchDP}"</Button>
+                                                </CommandEmpty>
+                                                <CommandGroup>
+                                                    {filteredPorts.map(p => (
+                                                        <CommandItem key={p._id} value={`${p.name} ${p.locode}`} onSelect={() => { setValue("destination", p.locode || p.name); setOpenDP(false); setSearchDP(""); }}>
+                                                            <Check className={cn("mr-2 h-4 w-4", destVal === (p.locode || p.name) ? "opacity-100" : "opacity-0")} />
+                                                            {p.name} ({p.locode || "N/A"})
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Vessel/Flight</label><CarrierVehicleCombobox name="vesselFlight" type={vehicleType} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">OBL / MAWB</label><input {...register("oblMawb")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">HBL / HAWB</label><input {...register("hblHawb")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Container No.</label><input {...register("containerNo")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase block">Shipping Bill (SB) No.</label><input {...register("sbNo")} className="w-full bg-slate-100 rounded-lg h-9 px-3 text-sm outline-none font-mono" /></div>
                         </div>
                     </div>
 
-                    {/* SECTION 3: INTERACTIVE BILLING LINES */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center">
                             <h2 className="text-sm font-extrabold text-slate-900">Billing Items</h2>
-                            <button type="button" onClick={() => append({ description: "", sacCode: "996511", rate: 0, quantity: 1, unit: "SET", currency: "USD", roe: 1, gstPercent: 18 })} className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
-                                <PlusCircle className="w-4 h-4" /> Add Charge Line
-                            </button>
+                            <button type="button" onClick={() => append({ description: "", sacCode: "996511", rate: 0, quantity: 1, unit: "SET", currency: "USD", roe: 1, gstPercent: 18 })} className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"><PlusCircle className="w-4 h-4" /> Add Line</button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-slate-50/80 border-b border-slate-100">
-                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest w-[25%]">Description</th>
-                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">SAC/HSN</th>
-                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Qty</th>
-                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Unit</th>
-                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rate</th>
-                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Cur</th>
-                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 text-center uppercase tracking-widest">ROE</th>
-                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">GST%</th>
-                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Amount (₹)</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase w-[25%]">Description</th>
+                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase">Qty</th>
+                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase">Rate</th>
+                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase text-center">Cur</th>
+                                        <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase text-right">Amount (₹)</th>
                                         <th className="px-6 py-4 w-10"></th>
                                     </tr>
                                 </thead>
@@ -449,38 +475,13 @@ export default function EditInvoicePage() {
                                         const lineRoe = watch(`lineItems.${index}.roe`) || 1;
                                         const lineTaxable = lineRate * lineQty * lineRoe;
                                         return (
-                                            <tr key={field.id} className="hover:bg-slate-50/50 transition-colors group">
-                                                <td className="px-6 py-4">
-                                                    <Controller
-                                                        name={`lineItems.${index}.description`}
-                                                        control={control}
-                                                        render={({ field }) => (
-                                                            <LineItemDescriptionInput 
-                                                                {...field} 
-                                                                className="w-full bg-transparent border-none text-sm font-medium focus:ring-0 p-0 outline-none" 
-                                                                placeholder="Description..." 
-                                                            />
-                                                        )}
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-4"><input {...register(`lineItems.${index}.sacCode`)} className="w-full bg-transparent border-none text-xs text-slate-500 font-mono focus:ring-0 p-0 outline-none" placeholder="996511" /></td>
-                                                <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.quantity`)} className="w-full bg-transparent border-none text-sm font-semibold tabular-nums focus:ring-0 p-0 outline-none" /></td>
-                                                <td className="px-4 py-4"><input {...register(`lineItems.${index}.unit`)} className="w-full bg-transparent border-none text-xs text-slate-500 focus:ring-0 p-0 outline-none" placeholder="per KG" /></td>
-                                                <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.rate`)} className="w-full bg-transparent border-none text-sm font-semibold tabular-nums focus:ring-0 p-0 outline-none" /></td>
-                                                <td className="px-4 py-4 text-center">
-                                                    <select {...register(`lineItems.${index}.currency`)} className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-1 rounded-full outline-none uppercase cursor-pointer appearance-none">
-                                                        <option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option>
-                                                        <option value="GBP">GBP</option><option value="AED">AED</option><option value="SGD">SGD</option>
-                                                    </select>
-                                                </td>
-                                                <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.roe`)} className="w-full bg-transparent border-none text-xs font-mono text-slate-500 text-center focus:ring-0 p-0 outline-none" /></td>
-                                                <td className="px-4 py-4">
-                                                    <select {...register(`lineItems.${index}.gstPercent`)} className="bg-transparent border-none text-xs font-medium focus:ring-0 p-0 outline-none cursor-pointer">
-                                                        <option value="18">18%</option><option value="12">12%</option><option value="5">5%</option><option value="0">0%</option>
-                                                    </select>
-                                                </td>
-                                                <td className="px-4 py-4 text-right text-sm font-bold tabular-nums">{lineTaxable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                                <td className="px-6 py-4 text-right"><button type="button" onClick={() => remove(index)} className="text-slate-300 hover:text-red-500 hover:scale-110 transition-colors"><Trash2 className="w-4 h-4" /></button></td>
+                                            <tr key={field.id} className="hover:bg-slate-50/50">
+                                                <td className="px-6 py-4"><Controller name={`lineItems.${index}.description`} control={control} render={({ field }) => (<LineItemDescriptionInput {...field} className="w-full bg-transparent border-none text-sm font-medium p-0 outline-none" />)} /></td>
+                                                <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.quantity`)} className="w-full bg-transparent border-none text-sm font-semibold p-0 outline-none" /></td>
+                                                <td className="px-4 py-4"><input type="number" step="0.01" {...register(`lineItems.${index}.rate`)} className="w-full bg-transparent border-none text-sm font-semibold p-0 outline-none" /></td>
+                                                <td className="px-4 py-4 text-center"><select {...register(`lineItems.${index}.currency`)} className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-1 rounded-full uppercase outline-none appearance-none"><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option></select></td>
+                                                <td className="px-4 py-4 text-right text-sm font-bold tabular-nums">{lineTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                <td className="px-6 py-4 text-right"><button type="button" onClick={() => remove(index)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button></td>
                                             </tr>
                                         )
                                     })}
@@ -489,22 +490,18 @@ export default function EditInvoicePage() {
                         </div>
                     </div>
 
-                    {/* SECTION 4: LIVE MATH FOOTER */}
                     <div className="flex flex-col md:flex-row gap-10 items-end justify-between py-10 border-t-2 border-slate-200 border-dashed">
                         <div className="max-w-md w-full">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Info className="w-4 h-4 text-slate-400" /><span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Taxation & Compliance Note</span>
-                            </div>
-                            <p className="text-xs text-slate-500 leading-relaxed italic">All freight charges are subject to carrier-standard ROE. Tax calculated as per destination local authority. Please ensure the HSN codes are verified against current customs data.</p>
+                            <p className="text-xs text-slate-500 leading-relaxed italic">All freight charges are subject to carrier-standard ROE. Tax calculated as per destination local authority.</p>
                         </div>
                         <div className="w-full md:w-96 space-y-4">
-                            <div className="flex justify-between items-center text-sm"><span className="text-slate-600 font-medium">Subtotal (Taxable)</span><span className="font-bold tabular-nums">₹{totals.taxable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                            <div className="flex justify-between items-center text-sm"><span className="text-slate-600 font-medium">Estimated GST</span><span className="font-bold tabular-nums text-blue-600">+ ₹{totals.gst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                            <div className="flex justify-between items-center text-sm"><span className="text-slate-600 font-medium">Subtotal</span><span className="font-bold">₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+                            <div className="flex justify-between items-center text-sm"><span className="text-slate-600 font-medium">GST</span><span className="font-bold text-blue-600">+ ₹{totals.gst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
                             <div className="h-px bg-slate-200 my-4"></div>
                             <div className="flex justify-between items-start">
-                                <span className="text-xs font-black uppercase tracking-widest text-slate-800 mt-2">Net Amount Due</span>
+                                <span className="text-xs font-black uppercase text-slate-800 mt-2">Net Due</span>
                                 <div className="text-right">
-                                    <div className="text-3xl font-black tabular-nums tracking-tighter text-slate-900">₹{totals.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                    <div className="text-3xl font-black text-slate-900">₹{totals.net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
                                     <div className="text-[10px] text-slate-500 font-bold mt-1 max-w-[200px] leading-tight">{numberToWords(totals.net)}</div>
                                 </div>
                             </div>
@@ -512,6 +509,14 @@ export default function EditInvoicePage() {
                     </div>
                 </form>
             </Form>
+
+            <AddPortModal 
+                isOpen={isPortModalOpen}
+                onClose={() => setIsPortModalOpen(false)}
+                onSuccess={handlePortSuccess}
+                initialName={portModalConfig?.initialName}
+                defaultType={vehicleType}
+            />
         </div>
     )
 }

@@ -53,7 +53,8 @@ export default function MasterDirectoryPage() {
   const [selectedCompany, setSelectedCompany] = React.useState<ICompany | null>(null)
   const [editForm, setEditForm] = React.useState<Partial<ICompany>>({})
   
-  const canEditMasterData = session && ["SuperAdmin", "Finance", "Sales", "Operations"].includes(session?.user?.role || "")
+  const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+  const canEditMasterData = session && (userRoles.includes("SuperAdmin") || userRoles.includes("Finance") || userRoles.includes("Sales") || userRoles.includes("Operations"));
   
   React.useEffect(() => {
     async function fetchCompanies() {

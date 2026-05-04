@@ -32,9 +32,21 @@ import { Button } from "@/components/ui/button"
 import Sidebar from "@/components/dashboard/Sidebar"
 import TopNav from "@/components/dashboard/TopNav"
 import RecordPaymentModal from "@/components/dashboard/ledger/RecordPaymentModal"
+import { useSession } from "next-auth/react"
 
 export default function VendorInvoicesDashboardPage() {
+  const { data: session, status } = useSession()
   const router = useRouter()
+  
+  // Subtle UI Abstraction: Silent redirect if not authorized
+  React.useEffect(() => {
+    if (status === "loading") return
+    const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+    if (!userRoles.some(r => ["SuperAdmin", "Finance", "Operations"].includes(r))) {
+      router.push("/dashboard")
+    }
+  }, [session, status, router])
+
   const [vendorInvoices, setVendorInvoices] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
 
@@ -391,6 +403,11 @@ export default function VendorInvoicesDashboardPage() {
                                                 <Button onClick={() => handleDownload(inv)} variant="ghost" size="sm" className="h-9 w-9 p-0 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50">
                                                     <Download className="w-4 h-4" />
                                                 </Button>
+                                                <Link href={`/dashboard/vendor-invoices/edit/${inv._id}`}>
+                                                    <Button variant="ghost" size="sm" className="h-9 w-9 p-0 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50">
+                                                        <Edit className="w-4 h-4" />
+                                                    </Button>
+                                                </Link>
                                             </div>
                                         </td>
                                     </tr>

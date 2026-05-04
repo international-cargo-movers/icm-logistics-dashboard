@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import dbConnect from "@/lib/mongodb";
 import { getAdminModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 export async function PATCH(
   request: Request,
@@ -15,14 +15,14 @@ export async function PATCH(
     const session = await getServerSession(authOptions);
 
     // Ensure the requester is a SuperAdmin
-    if (session?.user?.role !== "SuperAdmin") {
+    if (!session?.user?.roles?.includes("SuperAdmin") && session?.user?.role !== "SuperAdmin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const resolvedParams = await params;
     const { id } = resolvedParams;
     const body = await request.json();
-    const { password, isActive, role } = body;
+    const { password, isActive, roles } = body;
 
     const updateData: any = {};
     
@@ -34,8 +34,8 @@ export async function PATCH(
       updateData.isActive = isActive;
     }
 
-    if (role) {
-      updateData.role = role;
+    if (roles) {
+      updateData.roles = roles;
     }
 
     const updatedUser = await User.findByIdAndUpdate(

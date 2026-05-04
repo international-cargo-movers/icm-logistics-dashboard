@@ -101,8 +101,21 @@ const customerBillSchema = z.object({
 
 type CustomerBillFormValues = z.infer<typeof customerBillSchema>
 
+import { useSession } from "next-auth/react"
+
 export default function NewCustomerBillPage() {
+    const { data: session, status } = useSession()
     const router = useRouter()
+    
+    // Subtle UI Abstraction: Silent redirect if not authorized
+    React.useEffect(() => {
+        if (status === "loading") return
+        const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+        if (!userRoles.some(r => ["SuperAdmin", "Finance"].includes(r))) {
+            router.push("/dashboard")
+        }
+    }, [session, status, router])
+
     const [jobs, setJobs] = React.useState<any[]>([])
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [vehicleType, setVehicleType] = React.useState<"Sea" | "Air">("Sea")

@@ -19,9 +19,20 @@ const getDownloadUrl = (url: string) => {
     return url;
 }
 
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { redirect } from "next/navigation"
+
 // Server Component
 // Rebuild trigger
 export default async function JobControlRoom({ params }: { params: { jobId: string } }) {
+    const session = await getServerSession(authOptions);
+    const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+    
+    if (!session || !userRoles.some(r => ["SuperAdmin", "Operations", "Sales"].includes(r))) {
+        redirect("/dashboard");
+    }
+
     await dbConnect();
     const { Job } = await getTenantModels();
     const { jobId } = await params;

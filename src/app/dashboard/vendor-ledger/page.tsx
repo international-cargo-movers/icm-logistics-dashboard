@@ -19,11 +19,25 @@ import TopNav from "@/components/dashboard/TopNav"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+
 export default function VendorLedgerPage() {
+    const { data: session, status } = useSession()
+    const router = useRouter()
     const [companies, setCompanies] = useState<any[]>([])
     const [searchTerm, setSearchTerm] = useState("")
     const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
+
+    // Subtle UI Abstraction: Silent redirect if not authorized
+    useEffect(() => {
+        if (status === "loading") return
+        const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+        if (!userRoles.some(r => ["SuperAdmin", "Finance"].includes(r))) {
+            router.push("/dashboard")
+        }
+    }, [session, status, router])
 
     useEffect(() => {
         const fetchVendors = async () => {

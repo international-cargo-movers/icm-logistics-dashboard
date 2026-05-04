@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import { getTenantModels } from '@/model/tenantModels';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -29,7 +29,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         
         const session = await getServerSession(authOptions);
         
-        if (!session || !["SuperAdmin", "Finance", "Operations"].includes(session.user.role)) {
+        const allowedRoles = ["SuperAdmin", "Finance", "Operations"];
+        const hasAccess = session?.user?.roles?.some((r: string) => allowedRoles.includes(r)) || 
+                         allowedRoles.includes(session?.user?.role || "");
+
+        if (!session || !hasAccess) {
             return NextResponse.json({ 
                 success: false, 
                 error: "Security Violation: You do not have clearance to modify financial records." 
@@ -78,7 +82,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         const { CustomerBill } = await getTenantModels();
         
         const session = await getServerSession(authOptions);
-        if (!session || session.user.role !== "SuperAdmin") {
+        const isSuperAdmin = session?.user?.roles?.includes("SuperAdmin") || session?.user?.role === "SuperAdmin";
+        if (!session || !isSuperAdmin) {
             return NextResponse.json({ success: false, error: "Only SuperAdmins can delete records." }, { status: 403 });
         }
 

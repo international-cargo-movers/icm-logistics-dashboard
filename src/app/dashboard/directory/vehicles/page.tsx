@@ -10,7 +10,10 @@ import {
   Activity,
   ChevronRight,
   Ship,
-  Settings2
+  Settings2,
+  Edit,
+  Trash2,
+  Loader2
 } from "lucide-react"
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/dashboard/Sidebar"
@@ -20,6 +23,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
+import { toast } from "sonner"
 
 interface IVehicle {
   _id?: string;
@@ -35,10 +39,13 @@ export default function MasterVehiclesPage() {
   const [vehicles, setVehicles] = React.useState<IVehicle[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(true)
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
   const canEditMasterData = session && ["SuperAdmin", "Finance", "Sales", "Operations"].includes(session?.user?.role || "")
+  const isSuperAdmin = session?.user?.roles?.includes("SuperAdmin") || session?.user?.role === "SuperAdmin"
 
-  const [isAddOpen, setIsAddOpen] = React.useState(false)
-  const [newVehicle, setNewVehicle] = React.useState<IVehicle>({
+  const [isModalOpen, setIsModalOpen] = React.useState(false)
+  const [editingVehicle, setEditingVehicle] = React.useState<IVehicle | null>(null)
+  const [formData, setFormData] = React.useState<IVehicle>({
     name: "", type: "Sea", code: "", carrierName: "", isActive: true
   })
 
@@ -50,6 +57,7 @@ export default function MasterVehiclesPage() {
         if (json.success) setVehicles(json.data)
       } catch (error) {
         console.error("Failed to fetch vehicles:", error)
+        toast.error("Failed to load carriers.")
       } finally {
         setIsLoading(false)
       }
@@ -71,31 +79,82 @@ export default function MasterVehiclesPage() {
     return { total, sea, air };
   }, [vehicles]);
 
-  const handleSave = async () => {
-    if (!newVehicle.name) return alert("Name is required.");
+  const handleOpenAdd = () => {
+    setEditingVehicle(null);
+    setFormData({ name: "", type: "Sea", code: "", carrierName: "", isActive: true });
+    setIsModalOpen(true);
+  }
 
+  const handleOpenEdit = (vehicle: IVehicle) => {
+    setEditingVehicle(vehicle);
+    setFormData({ ...vehicle });
+    setIsModalOpen(true);
+  }
+
+  const handleSave = async () => {
+    if (!formData.name) return toast.error("Carrier name is required.");
+
+    setIsSubmitting(true);
     try {
-      const res = await fetch("/api/carrier-vehicles", {
-        method: "POST",
+      const isEditing = !!editingVehicle?._id;
+      const url = isEditing ? `/api/carrier-vehicles/${editingVehicle._id}` : "/api/carrier-vehicles";
+      const method = isEditing ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newVehicle)
+        body: JSON.stringify(formData)
       });
       const json = await res.json();
 
       if (json.success) {
-        // If it already exists, just show it, don't duplicate in local state if it's there
-        const exists = vehicles.find(v => v._id === json.data._id);
-        if (!exists) {
-          setVehicles([json.data, ...vehicles].sort((a, b) => a.name.localeCompare(b.name)));
+        if (isEditing) {
+          setVehicles(vehicles.map(v => v._id === json.data._id ? json.data : v));
+          toast.success(`Carrier "${formData.name}" updated successfully.`);
+        } else {
+          const exists = vehicles.find(v => v._id === json.data._id);
+          if (!exists) {
+            setVehicles([json.data, ...vehicles].sort((a, b) => a.name.localeCompare(b.name)));
+          }
+          toast.success(`Carrier "${formData.name}" registered successfully.`);
         }
-        setIsAddOpen(false);
-        setNewVehicle({ name: "", type: "Sea", code: "", carrierName: "", isActive: true });
+        setIsModalOpen(false);
       } else {
-        alert("Error saving vehicle: " + json.error);
+        toast.error(json.error || "Failed to save carrier.");
       }
     } catch (error) {
       console.error("Save failed:", error);
+      toast.error("An unexpected error occurred.");
+    } finally {
+      setIsSubmitting(false);
     }
+  }
+
+  const handleDelete = async (id: string, name: string) => {
+    toast.warning(`Delete ${name}?`, {
+      description: "This action cannot be undone.",
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          try {
+            const res = await fetch(`/api/carrier-vehicles/${id}`, { method: "DELETE" });
+            const json = await res.json();
+            if (json.success) {
+                setVehicles(prev => prev.filter(v => v._id !== id));
+                toast.success(`Carrier "${name}" removed from registry.`);
+            } else {
+                toast.error(json.error || "Delete failed.");
+            }
+          } catch (error) {
+            toast.error("An error occurred during deletion.");
+          }
+        }
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {}
+      }
+    });
   }
 
   if (isLoading) {
@@ -138,7 +197,7 @@ export default function MasterVehiclesPage() {
             <div className="flex gap-4">
               {canEditMasterData && (
                 <Button 
-                  onClick={() => setIsAddOpen(true)} 
+                  onClick={handleOpenAdd} 
                   className="group flex items-center gap-3 px-8 py-7 rounded-2xl font-bold shadow-2xl shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 transition-all bg-indigo-600 hover:bg-indigo-700 text-white border-none"
                 >
                   <Plus className="h-5 w-5" />
@@ -237,12 +296,13 @@ export default function MasterVehiclesPage() {
                                 <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Operator / Line</th>
                                 <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">IMO / Code</th>
                                 <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Status</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right w-20">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                             {filteredVehicles.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-8 py-16 text-center text-slate-400 font-bold">
+                                    <td colSpan={6} className="px-8 py-16 text-center text-slate-400 font-bold">
                                         No carriers found matching your search.
                                     </td>
                                 </tr>
@@ -275,6 +335,28 @@ export default function MasterVehiclesPage() {
                                                 {v.isActive ? "Active" : "Inactive"}
                                             </Badge>
                                         </td>
+                                        <td className="px-8 py-6 text-right">
+                                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {canEditMasterData && (
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        onClick={() => handleOpenEdit(v)}
+                                                        className="h-8 w-8 p-0 rounded-lg hover:bg-indigo-50 hover:text-indigo-600"
+                                                    >
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                                {isSuperAdmin && (
+                                                    <button 
+                                                        onClick={() => handleDelete(v._id!, v.name)}
+                                                        className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))
                             )}
@@ -287,16 +369,18 @@ export default function MasterVehiclesPage() {
         </div>
       </main>
 
-      {/* Single Add Slide-over */}
-      {isAddOpen && (
+      {/* Single Add/Edit Slide-over */}
+      {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex justify-end bg-slate-900/20 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="w-full max-w-lg bg-white shadow-2xl h-full flex flex-col animate-in slide-in-from-right duration-500">
             <div className="p-10 border-b border-slate-50 flex justify-between items-center">
                 <div>
                     <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-2">Registry Entry</p>
-                    <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Add Carrier</h2>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tighter">
+                        {editingVehicle ? "Update Carrier" : "Register Carrier"}
+                    </h2>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setIsAddOpen(false)} className="rounded-xl h-12 w-12 hover:bg-rose-50 hover:text-rose-600">
+                <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(false)} className="rounded-xl h-12 w-12 hover:bg-rose-50 hover:text-rose-600">
                     <X className="w-6 h-6" />
                 </Button>
             </div>
@@ -306,8 +390,8 @@ export default function MasterVehiclesPage() {
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Carrier Name (Vessel/Flight Number) *</label>
                         <Input 
-                            value={newVehicle.name} 
-                            onChange={(e) => setNewVehicle({ ...newVehicle, name: e.target.value.toUpperCase() })} 
+                            value={formData.name} 
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value.toUpperCase() })} 
                             className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-indigo-600 font-bold uppercase" 
                             placeholder="e.g. MAERSK KARACHI or EK501" 
                         />
@@ -317,9 +401,9 @@ export default function MasterVehiclesPage() {
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6 block">Transport Category</label>
                         <div className="flex gap-4">
                             <button 
-                                onClick={() => setNewVehicle({...newVehicle, type: "Sea"})} 
+                                onClick={() => setFormData({...formData, type: "Sea"})} 
                                 className={`flex-1 py-5 flex flex-col items-center gap-3 rounded-2xl border-2 transition-all ${
-                                    newVehicle.type === "Sea" 
+                                    formData.type === "Sea" 
                                         ? 'border-indigo-600 bg-indigo-50 text-indigo-600' 
                                         : 'border-slate-50 bg-slate-50 text-slate-400 hover:bg-slate-100'
                                 }`}
@@ -328,9 +412,9 @@ export default function MasterVehiclesPage() {
                                 <span className="text-[10px] font-black uppercase tracking-widest">Sea Vessel</span>
                             </button>
                             <button 
-                                onClick={() => setNewVehicle({...newVehicle, type: "Air"})} 
+                                onClick={() => setFormData({...formData, type: "Air"})} 
                                 className={`flex-1 py-5 flex flex-col items-center gap-3 rounded-2xl border-2 transition-all ${
-                                    newVehicle.type === "Air" 
+                                    formData.type === "Air" 
                                         ? 'border-indigo-600 bg-indigo-50 text-indigo-600' 
                                         : 'border-slate-50 bg-slate-50 text-slate-400 hover:bg-slate-100'
                                 }`}
@@ -345,8 +429,8 @@ export default function MasterVehiclesPage() {
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Operator / Shipping Line</label>
                             <Input 
-                                value={newVehicle.carrierName} 
-                                onChange={(e) => setNewVehicle({ ...newVehicle, carrierName: e.target.value })} 
+                                value={formData.carrierName} 
+                                onChange={(e) => setFormData({ ...formData, carrierName: e.target.value })} 
                                 className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-indigo-600 font-bold" 
                                 placeholder="e.g. Maersk, Emirates" 
                             />
@@ -354,26 +438,52 @@ export default function MasterVehiclesPage() {
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">IMO / Flight Code</label>
                             <Input 
-                                value={newVehicle.code} 
-                                onChange={(e) => setNewVehicle({ ...newVehicle, code: e.target.value.toUpperCase() })} 
+                                value={formData.code} 
+                                onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })} 
                                 className="bg-slate-50 border-none rounded-2xl py-6 focus-visible:ring-indigo-600 font-mono font-bold uppercase" 
                                 placeholder="e.g. 9123456" 
                             />
                         </div>
                     </div>
+
+                    {editingVehicle && (
+                        <div className="pt-4 flex items-center justify-between bg-slate-50 p-6 rounded-2xl">
+                            <div>
+                                <p className="text-xs font-bold text-slate-900">Registry Status</p>
+                                <p className="text-[10px] text-slate-400 font-medium">Inactive carriers are hidden from new jobs.</p>
+                            </div>
+                            <button 
+                                onClick={() => setFormData({ ...formData, isActive: !formData.isActive })}
+                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
+                                    formData.isActive ? 'bg-emerald-50 text-emerald-700 hover:bg-rose-50 hover:text-rose-700' : 'bg-rose-50 text-rose-700 hover:bg-emerald-50 hover:text-emerald-700'
+                                }`}
+                            >
+                                {formData.isActive ? "Deactivate" : "Activate"}
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
             <div className="p-10 bg-slate-50 border-t border-slate-100 flex gap-4">
-                <Button variant="outline" onClick={() => setIsAddOpen(false)} className="flex-1 py-7 rounded-2xl font-bold border-slate-200 hover:bg-white transition-all text-slate-500">
+                <Button 
+                    variant="outline" 
+                    onClick={() => setIsModalOpen(false)} 
+                    disabled={isSubmitting}
+                    className="flex-1 py-7 rounded-2xl font-bold border-slate-200 hover:bg-white transition-all text-slate-500"
+                >
                     Cancel
                 </Button>
                 <Button 
                     onClick={handleSave} 
-                    disabled={!newVehicle.name} 
+                    disabled={!formData.name || isSubmitting} 
                     className="flex-1 py-7 rounded-2xl font-bold bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-500/20 text-white transition-all border-none"
                 >
-                    Save Carrier
+                    {isSubmitting ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                        editingVehicle ? "Update Carrier" : "Save Carrier"
+                    )}
                 </Button>
             </div>
           </div>

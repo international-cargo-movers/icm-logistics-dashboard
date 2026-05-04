@@ -6,7 +6,10 @@ export default withAuth(
     const token = req.nextauth.token;
     const isAuth = !!token;
     const isSelectCompanyPage = req.nextUrl.pathname === "/select-company";
+    const isAuthRoute = req.nextUrl.pathname.startsWith("/api/auth");
     const hasTenantId = req.cookies.has("tenant-id");
+
+    if (isAuthRoute) return NextResponse.next();
 
     if (isAuth && !hasTenantId && !isSelectCompanyPage) {
       return NextResponse.redirect(new URL("/select-company", req.url));
@@ -18,6 +21,10 @@ export default withAuth(
     callbacks: {
       authorized: ({ token }) => !!token,
     },
+    pages: {
+      signIn: '/login',
+    },
+    secret: process.env.NEXTAUTH_SECRET,
   }
 );
 

@@ -12,9 +12,9 @@ export interface IPort extends Document{
 export const PortSchema = new Schema<IPort>(
     {
         name:{type:String,required:true},
-        locode:{type:String, required:true,unique:true,uppercase:true},
+        locode:{type:String, required:false, sparse:true, uppercase:true},
         country:{type:String,required:true},
-        countryCode:{type:String,required:true,uppercase:true,minlength:2,maxlength:2},
+        countryCode:{type:String,required:true},
         type:[{type:String,enum:["Sea","Air","Land","Rail"]}],
         isActive:{type:Boolean,default:true}
     },

@@ -16,14 +16,23 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { signOut } from "next-auth/react"
+import { signOut, useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
 import { INTERNAL_COMPANIES } from "@/lib/constants"
 
 export default function Sidebar() {
+  const { data: session } = useSession();
   const pathname = usePathname();
   const [companyName, setCompanyName] = useState("ICM");
-  const [branchName, setBranchName] = useState("Systems");
+  
+  const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+  
+  const hasRole = (role: string) => userRoles.includes(role);
+  const isSuperAdmin = hasRole("SuperAdmin");
+  
+  const canAccessOps = isSuperAdmin || hasRole("Operations") || hasRole("Sales");
+  const canAccessFinance = isSuperAdmin || hasRole("Finance");
+  const canAccessTeam = isSuperAdmin;
 
   useEffect(() => {
     const tenantId = document.cookie
@@ -66,25 +75,33 @@ export default function Sidebar() {
         </p>
       </div>
 
-      <nav className="flex-1 space-y-1">
-        <NavItem href="/dashboard" pathname={pathname} icon={LayoutDashboard} label="Dashboard" exact />
+      <nav className="flex-1 space-y-1 overflow-y-auto pr-2 scrollbar-none">
+        {isSuperAdmin && <NavItem href="/dashboard" pathname={pathname} icon={LayoutDashboard} label="Dashboard" exact />}
         
-        <div className="pt-3 pb-1 px-3">
-            <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Operations</p>
-        </div>
-        <NavItem href="/dashboard/quotes" pathname={pathname} icon={ScrollText} label="Quotations" />
-        <NavItem href="/dashboard/jobs" pathname={pathname} icon={Package} label="Freight Jobs" />
+        {canAccessOps && (
+          <>
+            <div className="pt-3 pb-1 px-3">
+                <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Operations</p>
+            </div>
+            <NavItem href="/dashboard/quotes" pathname={pathname} icon={ScrollText} label="Quotations" />
+            <NavItem href="/dashboard/jobs" pathname={pathname} icon={Package} label="Freight Jobs" />
+          </>
+        )}
         
-        <div className="pt-3 pb-1 px-3">
-            <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Finance</p>
-        </div>
-        <NavItem href="/dashboard/invoices" pathname={pathname} icon={Receipt} label="Customer Invoices" />
-        <NavItem href="/dashboard/customer-bills" pathname={pathname} icon={Receipt} label="Customer Bills" />
-        <NavItem href="/dashboard/vendor-invoices" pathname={pathname} icon={Wallet} label="Vendor Invoices" />
-        <NavItem href="/dashboard/vendor-bills" pathname={pathname} icon={Receipt} label="Vendor Bills" />
-        <NavItem href="/dashboard/ledger" pathname={pathname} icon={HandCoins} label="Customer Ledger" />
-        <NavItem href="/dashboard/vendor-ledger" pathname={pathname} icon={Wallet} label="Vendor Ledger" />
-        <NavItem href="/dashboard/reconciliation" pathname={pathname} icon={Scale} label="Financial Audit" />
+        {canAccessFinance && (
+          <>
+            <div className="pt-3 pb-1 px-3">
+                <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Finance</p>
+            </div>
+            <NavItem href="/dashboard/invoices" pathname={pathname} icon={Receipt} label="Customer Invoices" />
+            <NavItem href="/dashboard/customer-bills" pathname={pathname} icon={Receipt} label="Customer Bills" />
+            <NavItem href="/dashboard/vendor-invoices" pathname={pathname} icon={Wallet} label="Vendor Invoices" />
+            <NavItem href="/dashboard/vendor-bills" pathname={pathname} icon={Receipt} label="Vendor Bills" />
+            <NavItem href="/dashboard/ledger" pathname={pathname} icon={HandCoins} label="Customer Ledger" />
+            <NavItem href="/dashboard/vendor-ledger" pathname={pathname} icon={Wallet} label="Vendor Ledger" />
+            <NavItem href="/dashboard/reconciliation" pathname={pathname} icon={Scale} label="Financial Audit" />
+          </>
+        )}
         
         <div className="pt-3 pb-1 px-3">
             <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Workspace</p>
@@ -92,7 +109,7 @@ export default function Sidebar() {
         <NavItem href="/dashboard/directory/companies" pathname={pathname} icon={Folders} label="Directory" />
         <NavItem href="/dashboard/directory/ports" pathname={pathname} icon={Anchor} label="Ports Hub" />
         <NavItem href="/dashboard/directory/vehicles" pathname={pathname} icon={Anchor} label="Vessels & Flights" />
-        <NavItem href="/dashboard/team" pathname={pathname} icon={UsersRound} label="Control Team" />
+        {canAccessTeam && <NavItem href="/dashboard/team" pathname={pathname} icon={UsersRound} label="Control Team" />}
       </nav>
 
       {/* Footer / Logout Button */}

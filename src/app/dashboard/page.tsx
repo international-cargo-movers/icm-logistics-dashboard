@@ -6,6 +6,7 @@ import TopNav from "@/components/dashboard/TopNav"
 import JobTable from "@/components/dashboard/JobTable"
 import { Button } from "@/components/ui/button" 
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { 
     TrendingUp, 
     TrendingDown, 
@@ -16,20 +17,42 @@ import {
     ArrowDownRight,
     Plus,
     Building2,
-    PieChart as PieChartIcon
+    PieChart as PieChartIcon,
+    ShieldCheck
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { RevenueChart, JobModeChart, ProfitTrendChart } from "@/components/dashboard/AnalyticsCharts"
 import CompanyPerformance from "@/components/dashboard/CompanyPerformance"
 
 export default function DashboardPage() {
+  const { data: session, status } = useSession();
   const router = useRouter();
   const [searchTerm, setSearchTerm] = React.useState("");
   const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [timeframe, setTimeframe] = React.useState("monthly");
 
+  const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+  const canSeeFinancials = userRoles.includes("SuperAdmin") || userRoles.includes("Finance");
+  const canCreateJobs = userRoles.includes("SuperAdmin") || userRoles.includes("Operations") || userRoles.includes("Sales");
+
   React.useEffect(() => {
+    if (status === "loading") return;
+
+    // Redirect non-SuperAdmins from the main dashboard overview
+    if (!userRoles.includes("SuperAdmin")) {
+      if (userRoles.includes("Operations")) {
+        router.replace("/dashboard/jobs");
+      } else if (userRoles.includes("Finance")) {
+        router.replace("/dashboard/invoices");
+      } else if (userRoles.includes("Sales")) {
+        router.replace("/dashboard/quotes");
+      } else {
+        router.replace("/dashboard/directory/companies");
+      }
+      return;
+    }
+
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
@@ -46,7 +69,7 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, [timeframe]);
+  }, [timeframe, session, status, router, userRoles]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -56,7 +79,7 @@ export default function DashboardPage() {
     }).format(amount);
   };
 
-  if (loading || !data) {
+  if (status === "loading" || (userRoles.includes("SuperAdmin") && (loading || !data))) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <div className="flex flex-col items-center gap-4">
@@ -65,6 +88,12 @@ export default function DashboardPage() {
         </div>
       </div>
     );
+  }
+
+  // If not SuperAdmin, the useEffect will handle redirection. 
+  // We return null here to avoid rendering anything while redirecting.
+  if (!userRoles.includes("SuperAdmin")) {
+      return null;
   }
 
   const { stats, modeData, trendData, topCompanies, allCompanyMetrics } = data;
@@ -95,13 +124,15 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <Button 
-              onClick={()=>{router.push("/dashboard/new-job")}} 
-              className="group flex items-center gap-3 px-8 py-7 rounded-2xl font-bold shadow-2xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white border-none"
-            >
-              <Plus className="h-5 w-5" />
-              Initialize New Job
-            </Button>
+            {canCreateJobs && (
+              <Button 
+                onClick={()=>{router.push("/dashboard/new-job")}} 
+                className="group flex items-center gap-3 px-8 py-7 rounded-2xl font-bold shadow-2xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white border-none"
+              >
+                <Plus className="h-5 w-5" />
+                Initialize New Job
+              </Button>
+            )}
           </div>
 
           {/* High-Level KPIs */}
@@ -207,7 +238,7 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* NEW: Company Performance Section */}
+          {/* Company Performance Section */}
           <CompanyPerformance allCompanies={allCompanyMetrics} />
 
           {/* Job Terminal */}

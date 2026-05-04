@@ -21,6 +21,7 @@ import {
     UserX,
     UserCheck
 } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import Sidebar from "@/components/dashboard/Sidebar"
 import TopNav from "@/components/dashboard/TopNav"
@@ -38,19 +39,33 @@ import {
 } from "@/components/ui/dialog"
 
 export default function TeamManagementPage() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const [users, setUsers] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   
   const [showAddForm, setShowAddForm] = React.useState(false)
   const [formData, setFormData] = React.useState({
-    firstName: "", lastName: "", email: "", password: "", role: "Operations"
+    firstName: "", lastName: "", email: "", password: "", roles: ["Operations"] as string[]
   })
 
   // Password Reset State
   const [resettingUser, setResettingUser] = React.useState<any>(null)
   const [newPassword, setNewPassword] = React.useState("")
   const [isResetting, setIsResetting] = React.useState(false)
+
+  // Role Edit State
+  const [editingRolesUser, setEditingRolesUser] = React.useState<any>(null)
+  const [editRoles, setEditRoles] = React.useState<string[]>([])
+  const [isUpdatingRoles, setIsUpdatingRoles] = React.useState(false)
+
+  // Subtle UI Abstraction: Silent redirect if not SuperAdmin
+  React.useEffect(() => {
+    if (status === "loading") return
+    if (!session?.user?.roles?.includes("SuperAdmin") && session?.user?.role !== "SuperAdmin") {
+      router.push("/dashboard")
+    }
+  }, [session, status, router])
 
   React.useEffect(() => {
     async function fetchUsers() {
@@ -64,23 +79,27 @@ export default function TeamManagementPage() {
         setIsLoading(false)
       }
     }
-    if (session?.user?.role === "SuperAdmin") {
+    if (session?.user?.roles?.includes("SuperAdmin") || session?.user?.role === "SuperAdmin") {
       fetchUsers()
-    } else {
+    } else if (status !== "loading") {
       setIsLoading(false)
     }
-  }, [session])
+  }, [session, status])
 
   const stats = React.useMemo(() => {
     const total = users.length;
-    const admins = users.filter(u => u.role === "SuperAdmin").length;
-    const ops = users.filter(u => u.role === "Operations").length;
-    const finance = users.filter(u => u.role === "Finance").length;
+    const admins = users.filter(u => u.roles?.includes("SuperAdmin") || u.role === "SuperAdmin").length;
+    const ops = users.filter(u => u.roles?.includes("Operations") || u.role === "Operations").length;
+    const finance = users.filter(u => u.roles?.includes("Finance") || u.role === "Finance").length;
     return { total, admins, ops, finance };
   }, [users]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (formData.roles.length === 0) {
+      toast.error("Please select at least one role")
+      return
+    }
     const loadingToast = toast.loading("Provisioning new account...")
     
     try {
@@ -95,12 +114,60 @@ export default function TeamManagementPage() {
         toast.success("Account provisioned successfully!", { id: loadingToast })
         setUsers([...users, json.data])
         setShowAddForm(false)
-        setFormData({ firstName: "", lastName: "", email: "", password: "", role: "Operations" })
+        setFormData({ firstName: "", lastName: "", email: "", password: "", roles: ["Operations"] })
       } else {
         toast.error(json.error || "Failed to create account", { id: loadingToast })
       }
     } catch (error) {
       toast.error("Network error occurred", { id: loadingToast })
+    }
+  }
+
+  const toggleRoleInForm = (role: string) => {
+    setFormData(prev => {
+        const newRoles = prev.roles.includes(role)
+            ? prev.roles.filter(r => r !== role)
+            : [...prev.roles, role]
+        return { ...prev, roles: newRoles }
+    })
+  }
+
+  const toggleRoleInEdit = (role: string) => {
+    setEditRoles(prev => 
+        prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+    )
+  }
+
+  const handleUpdateRoles = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingRolesUser) return
+    if (editRoles.length === 0) {
+        toast.error("User must have at least one role")
+        return
+    }
+
+    setIsUpdatingRoles(true)
+    const loadingToast = toast.loading(`Updating roles for ${editingRolesUser.firstName}...`)
+
+    try {
+        const res = await fetch(`/api/users/${editingRolesUser._id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roles: editRoles })
+        })
+        const json = await res.json()
+
+        if (json.success) {
+            toast.success("Permissions updated successfully!", { id: loadingToast })
+            setUsers(users.map(u => u._id === editingRolesUser._id ? { ...u, roles: editRoles } : u))
+            setEditingRolesUser(null)
+        } else {
+            toast.error(json.error || "Failed to update roles", { id: loadingToast })
+        }
+    } catch (error) {
+        toast.error("Network error occurred", { id: loadingToast })
+    } finally {
+        setIsUpdatingRoles(false)
     }
   }
 
@@ -155,22 +222,13 @@ export default function TeamManagementPage() {
     }
   }
 
-  if (session?.user?.role !== "SuperAdmin") {
+  if (status === "loading" || (!session?.user?.roles?.includes("SuperAdmin") && session?.user?.role !== "SuperAdmin")) {
     return (
-      <div className="bg-[#F8FAFC] min-h-screen">
-        <Sidebar />
-        <main className="pl-64 flex flex-col items-center justify-center min-h-screen text-center p-12">
-            <div className="p-10 bg-white rounded-[40px] shadow-2xl shadow-slate-200/50 mb-8 border border-slate-50">
-                <Shield className="h-16 w-16 text-rose-600 opacity-20" />
-            </div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-4">Restricted Architecture</h1>
-            <p className="text-slate-500 max-w-md font-medium text-lg leading-relaxed">
-                Your current authorization level (<span className="text-rose-600 font-bold">{session?.user?.role || 'Viewer'}</span>) does not have clearance to view or modify team architecture.
-            </p>
-            <Button onClick={() => window.history.back()} variant="ghost" className="mt-8 text-blue-600 font-bold hover:bg-blue-50">
-                Return to Dashboard
-            </Button>
-        </main>
+      <div className="bg-[#F8FAFC] min-h-screen flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+            <div className="h-12 w-12 bg-blue-600/20 rounded-2xl"></div>
+            <div className="h-4 w-32 bg-slate-200 rounded-full"></div>
+        </div>
       </div>
     )
   }
@@ -326,14 +384,14 @@ export default function TeamManagementPage() {
                     </div>
 
                     <div className="space-y-4">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Access Authorization Level</label>
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Access Authorization Level (Multi-Select)</label>
                         <div className="flex flex-wrap gap-4">
                             {["SuperAdmin", "Finance", "Operations", "Sales", "Viewer"].map(role => (
                                 <button 
                                     key={role} type="button" 
-                                    onClick={() => setFormData({...formData, role})}
+                                    onClick={() => toggleRoleInForm(role)}
                                     className={`px-6 py-3 text-xs font-black uppercase tracking-tighter rounded-xl transition-all border ${
-                                        formData.role === role 
+                                        formData.roles.includes(role) 
                                             ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20' 
                                             : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'
                                     }`}
@@ -399,17 +457,34 @@ export default function TeamManagementPage() {
                                         </div>
                                     </td>
                                     <td className="px-10 py-7">
-                                        <Badge className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border-none ${
-                                            user.role === 'SuperAdmin' ? 'bg-indigo-50 text-indigo-700' :
-                                            user.role === 'Finance' ? 'bg-emerald-50 text-emerald-700' :
-                                            user.role === 'Operations' ? 'bg-blue-50 text-blue-700' :
-                                            'bg-slate-100 text-slate-600'
-                                        }`}>
-                                            {user.role} Access
-                                        </Badge>
+                                        <div className="flex flex-wrap gap-2">
+                                            {(user.roles || [user.role]).map((role: string) => (
+                                                <Badge key={role} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border-none ${
+                                                    role === 'SuperAdmin' ? 'bg-indigo-50 text-indigo-700' :
+                                                    role === 'Finance' ? 'bg-emerald-50 text-emerald-700' :
+                                                    role === 'Operations' ? 'bg-blue-50 text-blue-700' :
+                                                    'bg-slate-100 text-slate-600'
+                                                }`}>
+                                                    {role}
+                                                </Badge>
+                                            ))}
+                                        </div>
                                     </td>
                                     <td className="px-10 py-7 text-right">
                                         <div className="flex items-center justify-end gap-3">
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon"
+                                            onClick={() => {
+                                                setEditingRolesUser(user)
+                                                setEditRoles(user.roles || [user.role] || [])
+                                            }}
+                                            className="h-10 w-10 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                                            title="Edit Roles"
+                                          >
+                                            <Shield className="h-4 w-4" />
+                                          </Button>
+
                                           <Button 
                                             variant="ghost" 
                                             size="icon"
@@ -502,6 +577,65 @@ export default function TeamManagementPage() {
                 className="bg-blue-600 text-white rounded-xl font-black px-8 shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all"
               >
                 {isResetting ? "Updating..." : "Update Key"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Roles Dialog */}
+      <Dialog open={!!editingRolesUser} onOpenChange={(open) => !open && setEditingRolesUser(null)}>
+        <DialogContent className="max-w-md bg-white rounded-[32px] p-0 overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="p-8 bg-slate-50/50 border-b border-slate-100">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Access Modification</p>
+            </div>
+            <DialogTitle className="text-2xl font-black text-slate-900 tracking-tighter">
+              Adjust Permissions
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium">
+              Modifying clearance for <span className="text-slate-900 font-bold">{editingRolesUser?.firstName} {editingRolesUser?.lastName}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleUpdateRoles} className="p-8 space-y-6">
+            <div className="space-y-4">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Authorized Roles</label>
+              <div className="flex flex-wrap gap-3">
+                {["SuperAdmin", "Finance", "Operations", "Sales", "Viewer"].map(role => (
+                    <button 
+                        key={role} type="button" 
+                        onClick={() => toggleRoleInEdit(role)}
+                        className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-tighter rounded-xl transition-all border ${
+                            editRoles.includes(role) 
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/20' 
+                                : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'
+                        }`}
+                    >
+                        {role}
+                    </button>
+                ))}
+              </div>
+            </div>
+
+            <DialogFooter className="pt-4 gap-3 bg-transparent border-none p-0">
+              <Button 
+                type="button" 
+                variant="ghost" 
+                onClick={() => setEditingRolesUser(null)}
+                className="rounded-xl font-bold text-slate-500"
+              >
+                Discard
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isUpdatingRoles || editRoles.length === 0}
+                className="bg-emerald-600 text-white rounded-xl font-black px-8 shadow-xl shadow-emerald-500/20 hover:bg-emerald-700 transition-all"
+              >
+                {isUpdatingRoles ? "Saving..." : "Apply Changes"}
               </Button>
             </DialogFooter>
           </form>

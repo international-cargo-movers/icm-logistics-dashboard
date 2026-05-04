@@ -33,9 +33,21 @@ import { Button } from "@/components/ui/button"
 import Sidebar from "@/components/dashboard/Sidebar"
 import TopNav from "@/components/dashboard/TopNav"
 import RecordPaymentModal from "@/components/dashboard/ledger/RecordPaymentModal"
+import { useSession } from "next-auth/react"
 
 export default function VendorBillsDashboardPage() {
+  const { data: session, status } = useSession()
   const router = useRouter()
+  
+  // Subtle UI Abstraction: Silent redirect if not authorized
+  React.useEffect(() => {
+    if (status === "loading") return
+    const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+    if (!userRoles.some(r => ["SuperAdmin", "Finance", "Operations"].includes(r))) {
+      router.push("/dashboard")
+    }
+  }, [session, status, router])
+
   const [vendorBills, setVendorBills] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
 

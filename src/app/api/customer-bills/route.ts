@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import { getTenantModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 export async function GET() {
     try {
@@ -32,7 +32,11 @@ export async function POST(request: Request) {
 
         const session = await getServerSession(authOptions);
         
-        if (!session?.user?.role || !["SuperAdmin", "Finance", "Operations"].includes(session.user.role)) {
+        const allowedRoles = ["SuperAdmin", "Finance", "Operations"];
+        const hasAccess = session?.user?.roles?.some((r: string) => allowedRoles.includes(r)) || 
+                         allowedRoles.includes(session?.user?.role || "");
+
+        if (!session || !hasAccess) {
             return NextResponse.json({ 
                 success: false, 
                 error: "Security Violation: You do not have clearance to create financial records." 

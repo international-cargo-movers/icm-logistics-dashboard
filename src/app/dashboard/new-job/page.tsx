@@ -222,14 +222,20 @@ export default function NewJobPage() {
 
   async function onSubmit(values: z.infer<typeof jobFormSchema>) {
     try {
-      // toast.loading("Syncing CRM and creating Job...");
+      const resolvedMap: Record<string, string> = {}; // Local cache for this submission
 
       const resolveCompanyId = async (inputNameOrId: string | undefined, fallbackType: string, extraData: any = {}) => {
         if (!inputNameOrId || inputNameOrId.trim() === "") return undefined;
+        const trimmed = inputNameOrId.trim();
+
+        // 1. Check local cache first
+        if (resolvedMap[trimmed.toLowerCase()]) {
+          return resolvedMap[trimmed.toLowerCase()];
+        }
 
         const cleanData = Object.fromEntries(Object.entries(extraData).filter(([_, v]) => v != null && v !== ""));
 
-        // 1. Check if it's already a valid MongoDB ID
+        // 2. Check if it's already a valid MongoDB ID
         if (/^[0-9a-fA-F]{24}$/.test(inputNameOrId)) {
           if (Object.keys(cleanData).length > 0) {
             const putRes = await fetch(`/api/companies/${inputNameOrId}`, {
@@ -242,13 +248,13 @@ export default function NewJobPage() {
               throw new Error(`CRM Update Failed: ${errJson.error}`);
             }
           }
+          resolvedMap[trimmed.toLowerCase()] = inputNameOrId;
           return inputNameOrId;
         }
 
-        // 2. NEW: Check if this name already exists in our fetched companies list
-        // This prevents the duplicate key error
+        // 3. Check if this name already exists in our fetched companies list
         const existingCompany = companies.find(
-          (c:any) => c.name.toLowerCase() === inputNameOrId.trim().toLowerCase()
+          (c:any) => c.name.toLowerCase() === trimmed.toLowerCase()
         );
 
         if (existingCompany) {
@@ -258,18 +264,22 @@ export default function NewJobPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(cleanData)
           });
+          resolvedMap[trimmed.toLowerCase()] = existingCompany._id;
           return existingCompany._id;
         }
 
-        // 3. If it's truly new, then create it
+        // 4. If it's truly new, then create/upsert it
         const createRes = await fetch("/api/companies", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: inputNameOrId, type: [fallbackType], ...cleanData }),
+          body: JSON.stringify({ name: trimmed, type: [fallbackType], ...cleanData }),
         });
 
         const createJson = await createRes.json();
-        if (createRes.ok) return createJson.data._id;
+        if (createRes.ok) {
+          resolvedMap[trimmed.toLowerCase()] = createJson.data._id;
+          return createJson.data._id;
+        }
         throw new Error(createJson.error || `Failed to create new ${fallbackType}`);
       };
 
@@ -365,18 +375,22 @@ export default function NewJobPage() {
     }
   }
 
-  if (session && !["SuperAdmin", "Operations"].includes(session?.user?.role || "")) {
+  // Subtle UI Abstraction: Silent redirect if not authorized
+  React.useEffect(() => {
+    if (status === "loading") return
+    const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
+    if (!userRoles.some(r => ["SuperAdmin", "Operations"].includes(r))) {
+      router.push("/dashboard")
+    }
+  }, [session, status, router])
+
+  if (status === "loading") {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-center px-6">
-        <Shield className="w-16 h-16 text-red-500 mb-4 opacity-20" />
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Restricted Area</h1>
-        <p className="text-slate-500 max-w-md">Your current role ({session.user.role}) does not have clearance to generate financial documents.</p>
-        <button
-          onClick={() => router.back()}
-          className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
-        >
-          Go Back
-        </button>
+      <div className="bg-surface min-h-screen flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="h-12 w-12 bg-primary/20 rounded-2xl"></div>
+          <div className="h-4 w-32 bg-slate-200 rounded-full"></div>
+        </div>
       </div>
     )
   }
