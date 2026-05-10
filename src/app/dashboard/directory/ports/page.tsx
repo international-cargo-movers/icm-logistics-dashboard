@@ -88,7 +88,7 @@ export default function MasterPortsPage() {
 
   // --- SINGLE SAVE HANDLER ---
   const handleSave = async () => {
-    if (newPort.locode.length !== 5) return alert("UN/LOCODE must be exactly 5 characters.");
+    if (newPort.locode && newPort.locode.length !== 5) return alert("UN/LOCODE must be exactly 5 characters if provided.");
     if (newPort.countryCode.length !== 2) return alert("Country Code must be exactly 2 characters.");
 
     try {
@@ -604,7 +604,7 @@ export default function MasterPortsPage() {
                 </Button>
                 <Button 
                     onClick={handleSave} 
-                    disabled={!newPort.name || newPort.locode.length !== 5 || newPort.countryCode.length !== 2} 
+                    disabled={!newPort.name || (newPort.locode && newPort.locode.length !== 5) || newPort.countryCode.length !== 2} 
                     className="flex-1 py-7 rounded-2xl font-bold bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-500/20 text-white transition-all border-none"
                 >
                     Save Port

@@ -55,7 +55,13 @@ export async function POST(request:Request){
 
         if(Array.isArray(body)){
             try {
-                const newPorts = await Port.insertMany(body, { ordered: false });
+                // Sanitize LOCODEs in bulk import to handle empty strings
+                const sanitizedBody = body.map(port => ({
+                    ...port,
+                    locode: (port.locode && port.locode.trim() !== "") ? port.locode.toUpperCase() : undefined,
+                    countryCode: port.countryCode ? port.countryCode.toUpperCase() : undefined
+                }));
+                const newPorts = await Port.insertMany(sanitizedBody, { ordered: false });
                 return NextResponse.json({success:true,data:newPorts},{status:201});
             } catch (bulkError: any) {
                 // If some succeeded and some failed (e.g. duplicates), we can still return success for those that worked
@@ -71,9 +77,9 @@ export async function POST(request:Request){
         }else {
             const newPort = await Port.create({
                 name: body.name,
-                locode: body.locode ? body.locode.toUpperCase() : undefined,
+                locode: (body.locode && body.locode.trim() !== "") ? body.locode.toUpperCase() : undefined,
                 country: body.country,
-                countryCode: body.countryCode.toUpperCase(),
+                countryCode: body.countryCode ? body.countryCode.toUpperCase() : undefined,
                 type: body.type || ["Sea"],
                 isActive: body.isActive !== undefined ? body.isActive : true
             });
