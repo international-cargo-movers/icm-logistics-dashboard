@@ -22,7 +22,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { redirect } from "next/navigation"
 
-export default async function ReconciliationPage({ params }: { params: { jobId: string } }) {
+export default async function ReconciliationPage({ params }: { params: { id: string } }) {
     const session = await getServerSession(authOptions);
     const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
     
@@ -32,9 +32,10 @@ export default async function ReconciliationPage({ params }: { params: { jobId: 
 
     await dbConnect();
     const { Job, Invoice, VendorInvoice } = await getTenantModels();
-    const { jobId } = await params;
+    const { id } = await params;
 
-    const job = await Job.findOne({ jobId: jobId }).lean();
+    // Fetch by database _id instead of sequence-based jobId to prevent path issues
+    const job = await Job.findById(id).lean();
     if (!job) return notFound();
 
     // Fetch all customer invoices for this job
@@ -64,7 +65,7 @@ export default async function ReconciliationPage({ params }: { params: { jobId: 
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
-                    <Link href={`/dashboard/jobs/${jobId}`}>
+                    <Link href={`/dashboard/jobs/${job._id}`}>
                         <Button variant="ghost" className="pl-0 text-muted-foreground hover:text-primary mb-2">
                             <ArrowLeft className="mr-2 h-4 w-4" /> Back To Job Control
                         </Button>
@@ -75,7 +76,7 @@ export default async function ReconciliationPage({ params }: { params: { jobId: 
                                 <Scale className="h-8 w-8 text-blue-600" /> Financial Reconciliation
                             </h1>
                             <p className="text-muted-foreground mt-1">
-                                Job Reference: <span className="font-bold text-foreground">{jobId}</span>
+                                Job Reference: <span className="font-bold text-foreground">{job.jobId}</span>
                             </p>
                         </div>
                         <Badge variant="outline" className="px-4 py-1 text-sm border-blue-200 bg-blue-50 text-blue-700">

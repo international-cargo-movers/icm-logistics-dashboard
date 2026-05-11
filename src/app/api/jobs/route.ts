@@ -3,6 +3,7 @@ import dbConnect from "@/lib/mongodb";
 import { getTenantModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { generateJobNumber, generateHawbNumber, generateHblNumber } from "@/lib/sequencing";
 
 export async function GET(){
     try{
@@ -47,8 +48,44 @@ export async function POST(request:Request){
         }
 
         const body = await request.json();
-        const jobId = `FR-${Math.floor(100000 + Math.random()*900000)}`;
-        const newJob = await Job.create({...body,jobId});
+        
+        // Generate Sequence-based IDs
+        const jobId = await generateJobNumber(body.shipmentDetails?.mode || "");
+        
+        // Auto-generate HAWB/HBL if missing and mode matches
+        let updatedBody = { ...body, jobId };
+        const mode = (body.shipmentDetails?.mode || "").toLowerCase();
+        const destPort = body.shipmentDetails?.portOfDischarge || "";
+
+        if (!body.shippingDocuments?.awbDetails?.hawbNumber && mode.includes("air")) {
+            const hawb = await generateHawbNumber(destPort);
+            updatedBody = {
+                ...updatedBody,
+                shippingDocuments: {
+                    ...updatedBody.shippingDocuments,
+                    awbDetails: {
+                        ...(updatedBody.shippingDocuments?.awbDetails || {}),
+                        hawbNumber: hawb
+                    }
+                }
+            };
+        }
+
+        if (!body.shippingDocuments?.bolDetails?.bolNumber && mode.includes("sea")) {
+            const hbl = await generateHblNumber(destPort);
+            updatedBody = {
+                ...updatedBody,
+                shippingDocuments: {
+                    ...updatedBody.shippingDocuments,
+                    bolDetails: {
+                        ...(updatedBody.shippingDocuments?.bolDetails || {}),
+                        bolNumber: hbl
+                    }
+                }
+            };
+        }
+
+        const newJob = await Job.create(updatedBody);
 
         return NextResponse.json({success:true,data:newJob},{status:201});
     }catch(error:any){

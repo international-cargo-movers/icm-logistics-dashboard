@@ -15,14 +15,14 @@ import { useSession } from "next-auth/react"
 // These MUST perfectly match your Mongoose Schema Enums!
 const STATUS_OPTIONS = ["Processing", "Pending", "Completed", "Cancel"]
 
-export default function StatusDropdown({ jobId, currentStatus }: { jobId: string, currentStatus: string }) {
+export default function StatusDropdown({ id, currentStatus }: { id: string, currentStatus: string }) {
   const [isUpdating, setIsUpdating] = React.useState(false)
   const { data: session } = useSession()
   const handleStatusChange = async (newStatus: string) => {
     if (newStatus === currentStatus) return; // Don't update if it's the same
 
     setIsUpdating(true)
-    await updateJobStatus(jobId, newStatus)
+    await updateJobStatus(id, newStatus)
     setIsUpdating(false)
   }
   const canUpdateStatus = ["SuperAdmin", "Operations"].includes(session?.user?.role || "")

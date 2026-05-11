@@ -68,8 +68,8 @@ export default function NewQuotePage() {
       equipment: ""
     },
     lineItems: [
-      { chargeName: "Ocean Freight", chargeType: "Freight", currency: "USD", roe: 83.5, buyPrice: 2800, sellPrice: 3250, notes: "" },
-      { chargeName: "Customs Clearance", chargeType: "Origin", currency: "INR", roe: 1, buyPrice: 3500, sellPrice: 5500, notes: "" }
+      { chargeName: "Ocean Freight", chargeType: "Freight", currency: "USD", roe: 83.5, buyPrice: 2800, sellPrice: 3250, notes: "", gstPercent: 18 },
+      { chargeName: "Customs Clearance", chargeType: "Origin", currency: "INR", roe: 1, buyPrice: 3500, sellPrice: 5500, notes: "", gstPercent: 18 }
     ]
   })
 
@@ -109,9 +109,16 @@ export default function NewQuotePage() {
     return acc + ((Number(item.sellPrice) || 0) * (Number(item.roe) || 1) * qty);
   }, 0)
 
+  const totalGst = quoteData.lineItems.reduce((acc, item) => {
+    const qty = (item.chargeType === "Freight" || item.chargeName.toLowerCase().includes("freight")) ? multiplier : 1;
+    const baseSell = (Number(item.sellPrice) || 0) * (Number(item.roe) || 1) * qty;
+    return acc + (baseSell * (Number(item.gstPercent) || 0) / 100);
+  }, 0)
+
+  const netTotal = totalSell + totalGst
   const profitMargin = totalSell - totalBuy
 
-  const addLineItem = () => setQuoteData({ ...quoteData, lineItems: [...quoteData.lineItems, { chargeName: "", chargeType: "Origin", currency: "INR", roe: 1, buyPrice: 0, sellPrice: 0, notes: "" }] })
+  const addLineItem = () => setQuoteData({ ...quoteData, lineItems: [...quoteData.lineItems, { chargeName: "", chargeType: "Origin", currency: "INR", roe: 1, buyPrice: 0, sellPrice: 0, notes: "", gstPercent: 18 }] })
   const removeLineItem = (index: number) => setQuoteData({ ...quoteData, lineItems: quoteData.lineItems.filter((_, idx) => idx !== index) })
   const updateLineItem = (index: number, field: string, value: string | number) => {
     const newItems = [...quoteData.lineItems]
@@ -171,11 +178,30 @@ export default function NewQuotePage() {
 
   const handlePortSuccess = (newPort: any) => {
     setPorts(prev => [...prev, newPort])
+    setCountries(prev => {
+      if (!prev.find(c => c.code === newPort.countryCode)) {
+        return [...prev, { name: newPort.country, code: newPort.countryCode }].sort((a, b) => a.name.localeCompare(b.name));
+      }
+      return prev;
+    })
+
     if (portModalConfig?.target === "origin") {
-      setQuoteData(prev => ({ ...prev, originPort: newPort.locode || newPort.name }))
+      setQuoteData(prev => ({ 
+        ...prev, 
+        originCountry: newPort.countryCode,
+        originPort: newPort.locode || newPort.name 
+      }))
     } else {
-      setQuoteData(prev => ({ ...prev, destinationPort: newPort.locode || newPort.name }))
+      setQuoteData(prev => ({ 
+        ...prev, 
+        destinationCountry: newPort.countryCode,
+        destinationPort: newPort.locode || newPort.name 
+      }))
     }
+    setSearchOC("")
+    setSearchOP("")
+    setSearchDC("")
+    setSearchDP("")
   }
 
   const handleQuickAddCustomer = async (e: React.MouseEvent) => {
@@ -479,9 +505,16 @@ export default function NewQuotePage() {
                       </PopoverTrigger>
                       <PopoverContent className="w-[300px] p-0" align="start">
                         <Command>
-                          <CommandInput placeholder="Search Country..." />
+                          <CommandInput placeholder="Search Country..." value={searchOC} onValueChange={setSearchOC} />
                           <CommandList>
-                            <CommandEmpty>No country found.</CommandEmpty>
+                            <CommandEmpty className="py-4 text-center">
+                              <p className="text-xs text-muted-foreground mb-2">No country found.</p>
+                              <Button size="sm" variant="outline" className="text-[10px] font-bold uppercase" onClick={() => {
+                                setPortModalConfig({ target: "origin", initialName: "" });
+                                setIsPortModalOpen(true);
+                                setOpenOC(false);
+                              }}>+ Add Port in "{searchOC}"</Button>
+                            </CommandEmpty>
                             <CommandGroup>
                               {countries.map((c) => (
                                 <CommandItem key={c.code} value={c.name} onSelect={() => { setQuoteData({ ...quoteData, originCountry: c.code }); setOpenOC(false); }}>
@@ -543,9 +576,16 @@ export default function NewQuotePage() {
                       </PopoverTrigger>
                       <PopoverContent className="w-[300px] p-0" align="start">
                         <Command>
-                          <CommandInput placeholder="Search Country..." />
+                          <CommandInput placeholder="Search Country..." value={searchDC} onValueChange={setSearchDC} />
                           <CommandList>
-                            <CommandEmpty>No country found.</CommandEmpty>
+                            <CommandEmpty className="py-4 text-center">
+                              <p className="text-xs text-muted-foreground mb-2">No country found.</p>
+                              <Button size="sm" variant="outline" className="text-[10px] font-bold uppercase" onClick={() => {
+                                setPortModalConfig({ target: "destination", initialName: "" });
+                                setIsPortModalOpen(true);
+                                setOpenDC(false);
+                              }}>+ Add Port in "{searchDC}"</Button>
+                            </CommandEmpty>
                             <CommandGroup>
                               {countries.map((c) => (
                                 <CommandItem key={c.code} value={c.name} onSelect={() => { setQuoteData({ ...quoteData, destinationCountry: c.code }); setOpenDC(false); }}>
@@ -719,18 +759,18 @@ export default function NewQuotePage() {
                 </button>
               </div>
 
-              <div className="border border-outline-variant/20 rounded-xl overflow-hidden">
-                <table className="w-full text-left border-collapse">
+              <div className="border border-outline-variant/20 rounded-xl bg-surface-container-low/20">
+                <table className="w-full text-left border-collapse table-fixed">
                   <thead>
-                    <tr className="bg-surface-container-low">
+                    <tr className="bg-surface-container-low/50 border-b border-outline-variant/20">
                       <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[25%]">Charge Name</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[10%]">Curr</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[10%]">ROE</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[20%]">Remarks / Units</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Rate (Buy)</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Rate (Sell)</th>
-                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Total Sell (₹)</th>
-                      <th className="py-3 px-3 text-right w-10"></th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[10%] text-center">FX (Cur/ROE)</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest w-[15%]">Remarks / Metric</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right w-[12%]">Rate (Buy)</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right w-[12%]">Rate (Sell)</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-center w-[8%]">GST%</th>
+                      <th className="py-3 px-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right w-[15%]">Total (₹)</th>
+                      <th className="py-3 px-3 text-right w-[3%]"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/10">
@@ -740,40 +780,52 @@ export default function NewQuotePage() {
 
                       const baseBuy = (Number(item.buyPrice) || 0) * (Number(item.roe) || 1) * itemMultiplier;
                       const baseSell = (Number(item.sellPrice) || 0) * (Number(item.roe) || 1) * itemMultiplier;
+                      const itemGst = baseSell * (Number(item.gstPercent) || 0) / 100;
 
                       return (
-                        <tr key={index} className="group hover:bg-surface-container-low/30 transition-colors">
-                          <td className="py-2 px-3">
-                            <LineItemDescriptionInput value={item.chargeName} onChange={(e: any) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="e.g. Ocean Freight" />
+                        <tr key={index} className="group hover:bg-surface-container-low/50 transition-colors">
+                          <td className="py-3 px-3">
+                            <LineItemDescriptionInput value={item.chargeName} onChange={(e: any) => updateLineItem(index, 'chargeName', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-semibold outline-none truncate" placeholder="Charge Name" />
                           </td>
-                          <td className="py-2 px-3">
-                            <input type="text" value={item.currency} onChange={(e) => updateLineItem(index, 'currency', e.target.value.toUpperCase())} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none uppercase" placeholder="USD" maxLength={3} />
+                          <td className="py-3 px-3">
+                            <div className="flex flex-col items-center gap-1">
+                              <input type="text" value={item.currency} onChange={(e) => updateLineItem(index, 'currency', e.target.value.toUpperCase())} className="w-full bg-transparent border-none p-0 focus:ring-0 text-[10px] font-black text-center outline-none uppercase text-primary" placeholder="USD" maxLength={3} />
+                              <div className="flex items-center gap-1 text-[9px] font-bold text-on-surface-variant">
+                                <span>@</span>
+                                <input type="number" step="0.01" value={item.roe} onChange={(e) => updateLineItem(index, 'roe', e.target.value)} className="w-10 bg-transparent border-none p-0 focus:ring-0 text-[9px] font-bold outline-none" placeholder="1.0" />
+                              </div>
+                            </div>
                           </td>
-                          <td className="py-2 px-3">
-                            <input type="number" step="0.01" value={item.roe} onChange={(e) => updateLineItem(index, 'roe', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium outline-none" placeholder="1.00" />
-                          </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-3">
                             <div className="flex flex-col">
                               {isFreight ? (
-                                <span className="text-[10px] font-black text-primary uppercase">x {multiplier} {unitLabel}</span>
+                                <span className="text-[10px] font-black text-primary uppercase bg-primary/5 px-2 py-0.5 rounded w-fit truncate">x {multiplier} {unitLabel}</span>
                               ) : (
-                                <input type="text" value={item.notes} onChange={(e) => updateLineItem(index, 'notes', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-[10px] text-gray-500 font-bold outline-none" placeholder="REMARKS" />
+                                <input type="text" value={item.notes} onChange={(e) => updateLineItem(index, 'notes', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-[10px] text-gray-400 font-bold outline-none italic truncate" placeholder="REMARKS" />
                               )}
                             </div>
                           </td>
-                          <td className="py-2 px-3 text-right border-l border-outline-variant/10">
-                            <input type="number" value={item.buyPrice} onChange={(e) => updateLineItem(index, 'buyPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right text-error font-medium outline-none" />
+                          <td className="py-3 px-3 text-right border-l border-outline-variant/10">
+                            <input type="number" value={item.buyPrice} onChange={(e) => updateLineItem(index, 'buyPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right text-error font-bold outline-none" />
                           </td>
-                          <td className="py-2 px-3 text-right border-l border-outline-variant/10">
-                            <input type="number" value={item.sellPrice} onChange={(e) => updateLineItem(index, 'sellPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right font-bold text-primary outline-none" />
+                          <td className="py-3 px-3 text-right border-l border-outline-variant/10">
+                            <input type="number" value={item.sellPrice} onChange={(e) => updateLineItem(index, 'sellPrice', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-right font-black text-primary outline-none" />
                           </td>
-                          <td className="py-2 px-3 text-right border-l border-outline-variant/10">
-                            <span className="text-sm font-black text-on-surface">
-                              ₹{baseSell.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          <td className="py-3 px-3 text-center border-l border-outline-variant/10">
+                            <select value={item.gstPercent} onChange={(e) => updateLineItem(index, 'gstPercent', parseInt(e.target.value))} className="bg-surface-container-highest/50 border-none rounded text-[10px] font-black focus:ring-0 px-1 py-0.5 outline-none cursor-pointer appearance-none text-center w-full">
+                              <option value="18">18%</option>
+                              <option value="12">12%</option>
+                              <option value="5">5%</option>
+                              <option value="0">0%</option>
+                            </select>
+                          </td>
+                          <td className="py-3 px-3 text-right border-l border-outline-variant/10">
+                            <span className="text-sm font-black text-on-surface tabular-nums">
+                              ₹{(baseSell + itemGst).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                             </span>
                           </td>
-                          <td className="py-2 px-3 text-right">
-                            <button onClick={() => removeLineItem(index)} className="p-1.5 text-on-surface-variant hover:bg-error-container hover:text-error rounded-md transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          <td className="py-3 px-3 text-right">
+                            <button onClick={() => removeLineItem(index)} className="p-1 text-on-surface-variant hover:text-error transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                           </td>
                         </tr>
                       )
@@ -786,8 +838,10 @@ export default function NewQuotePage() {
 
           <div className="bg-surface-container-low p-8 flex items-center justify-between border-t border-outline-variant/20">
             <div className="flex gap-12">
-              <div className="space-y-1"><span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Total Sell</span><div className="text-xl font-bold text-primary tabular-nums">₹{totalSell.toLocaleString('en-IN')}</div></div>
-              <div className="space-y-1 border-l border-outline-variant/30 pl-6 pr-6"><span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Net Margin</span><div className="text-2xl font-black text-emerald-600 tabular-nums">₹{profitMargin.toLocaleString('en-IN')}</div></div>
+              <div className="space-y-1"><span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Subtotal (Sell)</span><div className="text-lg font-bold text-on-surface tabular-nums">₹{totalSell.toLocaleString('en-IN')}</div></div>
+              <div className="space-y-1 border-l border-outline-variant/30 pl-6"><span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Total GST</span><div className="text-lg font-bold text-blue-600 tabular-nums">+ ₹{totalGst.toLocaleString('en-IN')}</div></div>
+              <div className="space-y-1 border-l border-outline-variant/30 pl-6"><span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Net Quote</span><div className="text-xl font-black text-primary tabular-nums">₹{netTotal.toLocaleString('en-IN')}</div></div>
+              <div className="space-y-1 border-l border-outline-variant/30 pl-6"><span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Base Margin</span><div className="text-xl font-black text-emerald-600 tabular-nums">₹{profitMargin.toLocaleString('en-IN')}</div></div>
             </div>
             <div className="flex gap-4">
               <button onClick={handleDownloadPDF} disabled={isSavingPdf || isSendingEmail} className="px-6 py-3 bg-white border border-outline-variant/30 text-on-surface-variant rounded-lg font-bold flex items-center gap-2 hover:bg-surface-container transition-colors disabled:opacity-50">

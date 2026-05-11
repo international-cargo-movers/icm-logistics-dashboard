@@ -10,6 +10,8 @@ export interface IQuoteLineItem {
     roe: number;              // e.g., "USD", "EUR"
     quantity: number;         // Multiplier for the price
     notes?: string;           // Optional remarks for this specific charge
+    gstPercent?: number;      // GST Percentage
+    gstAmount?: number;       // Calculated GST Amount (Sell)
 }
 
 // 2. Main Quote Interface
@@ -53,6 +55,8 @@ export interface IQuote extends Document {
         totalSell: number;
         profitMargin: number;
         baseCurrency: string;
+        totalGst: number;
+        netTotal: number;
     };
     status: "Draft" | "Sent" | "Accepted" | "Rejected" | "Expired" | "Approved";
 }
@@ -104,13 +108,17 @@ export const QuoteSchema = new Schema<IQuote>({
                 currency: { type: String, default: "USD" },
                 roe: { type: Number, required: true, default: 1 },
                 quantity: { type: Number, required: true, default: 1 },
-                notes: { type: String }
+                notes: { type: String },
+                gstPercent: { type: Number, default: 18 },
+                gstAmount: { type: Number, default: 0 }
             }
         ],
         totalBuy: { type: Number, default: 0 },
         totalSell: { type: Number, default: 0 },
         profitMargin: { type: Number, default: 0 },
-        baseCurrency: { type: String, default: "USD" }
+        baseCurrency: { type: String, default: "USD" },
+        totalGst: { type: Number, default: 0 },
+        netTotal: { type: Number, default: 0 }
     },
     status: {
         type: String,
@@ -123,19 +131,28 @@ export const QuoteSchema = new Schema<IQuote>({
 QuoteSchema.pre("save", function (this: IQuote, next) {
     let calcTotalBuy = 0;
     let calcTotalSell = 0;
+    let calcTotalGst = 0;
 
     if (this.financials && this.financials.lineItems) {
         this.financials.lineItems.forEach(item => {
             const roe = item.roe || 1;
             const quantity = item.quantity || 1;
+            const baseSell = (item.sellPrice || 0) * roe * quantity;
+            
             calcTotalBuy += (item.buyPrice || 0) * roe * quantity;
-            calcTotalSell += (item.sellPrice || 0) * roe * quantity;
+            calcTotalSell += baseSell;
+            
+            const gstAmount = baseSell * ((item.gstPercent || 0) / 100);
+            item.gstAmount = gstAmount;
+            calcTotalGst += gstAmount;
         });
     }
 
     this.financials.totalBuy = calcTotalBuy;
     this.financials.totalSell = calcTotalSell;
     this.financials.profitMargin = calcTotalSell - calcTotalBuy;
+    this.financials.totalGst = calcTotalGst;
+    this.financials.netTotal = calcTotalSell + calcTotalGst;
     
     // Set base currency to INR since totals are now converted
     this.financials.baseCurrency = "INR"; 

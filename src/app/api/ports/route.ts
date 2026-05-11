@@ -56,11 +56,19 @@ export async function POST(request:Request){
         if(Array.isArray(body)){
             try {
                 // Sanitize LOCODEs in bulk import to handle empty strings
-                const sanitizedBody = body.map(port => ({
-                    ...port,
-                    locode: (port.locode && port.locode.trim() !== "") ? port.locode.toUpperCase() : undefined,
-                    countryCode: port.countryCode ? port.countryCode.toUpperCase() : undefined
-                }));
+                const sanitizedBody = body.map(port => {
+                    const p: any = {
+                        ...port,
+                        countryCode: port.countryCode ? port.countryCode.toUpperCase() : undefined
+                    };
+                    // Ensure locode is completely omitted if empty, preventing index collisions on 'null'
+                    if (port.locode && port.locode.trim() !== "") {
+                        p.locode = port.locode.toUpperCase();
+                    } else {
+                        delete p.locode;
+                    }
+                    return p;
+                });
                 const newPorts = await Port.insertMany(sanitizedBody, { ordered: false });
                 return NextResponse.json({success:true,data:newPorts},{status:201});
             } catch (bulkError: any) {
@@ -75,14 +83,20 @@ export async function POST(request:Request){
                 throw bulkError;
             }
         }else {
-            const newPort = await Port.create({
+            const portData: any = {
                 name: body.name,
-                locode: (body.locode && body.locode.trim() !== "") ? body.locode.toUpperCase() : undefined,
                 country: body.country,
                 countryCode: body.countryCode ? body.countryCode.toUpperCase() : undefined,
                 type: body.type || ["Sea"],
                 isActive: body.isActive !== undefined ? body.isActive : true
-            });
+            };
+            
+            // Ensure locode is completely omitted if empty, preventing index collisions on 'null'
+            if (body.locode && body.locode.trim() !== "") {
+                portData.locode = body.locode.toUpperCase();
+            }
+
+            const newPort = await Port.create(portData);
             return NextResponse.json({ success: true, data: newPort }, { status: 201 });
         }
     }catch(error:any){

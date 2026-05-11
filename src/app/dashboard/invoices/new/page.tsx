@@ -203,7 +203,7 @@ export default function SmartInvoiceGenerator() {
                             unit: isFreight ? (item.notes || defaultUnit) : "SET",
                             currency: item.currency || "USD",
                             roe: item.roe || 1,
-                            gstPercent: 18
+                            gstPercent: item.gstPercent ?? 18
                         };
                     })
                     replace(invoiceReadyLines.length > 0 ? invoiceReadyLines : [{ description: "Freight Charges", sacCode: "996511", rate: 0, quantity: defaultQty, unit: defaultUnit, currency: "USD", roe: 1, gstPercent: 18 }])

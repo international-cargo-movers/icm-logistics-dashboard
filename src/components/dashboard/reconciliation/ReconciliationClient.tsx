@@ -99,7 +99,7 @@ export default function ReconciliationClient({ initialData }: ReconciliationClie
                                 filteredData.map((data) => (
                                     <TableRow key={`op-${data.id}`} className="group hover:bg-slate-50/80 transition-colors border-slate-50">
                                         <TableCell className="pl-8">
-                                            <Link href={`/dashboard/jobs/${data.jobId}/reconciliation`} className="group/link flex items-center gap-2">
+                                            <Link href={`/dashboard/jobs/${data.id}/reconciliation`} className="group/link flex items-center gap-2">
                                                 <span className="font-black text-slate-900 group-hover/link:text-blue-600 transition-colors">{data.jobId}</span>
                                                 <ArrowRight className="h-3 w-3 opacity-0 group-hover/link:opacity-100 -translate-x-2 group-hover/link:translate-x-0 transition-all text-blue-600" />
                                             </Link>

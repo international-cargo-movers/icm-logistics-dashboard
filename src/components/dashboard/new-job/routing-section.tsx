@@ -44,9 +44,18 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
 
   const handlePortSuccess = (newPort: any) => {
     setAllPorts(prev => [...prev, newPort])
+    setCountries(prev => {
+        if (!prev.find(c => c.code === newPort.countryCode)) {
+            return [...prev, { name: newPort.country, code: newPort.countryCode }].sort((a, b) => a.name.localeCompare(b.name));
+        }
+        return prev;
+    })
+
     if (portModalConfig?.target === "origin") {
+        setValue("shipmentDetails.originCountry", newPort.countryCode, { shouldValidate: true })
         setValue("shipmentDetails.originPort", newPort.locode || newPort.name, { shouldValidate: true })
     } else {
+        setValue("shipmentDetails.destinationCountry", newPort.countryCode, { shouldValidate: true })
         setValue("shipmentDetails.destinationPort", newPort.locode || newPort.name, { shouldValidate: true })
     }
   }
@@ -189,7 +198,20 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
                     <ComboboxContent>
                       <ComboboxList>
                         {countries.map((c) => <ComboboxItem key={c.code} value={c.name}>{c.name}</ComboboxItem>)}
-                        <ComboboxEmpty>No countries found</ComboboxEmpty>
+                        <ComboboxEmpty className="flex flex-col gap-2 p-4">
+                          <p className="text-xs text-muted-foreground">No countries found.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPortModalConfig({ target: "origin", initialName: "" });
+                              setIsPortModalOpen(true);
+                              setOpenOC(false);
+                            }}
+                            className="text-[10px] font-bold uppercase py-2 px-4 border border-primary/20 bg-primary/5 text-primary rounded-md hover:bg-primary/10 transition-all text-left"
+                          >
+                            + Add Port in "{searchOC}"
+                          </button>
+                        </ComboboxEmpty>
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
@@ -261,7 +283,20 @@ export default function RoutingSection({ isReadOnly }: { isReadOnly?: boolean })
                     <ComboboxContent>
                       <ComboboxList>
                         {countries.map((c) => <ComboboxItem key={c.code} value={c.name}>{c.name}</ComboboxItem>)}
-                        <ComboboxEmpty>No countries found</ComboboxEmpty>
+                        <ComboboxEmpty className="flex flex-col gap-2 p-4">
+                          <p className="text-xs text-muted-foreground">No countries found.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPortModalConfig({ target: "destination", initialName: "" });
+                              setIsPortModalOpen(true);
+                              setOpenDC(false);
+                            }}
+                            className="text-[10px] font-bold uppercase py-2 px-4 border border-primary/20 bg-primary/5 text-primary rounded-md hover:bg-primary/10 transition-all text-left"
+                          >
+                            + Add Port in "{searchDC}"
+                          </button>
+                        </ComboboxEmpty>
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>

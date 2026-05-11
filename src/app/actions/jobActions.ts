@@ -4,17 +4,17 @@ import dbConnect from "@/lib/mongodb"
 import { getTenantModels } from "@/model/tenantModels"
 import {revalidatePath} from "next/cache"
 
-export async function updateJobStatus(jobId:string, newStatus: string){
+export async function updateJobStatus(id:string, newStatus: string){
     try{
         await dbConnect()
         const { Job } = await getTenantModels()
 
-        await Job.findOneAndUpdate(
-            {jobId:jobId},
+        await Job.findByIdAndUpdate(
+            id,
             {$set:{"cargoDetails.jobStatus":newStatus}}
         )
 
-        revalidatePath(`/dashboard/jobs/${jobId}`)
+        revalidatePath(`/dashboard/jobs/${id}`)
         revalidatePath("/dashboard")
 
         return {success:true}

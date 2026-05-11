@@ -11,6 +11,7 @@ import { PortSchema } from "./PortModel";
 import { UserSchema } from "./UserModel";
 import { FinancialItemSchema } from "./FinancialItemModel";
 import { CarrierVehicleSchema } from "./CarrierVehicleModel";
+import { CounterSchema } from "./CounterModel";
 
 export async function getTenantModels() {
   return {
@@ -22,6 +23,7 @@ export async function getTenantModels() {
     VendorInvoice: await getModel("VendorInvoice", VendorInvoiceSchema),
     VendorBill: await getModel("VendorBill", VendorBillSchema),
     CustomerBill: await getModel("CustomerBill", CustomerBillSchema),
+    Counter: await getModel("Counter", CounterSchema),
   };
 }
 

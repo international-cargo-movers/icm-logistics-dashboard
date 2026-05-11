@@ -111,7 +111,7 @@ export default function EditJobPage() {
             
             if (json.success) {
                 toast.success("Job updated successfully!");
-                router.push(`/dashboard/jobs/${json.data.jobId}`);
+                router.push(`/dashboard/jobs/${json.data._id}`);
             } else {
                 toast.error("Failed to update job: " + json.error);
             }

@@ -25,7 +25,7 @@ import { redirect } from "next/navigation"
 
 // Server Component
 // Rebuild trigger
-export default async function JobControlRoom({ params }: { params: { jobId: string } }) {
+export default async function JobControlRoom({ params }: { params: { id: string } }) {
     const session = await getServerSession(authOptions);
     const userRoles = session?.user?.roles || (session?.user?.role ? [session?.user?.role] : []);
     
@@ -35,9 +35,10 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
 
     await dbConnect();
     const { Job } = await getTenantModels();
-    const { jobId } = await params;
+    const { id } = await params;
 
-    const job = await Job.findOne({ jobId: jobId })
+    // Fetch by database _id instead of sequence-based jobId to prevent path issues
+    const job = await Job.findById(id)
         .populate("customerDetails.companyId", "name taxId streetAddress city state zipCode country defaultSalesPerson")
         .populate("vendorDetails.vendorId", "name taxId streetAddress city state zipCode country")
         .populate("partyDetails.shipperId","name taxId streetAddress city state zipCode country")
@@ -69,7 +70,7 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                             </Button>
                         </Link>
                         <span className="text-muted-foreground/30">|</span>
-                        <Link href={`/dashboard/jobs/${sanitizedJob.jobId}/reconciliation`}>
+                        <Link href={`/dashboard/jobs/${sanitizedJob._id}/reconciliation`}>
                             <Button variant="ghost" className="text-muted-foreground hover:text-blue-600">
                                 <FileText className="mr-2 h-4 w-4" /> Reconciliation
                             </Button>
@@ -92,7 +93,7 @@ export default async function JobControlRoom({ params }: { params: { jobId: stri
                 </div>
                 <div className="flex gap-3">
                     <StatusDropdown
-                        jobId={sanitizedJob.jobId}
+                        id={sanitizedJob._id}
                         currentStatus={sanitizedJob.cargoDetails?.jobStatus || "Processing"}
                     />
                 </div>

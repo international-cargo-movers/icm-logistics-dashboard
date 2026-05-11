@@ -171,7 +171,7 @@ export default function JobTable({ searchTerm = "" }: { searchTerm?: string }) {
                 <TableRow
                     key={job._id}
                     className="group cursor-pointer hover:bg-slate-50/50 transition-all border-slate-50"
-                    onClick={() => router.push(`/dashboard/jobs/${job.jobId}`)}
+                    onClick={() => router.push(`/dashboard/jobs/${job._id}`)}
                 >
                     <TableCell className="px-8 py-6">
                         <div className="flex items-center gap-3">
