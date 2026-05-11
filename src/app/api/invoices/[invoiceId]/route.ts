@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import dbConnect from '@/lib/mongodb';
 import { getTenantModels } from '@/model/tenantModels';
 import { getServerSession } from "next-auth/next";
@@ -9,12 +10,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ invo
         await dbConnect();
         const { Invoice } = await getTenantModels();
         
-        // Optional: You can check session here too if you want to block unauthorized viewing
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const resolvedParams = await params;
-        const invoice = await Invoice.findOne({ invoiceNo: resolvedParams.invoiceId });
+        const id = resolvedParams.invoiceId;
+
+        // Try to find by _id first if it's a valid ObjectId, then by invoiceNo
+        let invoice;
+        if (mongoose.isValidObjectId(id)) {
+            invoice = await Invoice.findById(id);
+        }
+        
+        if (!invoice) {
+            invoice = await Invoice.findOne({ invoiceNo: id });
+        }
         
         if (!invoice) return NextResponse.json({ success: false, error: "Invoice not found" }, { status: 404 });
         return NextResponse.json({ success: true, data: invoice });
@@ -28,10 +38,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ invo
         await dbConnect();
         const { Invoice } = await getTenantModels();
         
-        // --- THE SERVER LOCK ---
         const session = await getServerSession(authOptions);
         
-        // If they are not logged in, OR they are a Viewer/Operations/Sales, block the request!
         const allowedRoles = ["SuperAdmin", "Finance", "Operations"];
         const hasAccess = session?.user?.roles?.some((r: string) => allowedRoles.includes(r)) || 
                          allowedRoles.includes(session?.user?.role || "");
@@ -42,21 +50,27 @@ export async function PUT(request: Request, { params }: { params: Promise<{ invo
                 error: "Security Violation: You do not have clearance to modify financial records." 
             }, { status: 403 });
         }
-        // -----------------------
 
         const body = await request.json();
         const resolvedParams  = await params;
+        const id = resolvedParams.invoiceId;
         
-        // 1. Fetch existing invoice to get current payment status
-        const existingInvoice = await Invoice.findOne({ invoiceNo: resolvedParams.invoiceId });
+        // Try to find by _id first, then by invoiceNo
+        let existingInvoice;
+        if (mongoose.isValidObjectId(id)) {
+            existingInvoice = await Invoice.findById(id);
+        }
+        
+        if (!existingInvoice) {
+            existingInvoice = await Invoice.findOne({ invoiceNo: id });
+        }
+
         if (!existingInvoice) return NextResponse.json({ success: false, error: "Invoice not found" }, { status: 404 });
 
-        // 2. Recalculate Balance Due
         const amountPaid = existingInvoice.amountPaid || 0;
         const newNetAmount = body.totals?.netAmount || existingInvoice.totals.netAmount;
         const newBalanceDue = Math.max(0, newNetAmount - amountPaid);
 
-        // 3. Determine New Status based on payment truth
         let newStatus = body.status || existingInvoice.status;
         if (amountPaid > 0) {
             newStatus = newBalanceDue <= 0.5 ? "Paid" : "Partially Paid";
@@ -64,14 +78,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ invo
             newStatus = "Unpaid";
         }
 
-        // 4. Update with recalculated fields
         const updatedInvoice = await Invoice.findOneAndUpdate(
-            { invoiceNo: resolvedParams.invoiceId },
+            { _id: existingInvoice._id },
             { 
                 ...body, 
                 balanceDue: newBalanceDue, 
                 status: newStatus,
-                amountPaid: amountPaid // Safeguard to ensure amountPaid isn't wiped
+                amountPaid: amountPaid
             },
             { new: true, runValidators: true }
         );

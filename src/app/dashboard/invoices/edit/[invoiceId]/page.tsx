@@ -351,7 +351,7 @@ export default function EditInvoicePage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Invoice Number</label>
-                            <input {...register("invoiceNo")} className="bg-slate-100 border-none rounded-lg px-4 py-3 text-sm font-mono outline-none" />
+                            <input {...register("invoiceNo")} readOnly className="bg-slate-50 border-none rounded-lg px-4 py-3 text-sm font-mono outline-none text-slate-400 cursor-not-allowed" />
                         </div>
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Issue Date</label>

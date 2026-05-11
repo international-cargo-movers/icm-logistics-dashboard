@@ -91,7 +91,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ quot
             currency: item.currency || "USD",
             roe: Number(item.roe) || 1,
             quantity: Number(item.quantity) || 1,
-            notes: item.notes || ""
+            notes: item.notes || "",
+            gstPercent: Number(item.gstPercent ?? 18)
         }));
 
         // If it was rejected or draft, editing it moves it back to Draft/Sent depending on action

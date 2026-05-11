@@ -112,7 +112,7 @@ export default function SmartInvoiceGenerator() {
     const form = useForm<InvoiceFormValues>({
         resolver: zodResolver(invoiceSchema) as any,
         defaultValues: {
-            invoiceNo: `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+            invoiceNo: "AUTO-GENERATED",
             issueDate: new Date().toISOString().split('T')[0],
             jobId: "", customerName: "", billingAddress: "", gstin: "", stateCode: "",
             origin: "", destination: "",
@@ -287,10 +287,11 @@ export default function SmartInvoiceGenerator() {
             const dbResult = await dbResponse.json();
             if (!dbResult.success) throw new Error(dbResult.error || "Failed to save to database");
 
-            const blob = await pdf(<InvoicePDF data={invoicePayload} />).toBlob()
+            const finalInvoicePayload = { ...invoicePayload, invoiceNo: dbResult.data.invoiceNo };
+            const blob = await pdf(<InvoicePDF data={finalInvoicePayload} />).toBlob()
             const url = URL.createObjectURL(blob)
             window.open(url, '_blank')
-            toast.success("Transaction Recorded & PDF Generated!")
+            toast.success(`Transaction Recorded! Invoice No: ${dbResult.data.invoiceNo}`)
             router.push("/dashboard/invoices")
         } catch (error: any) { toast.error("Failed to generate invoice.") }
         finally { setIsSubmitting(false) }
@@ -320,7 +321,7 @@ export default function SmartInvoiceGenerator() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Invoice Number</label>
-                            <input {...register("invoiceNo")} className="bg-slate-100 border-none rounded-lg px-4 py-3 text-sm font-mono outline-none" />
+                            <input {...register("invoiceNo")} readOnly className="bg-slate-50 border-none rounded-lg px-4 py-3 text-sm font-mono outline-none text-slate-400 cursor-not-allowed" />
                         </div>
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Issue Date</label>

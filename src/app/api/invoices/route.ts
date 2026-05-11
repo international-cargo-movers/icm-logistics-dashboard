@@ -3,6 +3,7 @@ import dbConnect from "@/lib/mongodb";
 import { getTenantModels } from "@/model/tenantModels";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { generateInvoiceNumber } from "@/lib/sequencing";
 
 export async function GET() {
     try {
@@ -51,7 +52,12 @@ export async function POST(request: Request) {
         // -----------------------
 
         const body = await request.json();
-        const newInvoice = await Invoice.create(body);
+        
+        // Generate Official Invoice Number
+        const invoiceNo = await generateInvoiceNumber();
+        const bodyWithSeq = { ...body, invoiceNo };
+
+        const newInvoice = await Invoice.create(bodyWithSeq);
 
         return NextResponse.json({ success: true, data: newInvoice }, { status: 201 });
     } catch (error: any) {

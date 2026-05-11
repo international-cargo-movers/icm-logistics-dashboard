@@ -128,7 +128,7 @@ export const QuoteSchema = new Schema<IQuote>({
 }, { timestamps: true });
 
 // 4. Pre-save middleware to calculate totals
-QuoteSchema.pre("save", function (this: IQuote, next) {
+QuoteSchema.pre("save", function (this: IQuote) {
     let calcTotalBuy = 0;
     let calcTotalSell = 0;
     let calcTotalGst = 0;
@@ -138,10 +138,10 @@ QuoteSchema.pre("save", function (this: IQuote, next) {
             const roe = item.roe || 1;
             const quantity = item.quantity || 1;
             const baseSell = (item.sellPrice || 0) * roe * quantity;
-            
+
             calcTotalBuy += (item.buyPrice || 0) * roe * quantity;
             calcTotalSell += baseSell;
-            
+
             const gstAmount = baseSell * ((item.gstPercent || 0) / 100);
             item.gstAmount = gstAmount;
             calcTotalGst += gstAmount;
@@ -153,10 +153,8 @@ QuoteSchema.pre("save", function (this: IQuote, next) {
     this.financials.profitMargin = calcTotalSell - calcTotalBuy;
     this.financials.totalGst = calcTotalGst;
     this.financials.netTotal = calcTotalSell + calcTotalGst;
-    
+
     // Set base currency to INR since totals are now converted
     this.financials.baseCurrency = "INR"; 
-    next();
 });
-
 export default mongoose.models.Quote || mongoose.model<IQuote>("Quote", QuoteSchema);

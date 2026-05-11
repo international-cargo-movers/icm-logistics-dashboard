@@ -5,7 +5,7 @@ const COMPANY_CONFIG: Record<string, { short: string, loc: string }> = {
   "icm-delhi": { short: "ICM", loc: "ICMDEL" },
   "icm-mumbai": { short: "ICM", loc: "ICMMUM" },
   "intimation-delhi": { short: "ICMPL", loc: "ICMPLDEL" },
-  "intimation-mumbai": { short: "ICMPL", loc: "ICMPLMUM" },
+  "intimation-mumbai": { short: "ICMPL", loc: "ICMPLMUL" },
 };
 
 function getFinancialYear() {

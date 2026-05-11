@@ -34,61 +34,67 @@ export async function POST(request: Request) {
         }
 
         // 1. Map the frontend data to our strict MongoDB Schema
-        const updatedQuote = await Quote.findOneAndUpdate(
-            { quoteId: quoteData.quoteRef },
-            {
-                customerDetails: {
-                    companyId: quoteData.customerId,
-                    contactPerson: quoteData.customerName, 
-                },
-                routingDetails: {
-                    originCountry: String(quoteData.originCountry),           
-                    originPort: String(quoteData.originPort),
-                    destinationCountry: String(quoteData.destinationCountry), 
-                    destinationPort: String(quoteData.destinationPort),
-                    mode: String(quoteData.mode), 
-                },
-                cargoSummary: {
-                    commodity: quoteData.cargoSummary?.commodity || "General Cargo",
-                    equipment: quoteData.cargoSummary?.equipment,
-                    containerCount: Number(quoteData.cargoSummary?.containerCount) || undefined,
-                    containerType: quoteData.cargoSummary?.containerType,
-                    totalCBM: Number(quoteData.cargoSummary?.totalCBM) || undefined,
-                    items: quoteData.cargoSummary?.items?.map((item: any) => ({
-                        description: item.description,
-                        hsnCode: item.hsnCode,
-                        noOfPackages: Number(item.noOfPackages) || 0,
-                        grossWeight: Number(item.grossWeight) || 0,
-                        volumetricWeight: Number(item.volumetricWeight) || 0,
-                    })) || [],
-                    totalNoOfPackages: Number(quoteData.totalNoOfPackages) || 0,
-                    totalGrossWeight: Number(quoteData.totalGrossWeight) || 0,
-                    totalVolumetricWeight: Number(quoteData.totalVolumetricWeight) || 0,
-                },
-                validity: {
-                    issueDate: new Date(),
-                    expiryDate: new Date(quoteData.validUntil),
-                },
-                financials: {
-                    lineItems: quoteData.lineItems.map((item: any) => ({
-                        chargeName: item.chargeName,
-                        chargeType: item.chargeType,
-                        buyPrice: Number(item.buyPrice),
-                        sellPrice: Number(item.sellPrice),
-                        currency: item.currency || "USD",
-                        roe: Number(item.roe) || 1,
-                        quantity: Number(item.quantity) || 1,
-                        notes: item.notes || ""
-                    })),
-                    totalBuy: Number(quoteData.totalBuy) || 0,
-                    totalSell: Number(quoteData.totalSell) || 0,
-                    profitMargin: Number(quoteData.profitMargin) || 0,
-                    baseCurrency: "INR"
-                },
-                status: "Sent"
-            },
-            { upsert: true, returnDocument: 'after', runValidators: true }
-        );
+        // We use .findOne() and .save() instead of findOneAndUpdate() 
+        // to ensure our Mongoose pre-save hook (which calculates profit margins and GST) fires correctly!
+        let quote = await Quote.findOne({ quoteId: quoteData.quoteRef });
+        
+        if (!quote) {
+            quote = new Quote({ quoteId: quoteData.quoteRef });
+        }
+
+        quote.customerDetails = {
+            companyId: quoteData.customerId,
+            contactPerson: quoteData.customerName, 
+        };
+        quote.routingDetails = {
+            originCountry: String(quoteData.originCountry),           
+            originPort: String(quoteData.originPort),
+            destinationCountry: String(quoteData.destinationCountry), 
+            destinationPort: String(quoteData.destinationPort),
+            mode: String(quoteData.mode), 
+        };
+        quote.cargoSummary = {
+            commodity: quoteData.cargoSummary?.commodity || "General Cargo",
+            equipment: quoteData.cargoSummary?.equipment,
+            containerCount: Number(quoteData.cargoSummary?.containerCount) || undefined,
+            containerType: quoteData.cargoSummary?.containerType,
+            totalCBM: Number(quoteData.cargoSummary?.totalCBM) || undefined,
+            items: quoteData.cargoSummary?.items?.map((item: any) => ({
+                description: item.description,
+                hsnCode: item.hsnCode,
+                noOfPackages: Number(item.noOfPackages) || 0,
+                grossWeight: Number(item.grossWeight) || 0,
+                volumetricWeight: Number(item.volumetricWeight) || 0,
+            })) || [],
+            totalNoOfPackages: Number(quoteData.totalNoOfPackages) || 0,
+            totalGrossWeight: Number(quoteData.totalGrossWeight) || 0,
+            totalVolumetricWeight: Number(quoteData.totalVolumetricWeight) || 0,
+        };
+        quote.validity = {
+            issueDate: quote.validity?.issueDate || new Date(),
+            expiryDate: new Date(quoteData.validUntil),
+        };
+        quote.financials = {
+            lineItems: quoteData.lineItems.map((item: any) => ({
+                chargeName: item.chargeName,
+                chargeType: item.chargeType,
+                buyPrice: Number(item.buyPrice),
+                sellPrice: Number(item.sellPrice),
+                currency: item.currency || "USD",
+                roe: Number(item.roe) || 1,
+                quantity: Number(item.quantity) || 1,
+                notes: item.notes || "",
+                gstPercent: Number(item.gstPercent ?? 18)
+            })),
+            totalBuy: Number(quoteData.totalBuy) || 0,
+            totalSell: Number(quoteData.totalSell) || 0,
+            profitMargin: Number(quoteData.profitMargin) || 0,
+            baseCurrency: "INR"
+        };
+        quote.status = "Sent";
+
+        await quote.save();
+        const updatedQuote = quote;
 
         // ==========================================
         // 2. EMAIL DISPATCH PIPELINE (Nodemailer)

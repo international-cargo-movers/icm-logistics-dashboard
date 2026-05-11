@@ -414,7 +414,7 @@ export default function InvoicesDashboardPage() {
                               <Button onClick={() => handleDownload(inv)} variant="ghost" className="h-7 w-7 p-0 rounded-md text-slate-500 hover:text-indigo-600 hover:bg-white transition-all shadow-none">
                                 <Download className="w-3.5 h-3.5" />
                               </Button>
-                              <Button onClick={() => router.push(`/dashboard/invoices/edit/${inv.invoiceNo}`)} variant="ghost" className="h-7 w-7 p-0 rounded-md text-slate-500 hover:text-amber-600 hover:bg-white transition-all shadow-none">
+                              <Button onClick={() => router.push(`/dashboard/invoices/edit/${inv._id}`)} variant="ghost" className="h-7 w-7 p-0 rounded-md text-slate-500 hover:text-amber-600 hover:bg-white transition-all shadow-none">
                                 <Edit className="w-3.5 h-3.5" />
                               </Button>
                             </div>

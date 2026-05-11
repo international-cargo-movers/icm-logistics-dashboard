@@ -116,7 +116,7 @@ export default function QuotesDashboard() {
     const stats = useMemo(() => {
         const total = quotes.length;
         const approved = quotes.filter(q => q.status === "Approved");
-        const approvedValue = approved.reduce((sum, q) => sum + (q.financials?.totalSell || 0), 0);
+        const approvedValue = approved.reduce((sum, q) => sum + (q.financials?.netTotal || 0), 0);
         const winRate = total > 0 ? (approved.length / total) * 100 : 0;
         const pending = quotes.filter(q => q.status === "Sent" || q.status === "Draft").length;
 
@@ -138,7 +138,9 @@ export default function QuotesDashboard() {
             destinationCountry: q.routingDetails?.destinationCountry,
             cargoSummary: q.cargoSummary || {},
             lineItems: q.financials?.lineItems || [],
-            totalSell: q.financials?.totalSell || 0
+            totalSell: q.financials?.totalSell || 0,
+            totalGst: q.financials?.totalGst || 0,
+            netTotal: q.financials?.netTotal || 0
         }
     }
 
@@ -345,8 +347,8 @@ export default function QuotesDashboard() {
                                                     </Badge>
                                                 </td>
                                                 <td className="px-8 py-6">
-                                                    <p className="font-black text-slate-900">{formatCurrency(quote.financials?.totalSell)}</p>
-                                                    <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-tighter mt-1">Gross Sell</p>
+                                                    <p className="font-black text-slate-900">{formatCurrency(quote.financials?.netTotal)}</p>
+                                                    <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-tighter mt-1">Net Total</p>
                                                 </td>
                                                 <td className="px-8 py-6">
                                                     {getStatusBadge(quote.status)}

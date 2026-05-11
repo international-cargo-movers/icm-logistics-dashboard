@@ -171,7 +171,8 @@ export default function QuotePDF({ data }: { data: any }) {
             <Text style={styles.colDesc}>Particulars</Text>
             <Text style={styles.colQty}>Qty</Text>
             <Text style={styles.colRate}>Rate</Text>
-            <Text style={styles.colAmount}>Total</Text>
+            <Text style={[styles.colAmount, { width: '10%', textAlign: 'center' }]}>GST%</Text>
+            <Text style={[styles.colAmount, { width: '15%' }]}>Total</Text>
             <Text style={styles.colRemarks}>Unit</Text>
           </View>
           
@@ -185,19 +186,28 @@ export default function QuotePDF({ data }: { data: any }) {
                 <Text style={styles.colDesc}>{item.chargeName}</Text>
                 <Text style={styles.colQty}>{qty}</Text>
                 <Text style={styles.colRate}>{item.currency || "USD"} {rate.toLocaleString()}</Text>
-                <Text style={styles.colAmount}>{item.currency || "USD"} {lineTotal.toLocaleString()}</Text>
+                <Text style={{ width: '10%', textAlign: 'center' }}>{item.gstPercent || 0}%</Text>
+                <Text style={[styles.colAmount, { width: '15%' }]}>{item.currency || "USD"} {lineTotal.toLocaleString()}</Text>
                 <Text style={styles.colRemarks}>{item.notes || "PER SET"}</Text>
               </View>
             );
           })}
         </View>
 
-        {/* ESTIMATED TOTAL */}
-        <View style={styles.totalsBox}>
-            <View style={styles.totalsRow}>
-                <Text style={{ fontWeight: 'bold', fontSize: 10 }}>ESTIMATED TOTAL</Text>
-                <Text style={{ fontWeight: 'bold', fontSize: 10 }}>
-                    INR ₹{Number(data.totalSell || 0).toLocaleString()}
+        {/* ESTIMATED TOTAL BOX */}
+        <View style={[styles.totalsBox, { width: '45%' }]}>
+            <View style={[styles.totalsRow, { marginBottom: 4 }]}>
+                <Text style={{ color: '#54647a' }}>Subtotal (Excl. GST)</Text>
+                <Text style={{ fontWeight: 'bold' }}>INR ₹{Number(data.totalSell || 0).toLocaleString()}</Text>
+            </View>
+            <View style={[styles.totalsRow, { marginBottom: 4, borderBottom: '1px solid #c6c6cd', paddingBottom: 4 }]}>
+                <Text style={{ color: '#54647a' }}>Total GST Amount</Text>
+                <Text style={{ fontWeight: 'bold', color: '#111c2d' }}>INR ₹{Number(data.totalGst || 0).toLocaleString()}</Text>
+            </View>
+            <View style={[styles.totalsRow, { marginTop: 4 }]}>
+                <Text style={{ fontWeight: 'bold', fontSize: 10, color: '#111c2d' }}>ESTIMATED TOTAL</Text>
+                <Text style={{ fontWeight: 'bold', fontSize: 11, color: '#111c2d' }}>
+                    INR {Number(data.netTotal || data.totalSell || 0).toLocaleString()}
                 </Text>
             </View>
         </View>
