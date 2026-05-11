@@ -159,7 +159,7 @@ export const CustomerBillSchema = new Schema<ICustomerBill>({
     balanceDue: { type: Number, default: 0 },
 }, { timestamps: true });
 
-CustomerBillSchema.pre("save", function (this: ICustomerBill, next) {
+CustomerBillSchema.pre("save", function (this: ICustomerBill) {
     let tUSD = 0;
     let tTaxableINR = 0;
     let tGstINR = 0;

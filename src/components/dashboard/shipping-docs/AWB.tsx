@@ -79,6 +79,11 @@ export default function AwbPDF({ data }: { data: any }) {
     const cust = data?.customerDetails || {};
     const party = data?.partyDetails || {};
     const cargo = data?.cargoDetails || {};
+    const company = data?.companyDetails || {
+        fullName: "INTERNATIONAL CARGO MOVERS",
+        address: "193-A BASEMENT ARJUN NAGAR SAFDARJUNG ENCLAVE, NEW DELHI-110029, DELHI, INDIA",
+        logo: "/ICM_logo.png"
+    };
 
     const grossWeight = Number(cargo.totalGrossWeight || cargo.grossWeight || 0).toFixed(2);
     const volumetricWeight = Number(cargo.totalVolumetricWeight || cargo.volumetricWeight || 0).toFixed(2);
@@ -115,8 +120,8 @@ export default function AwbPDF({ data }: { data: any }) {
                             </View>
                             <View style={{ minHeight: 40, padding: 2 }}>
                                 <Text style={styles.label}>{"Issuing Carrier's Agent Name and City"}</Text>
-                                <Text style={styles.value}>INTERNATIONAL CARGO MOVERS</Text>
-                                <Text style={styles.address}>NEW DELHI, INDIA</Text>
+                                <Text style={styles.value}>{company.fullName}</Text>
+                                <Text style={styles.address}>{company.address}</Text>
                             </View>
                         </View>
                         <View style={styles.halfWidth}>
@@ -131,7 +136,7 @@ export default function AwbPDF({ data }: { data: any }) {
                                 <Text style={{ fontSize: 10, fontWeight: 'bold' }}>Air Waybill</Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                                     <Text style={styles.label}>Issued by</Text>
-                                    <Image src="/ICM_logo.png" style={{ width: 100, marginLeft: 10 }} />
+                                    <Image src={company.logo} style={{ width: 100, marginLeft: 10 }} />
                                 </View>
                             </View>
                             <View style={{ padding: 4, borderBottom: '1px solid #000', minHeight: 60 }}>

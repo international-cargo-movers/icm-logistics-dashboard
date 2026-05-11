@@ -36,6 +36,7 @@ import Sidebar from "@/components/dashboard/Sidebar"
 import TopNav from "@/components/dashboard/TopNav"
 import RecordPaymentModal from "@/components/dashboard/ledger/RecordPaymentModal"
 import { useSession } from "next-auth/react"
+import { getCompanyDetails } from "@/lib/constants"
 
 export default function CustomerBillsDashboardPage() {
   const { data: session, status } = useSession()
@@ -135,8 +136,15 @@ export default function CustomerBillsDashboardPage() {
   const handleViewPDF = async (bill: any, type: 'Commercial' | 'Tax') => {
     toast.info(`Generating ${type} Invoice Preview...`)
     try {
+      const tenantId = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("tenant-id="))
+        ?.split("=")[1];
+      const companyDetails = getCompanyDetails(tenantId);
+      const dataWithCompany = { ...bill, companyDetails };
+
       const PDFComponent = type === 'Commercial' ? CommercialInvoicePDF : TaxInvoicePDF;
-      const blob = await pdf(<PDFComponent data={bill} />).toBlob()
+      const blob = await pdf(<PDFComponent data={dataWithCompany} />).toBlob()
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
     } catch (error) { 

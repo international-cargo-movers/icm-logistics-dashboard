@@ -21,6 +21,7 @@ import { LineItemDescriptionInput } from "@/components/dashboard/financials/Line
 import { getAutoUnitAndQty, cn } from "@/lib/utils"
 import CarrierVehicleCombobox from "@/components/dashboard/CarrierVehicleCombobox"
 import { AddPortModal } from "@/components/dashboard/ports/AddPortModal"
+import { getCompanyDetails } from "@/lib/constants"
 
 // --- UTILITY: Number to Words ---
 function numberToWords(num: number): string {
@@ -260,6 +261,12 @@ export default function EditInvoicePage() {
     async function onSubmit(data: InvoiceFormValues) {
         setIsSubmitting(true)
         try {
+            const tenantId = document.cookie
+                .split("; ")
+                .find((row) => row.startsWith("tenant-id="))
+                ?.split("=")[1];
+            const companyDetails = getCompanyDetails(tenantId);
+
             const linkedJob = jobs.find(j => j._id === data.jobId || j.jobId === data.jobId);
             const companyId = linkedJob?.customerDetails?.companyId?._id || linkedJob?.customerDetails?.companyId || data.customerName;
 
@@ -296,7 +303,8 @@ export default function EditInvoicePage() {
                     roundOff: 0,
                     netAmount: totals.net,
                     amountInWords: numberToWords(totals.net)
-                }
+                },
+                companyDetails
             }
 
             const dbResponse = await fetch(`/api/invoices/${invoiceId}`, {

@@ -1,11 +1,14 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
   page: { padding: 30, fontFamily: 'Helvetica', fontSize: 8, color: '#191c1e' },
-  headerContainer: { flexDirection: 'row', justifyContent: 'space-between', borderBottom: '2px solid #111c2d', paddingBottom: 10, marginBottom: 15 },
+  headerContainer: { flexDirection: 'row', justifyContent: 'space-between', borderBottom: '2px solid #111c2d', paddingBottom: 10, marginBottom: 15, alignItems: 'center' },
+  logo: { width: 50 },
+  companyInfo: { flex: 1, paddingLeft: 10 },
   companyName: { fontSize: 16, fontWeight: 'bold', color: '#111c2d', marginBottom: 4 },
   companyDetails: { fontSize: 7, color: '#54647a', lineHeight: 1.4 },
+  titleContainer: { alignItems: 'flex-end' },
   title: { fontSize: 18, fontWeight: 'bold', color: '#111c2d', textAlign: 'right', marginBottom: 4 },
   metaRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 3 },
   metaLabel: { width: 60, textAlign: 'right', color: '#54647a', marginRight: 5 },
@@ -26,7 +29,7 @@ const styles = StyleSheet.create({
   quoteBanner: { backgroundColor: '#fdf04b', padding: 6, textAlign: 'center', border: '1px solid #111c2d', marginBottom: 10, borderRadius: 2 },
   quoteBannerText: { fontSize: 10, fontWeight: 'bold', color: '#111c2d', textTransform: 'uppercase' },
 
-  // Table Styles (Updated to match reference image)
+  // Table Styles
   table: { width: '100%', border: '1px solid #c6c6cd', borderRadius: 4, marginBottom: 5 },
   tableHeader: { flexDirection: 'row', backgroundColor: '#add8e6', borderBottom: '1px solid #c6c6cd', padding: 6, fontWeight: 'bold' },
   tableRow: { flexDirection: 'row', borderBottom: '1px solid #e6e8ea', padding: 6 },
@@ -37,8 +40,8 @@ const styles = StyleSheet.create({
   colAmount: { width: '15%', textAlign: 'right', fontWeight: 'bold' },
   colRemarks: { width: '15%', color: '#54647a', fontSize: 7, marginLeft: 5 },
   
-  totalsBox: { alignSelf: 'flex-end', width: '40%', border: '2px solid #111c2d', padding: 8, borderRadius: 4, backgroundColor: '#f8fafc', marginBottom: 10 },
-  totalsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  totalsBox: { alignSelf: 'flex-end', width: '45%', border: '2px solid #111c2d', padding: 8, borderRadius: 4, backgroundColor: '#f8fafc', marginBottom: 10 },
+  totalsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
   
   // Notes & Disclaimers
   redDisclaimer: { color: '#d32f2f', fontWeight: 'bold', fontStyle: 'italic', fontSize: 9, marginBottom: 4 },
@@ -53,6 +56,14 @@ const styles = StyleSheet.create({
 export default function QuotePDF({ data }: { data: any }) {
   const lineItems = data.lineItems || [];
   const cargo = data.cargoSummary || {};
+  const company = data.companyDetails || {
+    fullName: "INTERNATIONAL CARGO MOVERS",
+    name: "International Cargo Movers",
+    address: "193-A BASEMENT ARJUN NAGAR SAFDARJUNG ENCLAVE, NEW DELHI-110029, DELHI, INDIA",
+    tagline: "International Forwarders, Consolidators & Shipping Agent",
+    email: "accounts@internationalcargo.com",
+    logo: "/ICM_logo.png"
+  };
 
   // Construct dynamic banner title based on routing data
   const modeText = data.mode ? data.mode.toUpperCase() : "FREIGHT";
@@ -67,12 +78,14 @@ export default function QuotePDF({ data }: { data: any }) {
         
         {/* HEADER */}
         <View style={styles.headerContainer}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.companyName}>INTERNATIONAL CARGO MOVERS</Text>
-            <Text style={styles.companyDetails}>International Forwarders, Consolidators & Shipping Agent</Text>
-            <Text style={styles.companyDetails}>{process.env.EMAIL_USER || "quotes@icm.com"}</Text>
+          <Image src={company.logo} style={styles.logo} />
+          <View style={styles.companyInfo}>
+            <Text style={styles.companyName}>{company.fullName}</Text>
+            <Text style={styles.companyDetails}>{company.tagline}</Text>
+            <Text style={styles.companyDetails}>{company.address}</Text>
+            <Text style={styles.companyDetails}>{company.email}</Text>
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={styles.titleContainer}>
             <Text style={styles.title}>OFFICIAL QUOTATION</Text>
             <View style={styles.metaRow}>
                 <Text style={styles.metaLabel}>Quote Ref:</Text>
@@ -157,117 +170,80 @@ export default function QuotePDF({ data }: { data: any }) {
           </View>
         )}
 
-        {/* DYNAMIC YELLOW BANNER */}
+        {/* DYNAMIC BANNER */}
         <View style={styles.quoteBanner}>
             <Text style={styles.quoteBannerText}>{dynamicTitle}</Text>
         </View>
 
-        <Text style={{ fontSize: 9, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' }}>ORIGIN AND FREIGHT CHARGES</Text>
-
-        {/* PROPOSED CHARGES TABLE */}
+        {/* LINE ITEMS TABLE */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={styles.colSno}>S.No.</Text>
+            <Text style={styles.colSno}>S.No</Text>
             <Text style={styles.colDesc}>Particulars</Text>
             <Text style={styles.colQty}>Qty</Text>
-            <Text style={styles.colRate}>Rate</Text>
+            <Text style={styles.colRate}>Rate ({data.currency})</Text>
             <Text style={[styles.colAmount, { width: '10%', textAlign: 'center' }]}>GST%</Text>
-            <Text style={[styles.colAmount, { width: '15%' }]}>Total</Text>
+            <Text style={[styles.colAmount, { width: '15%' }]}>Total ({data.currency})</Text>
             <Text style={styles.colRemarks}>Unit</Text>
           </View>
-          
-          {lineItems.map((item: any, i: number) => {
-            const qty = Number(item.quantity) || 1;
-            const rate = Number(item.sellPrice) || 0;
-            const lineTotal = qty * rate;
-            return (
-              <View key={i} style={styles.tableRow}>
-                <Text style={styles.colSno}>{i + 1}</Text>
-                <Text style={styles.colDesc}>{item.chargeName}</Text>
-                <Text style={styles.colQty}>{qty}</Text>
-                <Text style={styles.colRate}>{item.currency || "USD"} {rate.toLocaleString()}</Text>
-                <Text style={{ width: '10%', textAlign: 'center' }}>{item.gstPercent || 0}%</Text>
-                <Text style={[styles.colAmount, { width: '15%' }]}>{item.currency || "USD"} {lineTotal.toLocaleString()}</Text>
-                <Text style={styles.colRemarks}>{item.notes || "PER SET"}</Text>
-              </View>
-            );
-          })}
+
+          {lineItems.map((item: any, i: number) => (
+            <View key={i} style={styles.tableRow}>
+              <Text style={styles.colSno}>{i + 1}</Text>
+              <Text style={styles.colDesc}>{item.description}</Text>
+              <Text style={styles.colQty}>{item.quantity}</Text>
+              <Text style={styles.colRate}>{item.rate?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+              <Text style={{ width: '10%', textAlign: 'center' }}>{item.gstPercent || 0}%</Text>
+              <Text style={[styles.colAmount, { width: '15%' }]}>{item.totalAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+              <Text style={styles.colRemarks}>{item.unit}</Text>
+            </View>
+          ))}
         </View>
 
-        {/* ESTIMATED TOTAL BOX */}
-        <View style={[styles.totalsBox, { width: '45%' }]}>
-            <View style={[styles.totalsRow, { marginBottom: 4 }]}>
-                <Text style={{ color: '#54647a' }}>Subtotal (Excl. GST)</Text>
-                <Text style={{ fontWeight: 'bold' }}>INR ₹{Number(data.totalSell || 0).toLocaleString()}</Text>
-            </View>
-            <View style={[styles.totalsRow, { marginBottom: 4, borderBottom: '1px solid #c6c6cd', paddingBottom: 4 }]}>
-                <Text style={{ color: '#54647a' }}>Total GST Amount</Text>
-                <Text style={{ fontWeight: 'bold', color: '#111c2d' }}>INR ₹{Number(data.totalGst || 0).toLocaleString()}</Text>
-            </View>
-            <View style={[styles.totalsRow, { marginTop: 4 }]}>
-                <Text style={{ fontWeight: 'bold', fontSize: 10, color: '#111c2d' }}>ESTIMATED TOTAL</Text>
-                <Text style={{ fontWeight: 'bold', fontSize: 11, color: '#111c2d' }}>
-                    INR {Number(data.netTotal || data.totalSell || 0).toLocaleString()}
-                </Text>
-            </View>
+        {/* TOTALS BOX */}
+        <View style={styles.totalsBox}>
+          <View style={[styles.totalsRow, { marginBottom: 4 }]}>
+            <Text style={{ color: '#54647a' }}>Subtotal (Excl. GST)</Text>
+            <Text style={{ fontWeight: 'bold' }}>INR {data.subTotal?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+          </View>
+          <View style={[styles.totalsRow, { marginBottom: 4, borderBottom: '1px solid #c6c6cd', paddingBottom: 4 }]}>
+            <Text style={{ color: '#54647a' }}>Total GST Amount</Text>
+            <Text style={{ fontWeight: 'bold' }}>INR {data.totalGst?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+          </View>
+          <View style={[styles.totalsRow, { marginTop: 4 }]}>
+            <Text style={{ fontWeight: 'bold', fontSize: 10 }}>ESTIMATED TOTAL</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 11 }}>
+              INR {data.netTotal?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </Text>
+          </View>
         </View>
 
         {/* DISCLAIMERS */}
-        <Text style={styles.redDisclaimer}>* The above rates are subject to booking and space confirmation.</Text>
-        <Text style={styles.blackDisclaimer}>** Local Transportation at actual</Text>
+        <Text style={styles.redDisclaimer}>* Rate Subject to GST as Applicable at the time of Invoicing</Text>
+        <Text style={styles.blackDisclaimer}>* Subject to Space and Equipment availability at the time of booking.</Text>
 
-        {/* DETAILED 12-POINT NOTES */}
+        {/* NOTES & TERMS */}
         <View style={styles.notesContainer}>
-            <Text style={styles.notesHeader}>NOTES:</Text>
-            
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>1.</Text>
-                <Text style={styles.noteText}>Government of India has announced implementation of Goods and Service Tax (GST) @ 18% with effect from 1st July 2017 will be applicable.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>2.</Text>
-                <Text style={styles.noteText}>The above charges are subject to Duty/Taxes, Storage, and Demurrage if any will be on consignee account.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>3.</Text>
-                <Text style={styles.noteText}>The above charges are without or subject to Insurance/storage/detention if any.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>4.</Text>
-                <Text style={styles.noteText}>Quote based on Household/General Non-Hazardous Goods.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>5.</Text>
-                <Text style={styles.noteText}>The above rates are without packing and insurance charges.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>6.</Text>
-                <Text style={styles.noteText}>Local Transportation and Loading/unloading will be as actual.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>7.</Text>
-                <Text style={styles.noteText}>It is the shipper/exporter's responsibility to ensure the cargo has air/sea worthiness packing.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>8.</Text>
-                <Text style={styles.noteText}>The above rates are subject to booking confirmation.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>9.</Text>
-                <Text style={styles.noteText}>MISC/Incidental Charges if any will be as actual.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>10.</Text>
-                <Text style={styles.noteText}>Without Stencil marking on packages bearing Shipper & consignee address, cargo is not allowed to enter terminal for custom clearance.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>11.</Text>
-                <Text style={styles.noteText}>Warehouse charges will be applicable.</Text>
-            </View>
-            <View style={styles.noteItem}>
-                <Text style={styles.noteNumber}>12.</Text>
-                <Text style={styles.noteText}>Rate Valid till - {data.validUntil || "TBD"}</Text>
-            </View>
+          <Text style={styles.notesHeader}>Notes & Terms:</Text>
+          <View style={styles.noteItem}>
+            <Text style={styles.noteNumber}>1.</Text>
+            <Text style={styles.noteText}>Above quoted rates are based on the dimensions and weight shared. Any variation will result in a revision of rates.</Text>
+          </View>
+          <View style={styles.noteItem}>
+            <Text style={styles.noteNumber}>2.</Text>
+            <Text style={styles.noteText}>Subject to {company.name} Standard Trading Conditions.</Text>
+          </View>
+          <View style={styles.noteItem}>
+            <Text style={styles.noteNumber}>3.</Text>
+            <Text style={styles.noteText}>Excludes any storage, detention or unforeseen charges at port/terminal unless specified.</Text>
+          </View>
+        </View>
+
+        {/* SIGNATURE */}
+        <View style={{ marginTop: 20, alignItems: 'flex-end' }}>
+            <View style={{ width: '35%', borderBottom: '1px solid #111c2d', marginBottom: 30 }} />
+            <Text style={{ fontSize: 9, fontWeight: 'bold' }}>For {company.fullName}</Text>
+            <Text style={{ fontSize: 7, color: '#54647a' }}>Authorized Signatory</Text>
         </View>
 
       </Page>

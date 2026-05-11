@@ -102,11 +102,25 @@ const customerBillSchema = z.object({
 type CustomerBillFormValues = z.infer<typeof customerBillSchema>
 
 import { useSession } from "next-auth/react"
+import { getCompanyDetails, INTERNAL_COMPANIES } from "@/lib/constants"
 
 export default function NewCustomerBillPage() {
     const { data: session, status } = useSession()
     const router = useRouter()
     
+    // Get tenant from cookie
+    const [companyDetails, setCompanyDetails] = React.useState(INTERNAL_COMPANIES[0]);
+
+    React.useEffect(() => {
+        const tenantId = document.cookie
+            .split("; ")
+            .find((row) => row.startsWith("tenant-id="))
+            ?.split("=")[1];
+        if (tenantId) {
+            setCompanyDetails(getCompanyDetails(tenantId));
+        }
+    }, []);
+
     // Subtle UI Abstraction: Silent redirect if not authorized
     React.useEffect(() => {
         if (status === "loading") return
@@ -127,9 +141,9 @@ export default function NewCustomerBillPage() {
             billDate: new Date().toISOString().split('T')[0],
             jobId: "", jobReference: "",
             exporter: { 
-                name: "INTERNATIONAL CARGO MOVERS", 
-                address: "193A, BASEMENT ARJUN NAGAR, SAFDARJUNG ENCLAVE, NEW DELHI-110029, INDIA",
-                gstin: "07ACDPR6690N1ZU",
+                name: companyDetails.fullName, 
+                address: companyDetails.address,
+                gstin: companyDetails.gstin,
                 iecNo: "0512091251",
                 exporterRef: ""
             },
@@ -143,14 +157,28 @@ export default function NewCustomerBillPage() {
                 termsOfDeliveryPayment: "PAYMENT : ADVANCE" 
             },
             bank: {
-                bankName: "ICICI BANK", accountNo: "032205500481", 
-                branchAddress: "A1/15, SAFDARJUNG ENCLAVE NEW DELHI-110029, INDIA",
-                swiftCode: "ICICINBBCTS", ifscCode: "ICIC0000322"
+                bankName: "HDFC BANK A/C", accountNo: "50200050661247", 
+                branchAddress: "SAFDARJUNG ENCLAVE NEW DELHI-110029, INDIA",
+                swiftCode: "HDFC0000503", ifscCode: "HDFC0000503"
             },
             exchangeRate: 83,
             lineItems: [{ description: "", hsnCode: "", quantity: 1, unit: "PCS", unitPriceUSD: 0, gstPercentage: 18 }]
         }
     })
+
+    // Update form when companyDetails changes
+    React.useEffect(() => {
+        form.reset({
+            ...form.getValues(),
+            exporter: {
+                name: companyDetails.fullName,
+                address: companyDetails.address,
+                gstin: companyDetails.gstin,
+                iecNo: "0512091251",
+                exporterRef: form.getValues().exporter.exporterRef
+            }
+        });
+    }, [companyDetails, form]);
 
     const { control, watch, setValue, register, handleSubmit } = form
     const { fields, append, remove, replace } = useFieldArray({ control, name: "lineItems" })

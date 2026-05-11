@@ -25,6 +25,7 @@ export async function POST(request: Request) {
         
         const body = await request.json();
         const { quoteData, pdfBase64 } = body;
+        const company = quoteData.companyDetails || { fullName: "International Cargo Movers" };
 
         if (!quoteData || !quoteData.quoteRef) {
             return NextResponse.json(
@@ -116,10 +117,10 @@ export async function POST(request: Request) {
             });
             
             const mailOptions = {
-                from: `"International Cargo Movers" <${process.env.EMAIL_USER}>`,
+                from: `"${company.fullName}" <${process.env.EMAIL_USER}>`,
                 to: quoteData.customerEmail,
                 subject: `Your Freight Quotation: ${quoteData.quoteRef}`,
-                text: `Hi ${quoteData.customerName},\n\nPlease find attached the official freight quotation (${quoteData.quoteRef}) for your requested routing.\n\nLet us know if you have any questions!\n\nBest Regards,\nMarcus Thorne\nFleet Director`,
+                text: `Hi ${quoteData.customerName},\n\nPlease find attached the official freight quotation (${quoteData.quoteRef}) for your requested routing.\n\nLet us know if you have any questions!\n\nBest Regards,\nTeam ${company.fullName}`,
                 attachments: [
                     {
                         filename: `Quotation_${quoteData.quoteRef}.pdf`,

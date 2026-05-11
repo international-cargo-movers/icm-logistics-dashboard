@@ -166,7 +166,7 @@ export const VendorBillSchema = new Schema<IVendorBill>({
     balanceDue: { type: Number, default: 0 },
 }, { timestamps: true });
 
-VendorBillSchema.pre("save", function (this: IVendorBill, next) {
+VendorBillSchema.pre("save", function (this: IVendorBill) {
     let totalTaxable = 0;
     let totalCgst = 0;
     let totalSgst = 0;

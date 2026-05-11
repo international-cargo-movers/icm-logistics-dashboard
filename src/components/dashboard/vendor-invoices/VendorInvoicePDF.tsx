@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
   page: { padding: 30, fontFamily: 'Helvetica', fontSize: 8, color: '#000000' },
@@ -9,8 +9,8 @@ const styles = StyleSheet.create({
   
   // Text Styles
   headerTitle: { fontSize: 12, fontWeight: 'bold', textAlign: 'center', borderBottom: '1px solid #000', padding: 4 },
-  companyName: { fontSize: 12, fontWeight: 'bold', textAlign: 'center', marginTop: 4 },
-  companyAddress: { fontSize: 8, textAlign: 'center', lineHeight: 1.3 },
+  companyName: { fontSize: 12, fontWeight: 'bold', textAlign: 'left', marginTop: 4 },
+  companyAddress: { fontSize: 8, textAlign: 'left', lineHeight: 1.3 },
   boldText: { fontWeight: 'bold' },
   
   // Grid System
@@ -56,6 +56,15 @@ export default function VendorInvoicePDF({ data }: { data: any }) {
   const lineItems = data.lineItems || [];
   const snapshot = data.shipmentSnapshot || {};
   const vendor = data.vendorDetails || {};
+  const company = data.companyDetails || {
+    fullName: "INTERNATIONAL CARGO MOVERS",
+    address: "193-A BASEMENT ARJUN NAGAR SAFDARJUNG ENCLAVE, NEW DELHI-110029, DELHI, INDIA",
+    gstin: "07AAACI1234E1Z5",
+    stateName: "Delhi",
+    stateCode: "07",
+    email: "accounts@internationalcargo.com",
+    logo: "/ICM_logo.png"
+  };
 
   // Group items by SAC for the HSN summary table at the bottom
   const hsnSummaryMap = lineItems.reduce((acc: any, item: any) => {
@@ -68,7 +77,6 @@ export default function VendorInvoicePDF({ data }: { data: any }) {
     return acc;
   }, {});
   const hsnSummaryArray = Object.values(hsnSummaryMap);
-  console.log("Vendor Invoice PDF job reference: ",data.jobReference);
   
   return (
     <Document>
@@ -79,13 +87,16 @@ export default function VendorInvoicePDF({ data }: { data: any }) {
           <Text style={styles.headerTitle}>Vendor Invoice</Text>
 
           {/* COMPANY HEADER */}
-          <View style={[styles.rowBorderBottom, { padding: 8, justifyContent: 'center' }]}>
-            <View style={{ width: '100%' }}>
-              <Text style={styles.companyName}>INTERNATIONAL CARGO MOVERS</Text>
-              <Text style={styles.companyAddress}>123 GLOBAL LOGISTICS PARK, NEW DELHI 110037</Text>
-              <Text style={styles.companyAddress}><Text style={styles.boldText}>GSTIN/UIN:</Text> 07AAACI1234E1Z5</Text>
-              <Text style={styles.companyAddress}><Text style={styles.boldText}>State Name:</Text> Delhi, Code: 07</Text>
-              <Text style={styles.companyAddress}><Text style={styles.boldText}>E-Mail:</Text> accounts@internationalcargo.com</Text>
+          <View style={[styles.rowBorderBottom, { padding: 8, flexDirection: 'row', alignItems: 'center' }]}>
+            <View style={{ width: '15%' }}>
+               <Image src={company.logo} style={{ width: 50 }} />
+            </View>
+            <View style={{ width: '85%', paddingLeft: 10 }}>
+              <Text style={styles.companyName}>{company.fullName}</Text>
+              <Text style={styles.companyAddress}>{company.address}</Text>
+              <Text style={styles.companyAddress}><Text style={styles.boldText}>GSTIN/UIN:</Text> {company.gstin}</Text>
+              <Text style={styles.companyAddress}><Text style={styles.boldText}>State Name:</Text> {company.stateName}, Code: {company.stateCode}</Text>
+              <Text style={styles.companyAddress}><Text style={styles.boldText}>E-Mail:</Text> {company.email}</Text>
             </View>
           </View>
 
@@ -233,13 +244,13 @@ export default function VendorInvoicePDF({ data }: { data: any }) {
           <View style={[styles.rowBorderBottom, { padding: 4 }]}>
             <View style={{ width: '60%', borderRight: '1px solid #000', paddingRight: 4 }}>
               <Text style={[styles.boldText, { textDecoration: 'underline', marginBottom: 4 }]}>Company's Bank Details</Text>
-              <View style={styles.flexRow}><Text style={{ width: '30%' }}>A/c Holder Name:</Text><Text style={styles.boldText}>INTERNATIONAL CARGO MOVERS</Text></View>
+              <View style={styles.flexRow}><Text style={{ width: '30%' }}>A/c Holder Name:</Text><Text style={styles.boldText}>{company.fullName}</Text></View>
               <View style={styles.flexRow}><Text style={{ width: '30%' }}>Bank Name:</Text><Text style={styles.boldText}>HDFC BANK A/C</Text></View>
               <View style={styles.flexRow}><Text style={{ width: '30%' }}>A/c No.:</Text><Text style={styles.boldText}>50200050661247</Text></View>
               <View style={styles.flexRow}><Text style={{ width: '30%' }}>Branch & IFSC:</Text><Text style={styles.boldText}>SAFDARJUNG ENCLAVE & HDFC0000503</Text></View>
             </View>
             <View style={{ width: '40%', paddingLeft: 4, justifyContent: 'flex-end', alignItems: 'flex-end' }}>
-               <Text style={{ fontSize: 9, marginBottom: 30, textAlign: 'center', width: '100%' }}>for INTERNATIONAL CARGO MOVERS</Text>
+               <Text style={{ fontSize: 9, marginBottom: 30, textAlign: 'center', width: '100%' }}>for {company.fullName}</Text>
                <Text style={{ fontSize: 7 }}>Authorised Signatory</Text>
             </View>
           </View>
@@ -247,7 +258,7 @@ export default function VendorInvoicePDF({ data }: { data: any }) {
           {/* TERMS AND CONDITIONS */}
           <View style={styles.footerBox}>
             <Text style={[styles.boldText, { textDecoration: 'underline', marginBottom: 2 }]}>Terms And Conditions</Text>
-            <Text style={[styles.boldText, { fontSize: 7 }]}>ALL PAYMENTS TO BE MADE BY CHEQUE/NEFT/RTGS FAVOURING INTERNATIONAL CARGO MOVERS. INTEREST @ 24% P.A. WILL BE CHARGED IF NOT PAID ON PRESENTATION. DISCREPANCY IF ANY BILLED ITEMS MUST BE COMMUNICATED WITHIN 7 DAYS.</Text>
+            <Text style={[styles.boldText, { fontSize: 7 }]}>ALL PAYMENTS TO BE MADE BY CHEQUE/NEFT/RTGS FAVOURING {company.fullName}. INTEREST @ 24% P.A. WILL BE CHARGED IF NOT PAID ON PRESENTATION. DISCREPANCY IF ANY BILLED ITEMS MUST BE COMMUNICATED WITHIN 7 DAYS.</Text>
             <Text style={{ fontSize: 7, marginTop: 4, textAlign: 'center' }}>All business transactions are done in accordance with our company's standard trading terms and conditions.</Text>
           </View>
 

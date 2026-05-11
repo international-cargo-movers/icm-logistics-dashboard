@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
     page: { padding: 30, fontFamily: 'Helvetica', fontSize: 7, color: '#000' },
@@ -38,6 +38,12 @@ const styles = StyleSheet.create({
 });
 
 export default function TaxInvoicePDF({ data }: { data: any }) {
+    const company = data?.companyDetails || {
+        fullName: "INTERNATIONAL CARGO MOVERS",
+        address: "193-A BASEMENT ARJUN NAGAR SAFDARJUNG ENCLAVE, NEW DELHI-110029, DELHI, INDIA",
+        gstin: "07AAACI1234E1Z5",
+        logo: "/ICM_logo.png"
+    };
     const exp = data?.exporterDetails || {};
     const con = data?.consigneeDetails || {};
     const ship = data?.shippingDetails || {};
@@ -53,10 +59,15 @@ export default function TaxInvoicePDF({ data }: { data: any }) {
                     {/* Header Section (Consolidated for space) */}
                     <View style={styles.headerRow}>
                         <View style={styles.col50}>
-                            <Text style={styles.label}>Exporter</Text>
-                            <Text style={styles.value}>{exp.name}</Text>
-                            <Text style={styles.address}>{exp.address}</Text>
-                            <Text style={styles.value}>GST NO.{exp.gstin}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                <Image src={company.logo} style={{ width: 30, marginRight: 8 }} />
+                                <View>
+                                    <Text style={styles.label}>Exporter</Text>
+                                    <Text style={styles.value}>{company.fullName}</Text>
+                                </View>
+                            </View>
+                            <Text style={styles.address}>{company.address}</Text>
+                            <Text style={styles.value}>GST NO.{company.gstin}</Text>
                             
                             <View style={{ marginTop: 5, borderTop: '1px solid #eee', pt: 2 }}>
                                 <Text style={styles.label}>Consignee</Text>
@@ -73,10 +84,10 @@ export default function TaxInvoicePDF({ data }: { data: any }) {
                             </View>
                             <View style={styles.gridRow}>
                                 <View style={styles.gridCol}><Text style={styles.label}>Exporter Ref.</Text><Text style={styles.value}>{exp.exporterRef || "N/A"}</Text></View>
-                                <View style={styles.gridColNoBorder}><Text style={styles.label}>IEC NO.</Text><Text style={styles.value}>{exp.iecNo}</Text></View>
+                                <View style={styles.gridColNoBorder}><Text style={styles.label}>IEC NO.</Text><Text style={styles.value}>{exp.iecNo || "0512091251"}</Text></View>
                             </View>
                             <View style={styles.gridRow}>
-                                <View style={styles.gridColNoBorder}><Text style={styles.label}>Country of origin of goods</Text><Text style={styles.value}>{ship.countryOfOrigin}</Text></View>
+                                <View style={styles.gridColNoBorder}><Text style={styles.label}>Country of origin of goods</Text><Text style={styles.value}>{ship.countryOfOrigin || "INDIA"}</Text></View>
                             </View>
                             <View style={[styles.gridRow, { borderBottom: 'none' }]}>
                                 <View style={styles.gridColNoBorder}><Text style={styles.label}>Country of final destination</Text><Text style={styles.value}>{ship.countryOfDestination}</Text></View>
@@ -110,12 +121,12 @@ export default function TaxInvoicePDF({ data }: { data: any }) {
                             <Text style={styles.colMarks}>{idx === 0 ? ship.marksAndNumbers : ""}</Text>
                             <Text style={styles.colDesc}>{item.description}</Text>
                             <Text style={styles.colHsn}>{item.hsnCode}</Text>
-                            <Text style={styles.colQty}>{item.quantity.toFixed(2)} {item.unit}</Text>
-                            <Text style={styles.colRate}>{item.unitPriceINR.toFixed(4)}</Text>
-                            <Text style={styles.colTaxable}>{item.taxableAmountINR.toFixed(2)}</Text>
+                            <Text style={styles.colQty}>{item.quantity?.toFixed(2)} {item.unit}</Text>
+                            <Text style={styles.colRate}>{item.unitPriceINR?.toFixed(4)}</Text>
+                            <Text style={styles.colTaxable}>{item.taxableAmountINR?.toFixed(2)}</Text>
                             <Text style={[styles.colGstPct, { textAlign: 'center' }]}>{item.gstPercentage}%</Text>
-                            <Text style={styles.colGstAmt}>{item.gstAmountINR.toFixed(2)}</Text>
-                            <Text style={styles.colTotal}>{item.totalAmountINR.toFixed(2)}</Text>
+                            <Text style={styles.colGstAmt}>{item.gstAmountINR?.toFixed(2)}</Text>
+                            <Text style={styles.colTotal}>{item.totalAmountINR?.toFixed(2)}</Text>
                         </View>
                     ))}
 
@@ -124,10 +135,10 @@ export default function TaxInvoicePDF({ data }: { data: any }) {
                         <View style={{ width: '51%', textAlign: 'right', padding: 3, borderRight: '1px solid #000' }}>
                             <Text>Total</Text>
                         </View>
-                        <Text style={[styles.colTaxable, { fontWeight: 'bold' }]}>{fin.totalTaxableINR.toFixed(2)}</Text>
+                        <Text style={[styles.colTaxable, { fontWeight: 'bold' }]}>{fin.totalTaxableINR?.toFixed(2)}</Text>
                         <Text style={styles.colGstPct}></Text>
-                        <Text style={[styles.colGstAmt, { fontWeight: 'bold' }]}>{fin.totalGstINR.toFixed(2)}</Text>
-                        <Text style={[styles.colTotal, { fontWeight: 'bold' }]}>{fin.totalAmountINR.toFixed(2)}</Text>
+                        <Text style={[styles.colGstAmt, { fontWeight: 'bold' }]}>{fin.totalGstINR?.toFixed(2)}</Text>
+                        <Text style={[styles.colTotal, { fontWeight: 'bold' }]}>{fin.totalAmountINR?.toFixed(2)}</Text>
                     </View>
 
                     {/* Footer Info */}
@@ -137,10 +148,10 @@ export default function TaxInvoicePDF({ data }: { data: any }) {
                         <View style={{ flexDirection: 'row', marginTop: 10 }}>
                             <View style={{ width: '60%' }}>
                                 <Text style={styles.label}>Declaration:</Text>
-                                <Text style={{ fontSize: 6 }}>We declaration that invoice shows the actual price of goods described and that all particularss are true & correct.</Text>
+                                <Text style={{ fontSize: 6 }}>We declare that invoice shows the actual price of goods described and that all particulars are true & correct.</Text>
                             </View>
                             <View style={{ width: '40%', alignItems: 'center' }}>
-                                <Text style={styles.label}>For {exp.name}</Text>
+                                <Text style={styles.label}>For {company.fullName}</Text>
                                 <View style={{ height: 30 }} />
                                 <Text style={[styles.label, { fontWeight: 'bold' }]}>AUTH. SIGN.</Text>
                             </View>

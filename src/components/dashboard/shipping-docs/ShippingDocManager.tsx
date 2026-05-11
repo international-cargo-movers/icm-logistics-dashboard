@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import { pdf } from "@react-pdf/renderer";
 import BolPDF from "./BoLPDF";
 import AwbPDF from "./AWB";
+import { getCompanyDetails } from "@/lib/constants";
 
 export default function ShippingDocManager({ job }: { job: any }) {
     const router = useRouter();
@@ -78,7 +79,15 @@ export default function ShippingDocManager({ job }: { job: any }) {
             } else {
                 toast.success("Downloading BoL...")
             }
-            const documentComponent = isAir ? <AwbPDF data={job} /> : <BolPDF data={job} />;
+
+            const tenantId = document.cookie
+                .split("; ")
+                .find((row) => row.startsWith("tenant-id="))
+                ?.split("=")[1];
+            const companyDetails = getCompanyDetails(tenantId);
+            const dataWithCompany = { ...job, companyDetails };
+
+            const documentComponent = isAir ? <AwbPDF data={dataWithCompany} /> : <BolPDF data={dataWithCompany} />;
             const blob = await pdf(documentComponent).toBlob();
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -96,8 +105,15 @@ export default function ShippingDocManager({ job }: { job: any }) {
 
     const handleView = async () => {
         try {
+            const tenantId = document.cookie
+                .split("; ")
+                .find((row) => row.startsWith("tenant-id="))
+                ?.split("=")[1];
+            const companyDetails = getCompanyDetails(tenantId);
+            const dataWithCompany = { ...job, companyDetails };
+
             // 1. Determine which document to render
-            const documentComponent = isAir ? <AwbPDF data={job} /> : <BolPDF data={job} />;
+            const documentComponent = isAir ? <AwbPDF data={dataWithCompany} /> : <BolPDF data={dataWithCompany} />;
 
             // 2. Generate the PDF Blob
             const blob = await pdf(documentComponent).toBlob();

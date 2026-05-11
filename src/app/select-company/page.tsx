@@ -57,7 +57,7 @@ export default function SelectCompanyPage() {
                   {company.name}
                 </h3>
                 <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">
-                  Logistics & Freight
+                  {company.branch} 
                 </p>
               </div>
 

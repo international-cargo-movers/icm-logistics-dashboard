@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input"
 
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { getCompanyDetails } from "@/lib/constants"
 
 export default function QuotesDashboard() {
     const { data: session, status } = useSession()
@@ -137,8 +138,17 @@ export default function QuotesDashboard() {
             destinationPort: q.routingDetails?.destinationPort,
             destinationCountry: q.routingDetails?.destinationCountry,
             cargoSummary: q.cargoSummary || {},
-            lineItems: q.financials?.lineItems || [],
-            totalSell: q.financials?.totalSell || 0,
+            lineItems: (q.financials?.lineItems || []).map((item: any) => ({
+                description: item.chargeName || item.description,
+                quantity: item.quantity || 1,
+                unit: item.unit || item.notes || "PER SET",
+                rate: item.sellPrice || item.rate || 0,
+                totalAmount: item.totalSell || item.totalAmount || ((item.sellPrice || 0) * (item.quantity || 1)),
+                currency: item.currency || "INR",
+                gstPercent: item.gstPercent || 0
+            })),
+            currency: q.financials?.lineItems?.[0]?.currency || "INR",
+            subTotal: q.financials?.totalSell || 0,
             totalGst: q.financials?.totalGst || 0,
             netTotal: q.financials?.netTotal || 0
         }
@@ -146,7 +156,12 @@ export default function QuotesDashboard() {
 
     const handleViewPDF = async (quote: any) => {
         toast.info("Generating PDF preview...")
-        const data = formatQuoteForPDF(quote)
+        const tenantId = document.cookie
+            .split("; ")
+            .find((row) => row.startsWith("tenant-id="))
+            ?.split("=")[1];
+        const companyDetails = getCompanyDetails(tenantId);
+        const data = { ...formatQuoteForPDF(quote), companyDetails }
         const blob = await pdf(<QuotePDF data={data} />).toBlob()
         const url = URL.createObjectURL(blob)
         window.open(url, '_blank')
@@ -154,7 +169,12 @@ export default function QuotesDashboard() {
 
     const handleDownloadPDF = async (quote: any) => {
         toast.info("Generating PDF for download...")
-        const data = formatQuoteForPDF(quote)
+        const tenantId = document.cookie
+            .split("; ")
+            .find((row) => row.startsWith("tenant-id="))
+            ?.split("=")[1];
+        const companyDetails = getCompanyDetails(tenantId);
+        const data = { ...formatQuoteForPDF(quote), companyDetails }
         const blob = await pdf(<QuotePDF data={data} />).toBlob()
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')

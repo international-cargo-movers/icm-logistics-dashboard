@@ -87,7 +87,7 @@ export const VendorInvoiceSchema = new Schema<IVendorInvoice>({
     }
 }, { timestamps: true });
 
-VendorInvoiceSchema.pre("save", function (this: IVendorInvoice, next) {
+VendorInvoiceSchema.pre("save", function (this: IVendorInvoice) {
     let totalTaxable = 0;
     let totalGst = 0;
 

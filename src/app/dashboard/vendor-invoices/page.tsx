@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { pdf } from '@react-pdf/renderer'
 import VendorInvoicePDF from '@/components/dashboard/vendor-invoices/VendorInvoicePDF'
+import { getCompanyDetails } from "@/lib/constants"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -143,6 +144,12 @@ export default function VendorInvoicesDashboardPage() {
   const handleView = async (inv: any) => {
     toast.info("Opening Vendor Invoice...")
     try {
+        const tenantId = document.cookie
+            .split("; ")
+            .find((row) => row.startsWith("tenant-id="))
+            ?.split("=")[1];
+        const companyDetails = getCompanyDetails(tenantId);
+
         const cleanPayload = {
             ...inv,
             vendorInvoiceNo: inv.vendorInvoiceNo,
@@ -151,7 +158,8 @@ export default function VendorInvoicesDashboardPage() {
             vendorName: inv.vendorDetails?.name || "Unknown",
             billingAddress: inv.vendorDetails?.billingAddress || "",
             lineItems: inv.lineItems || [],
-            totals: inv.totals || {}
+            totals: inv.totals || {},
+            companyDetails
           };
       const blob = await pdf(<VendorInvoicePDF data={cleanPayload} />).toBlob()
       const url = URL.createObjectURL(blob)
@@ -162,6 +170,12 @@ export default function VendorInvoicesDashboardPage() {
   const handleDownload = async (inv: any) => {
     toast.info("Downloading PDF...")
     try {
+        const tenantId = document.cookie
+            .split("; ")
+            .find((row) => row.startsWith("tenant-id="))
+            ?.split("=")[1];
+        const companyDetails = getCompanyDetails(tenantId);
+
         const cleanPayload = {
             ...inv,
             vendorInvoiceNo: inv.vendorInvoiceNo,
@@ -170,7 +184,8 @@ export default function VendorInvoicesDashboardPage() {
             vendorName: inv.vendorDetails?.name || "Unknown",
             billingAddress: inv.vendorDetails?.billingAddress || "",
             lineItems: inv.lineItems || [],
-            totals: inv.totals || {}
+            totals: inv.totals || {},
+            companyDetails
           };
       const blob = await pdf(<VendorInvoicePDF data={cleanPayload} />).toBlob()
       const url = URL.createObjectURL(blob)

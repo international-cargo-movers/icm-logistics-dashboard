@@ -61,6 +61,12 @@ export default function BolPDF({ data }: { data: any }) {
     const cust = data?.customerDetails || {};
     const party = data?.partyDetails || {};
     const cargo = data?.cargoDetails || {};
+    const company = data?.companyDetails || {
+        fullName: "INTERNATIONAL CARGO MOVERS",
+        address: "193-A BASEMENT ARJUN NAGAR SAFDARJUNG ENCLAVE, NEW DELHI-110029, DELHI, INDIA",
+        email: "RAVINDER@INTCARGOMOVERS.COM",
+        logo: "/ICM_logo.png"
+    };
 
     const shipper = cust.companyId || {};
     const consignee = party.consigneeId || {};
@@ -133,11 +139,11 @@ export default function BolPDF({ data }: { data: any }) {
 
                             <View style={[styles.logoContainer, { borderBottom: '1px solid #000', height: 110 }]}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                                    <Image src="/ICM_logo.png" style={styles.logo} />
+                                    <Image src={company.logo} style={styles.logo} />
                                 </View>
-                                <Text style={styles.companySubName}>INTERNATIONAL CARGO MOVERS</Text>
-                                <Text style={styles.companyAddress}>193-A BASEMENT ARJUN NAGAR SAFDARJUNG ENCLAVE, NEW DELHI-110029, DELHI, INDIA</Text>
-                                <Text style={styles.companyContact}>MOBILE: +91-9810213336 || EMAIL ID: RAVINDER@INTCARGOMOVERS.COM</Text>
+                                <Text style={styles.companySubName}>{company.fullName}</Text>
+                                <Text style={styles.companyAddress}>{company.address}</Text>
+                                <Text style={styles.companyContact}>EMAIL ID: {company.email}</Text>
                             </View>
 
                             <View style={[styles.cell, { height: 72 }]}>
@@ -333,7 +339,7 @@ export default function BolPDF({ data }: { data: any }) {
                             </View>
                         </View>
                         <View style={styles.authSignBox}>
-                            <Text style={styles.label}>FOR INTERNATIONAL CARGO MOVERS</Text>
+                            <Text style={styles.label}>FOR {company.fullName}</Text>
                             <View style={{ height: 40 }} />
                             <Text style={styles.label}>AUTH SIGN.</Text>
                         </View>

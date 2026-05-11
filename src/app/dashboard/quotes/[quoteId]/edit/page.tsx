@@ -18,6 +18,7 @@ import { toast } from "sonner"
 
 import { LineItemDescriptionInput } from "@/components/dashboard/financials/LineItemDescriptionInput"
 import { AddPortModal } from "@/components/dashboard/ports/AddPortModal"
+import { getCompanyDetails } from "@/lib/constants"
 
 export default function EditQuotePage() {
   const params = useParams() as { quoteId: string }
@@ -254,6 +255,12 @@ export default function EditQuotePage() {
       return null;
     }
 
+    const tenantId = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("tenant-id="))
+      ?.split("=")[1];
+    const companyDetails = getCompanyDetails(tenantId);
+
     let equipmentStr = "";
     if (quoteData.mode.includes("Sea FCL")) equipmentStr = `${quoteData.cargoSummary.containerCount}x ${quoteData.cargoSummary.containerType}`;
     else if (quoteData.mode.includes("Sea LCL")) equipmentStr = `${quoteData.cargoSummary.totalCBM} CBM`;
@@ -276,7 +283,11 @@ export default function EditQuotePage() {
       lineItems: finalLineItems,
       totalBuy,
       totalSell,
+      subTotal: totalSell,
+      totalGst,
+      netTotal,
       profitMargin,
+      companyDetails,
       date: new Date().toISOString().split('T')[0],
       validUntil: new Date(Date.now() + quoteData.validityDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     };
